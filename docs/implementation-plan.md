@@ -82,4 +82,4 @@ Host the standalone admin in a Homebridge plugin, keeping its own URL. This phas
 
 ## Current implementation checkpoint
 
-M2–M4 operational code is now connected, including the custom configuration UI and companion admin. Local behavior and cross-repository tests pass. M5 currently awaits release CI and the owner-run physical acceptance; see status.md and owner-test.md.
+M2–M4 operational code is now connected, including the custom configuration UI and companion admin. Release CI and cross-repository tests pass. M5 is ready for owner installation/testing; physical acceptance and any later npm publication remain outstanding; see status.md and owner-test.md.

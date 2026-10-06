@@ -2,7 +2,7 @@
 
 A Homebridge platform for coordinating **one garage door and a separate bolt/lock per configured controller**. Multiple doors are supported by separate controller definitions. Multiple input profiles for the same physical door must share its coordinator.
 
-**Status: operational test build; release checks in progress.** The runtime, combined Garage Door and optional Lock accessories, generalized physical inputs, standalone-admin API and modern custom Homebridge settings UI are connected. New garages stay disabled until explicitly checked and enabled. See [current validation](docs/status.md) before installation.
+**Status: ready for initial supervised owner testing.** The runtime, combined Garage Door and optional Lock accessories, generalized physical inputs, standalone-admin API and modern custom Homebridge settings UI are connected. New garages stay disabled until explicitly checked and enabled. Start with the [installation and test guide](docs/owner-test.md); [validated revisions and limits](docs/status.md) are recorded separately.
 
 ## Agreed product scope
 
