@@ -11,6 +11,7 @@ A Homebridge platform for coordinating **one garage door and a separate bolt/loc
 - Always publish a combined Garage Door accessory once the operational runtime is implemented.
 - Optionally publish a separate Lock accessory for either bolt backend.
 - Configure sensor-based or explicitly estimated travel feedback, independent opening/closing times, settling delays, and per-input behavior.
+- Assign supported deCONZ or Homebridge buttons/switches to the primary opener or a named motor relay through the same coordinator. HomeKit and virtual keypad retain the primary opener route. See [input assignments](docs/input-routing.md) for implementation boundaries.
 - No door-only, bolt-only, native HomeKit pairing, or Apple Home automation backend.
 - No dependency on HTTP Webhooks for the coordinator's accessories or state publication.
 

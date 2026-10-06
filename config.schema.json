@@ -249,6 +249,152 @@
                 "boltSettleSeconds",
                 "allowEstimatedBolting"
               ]
+            },
+            "motorPaths": {
+              "title": "Additional motor paths",
+              "type": "array",
+              "maxItems": 4,
+              "description": "Named opener pulse-relay connections. The primary Tailwind/Homebridge opener remains the HomeKit and virtual-keypad route. These are development declarations; see examples/input-routing-config.json.",
+              "items": {
+                "type": "object",
+                "required": [
+                  "id",
+                  "name",
+                  "type",
+                  "connection",
+                  "openPulseSeconds",
+                  "closePulseSeconds",
+                  "interruption"
+                ],
+                "properties": {
+                  "id": {
+                    "title": "Path ID",
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9-]{0,47}$"
+                  },
+                  "name": {
+                    "title": "Path name",
+                    "type": "string",
+                    "maxLength": 64
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "pulse-relay"
+                    ],
+                    "default": "pulse-relay"
+                  },
+                  "connection": {
+                    "type": "object",
+                    "description": "Supported deCONZ or Homebridge relay mapping, separate from the bolt. See the synthetic JSON example; input/output discovery is still being implemented."
+                  },
+                  "openPulseSeconds": {
+                    "title": "Opening pulse duration (seconds)",
+                    "type": "number",
+                    "minimum": 0.1,
+                    "maximum": 2,
+                    "default": 1
+                  },
+                  "closePulseSeconds": {
+                    "title": "Closing pulse duration (seconds)",
+                    "type": "number",
+                    "minimum": 0.1,
+                    "maximum": 2,
+                    "default": 1
+                  },
+                  "interruption": {
+                    "title": "Requested indoor-button interruption behavior",
+                    "type": "string",
+                    "enum": [
+                      "disabled",
+                      "stop-opening-reverse-closing"
+                    ],
+                    "default": "disabled",
+                    "description": "Only for a verified compatible relay/opener. Declaring this does not enable it; the stop/reverse runtime still needs integration."
+                  }
+                }
+              }
+            },
+            "inputs": {
+              "title": "Physical input assignments",
+              "type": "array",
+              "maxItems": 32,
+              "description": "Each button, switch edge or keypad can target a named motor path for this garage. Aqara is not required. Live input adapters are not connected in this development build.",
+              "items": {
+                "type": "object",
+                "required": [
+                  "id",
+                  "name",
+                  "enabled",
+                  "source",
+                  "trigger",
+                  "action",
+                  "motorPath",
+                  "busyBehavior",
+                  "rearmSeconds"
+                ],
+                "properties": {
+                  "id": {
+                    "title": "Input ID",
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9-]{0,47}$"
+                  },
+                  "name": {
+                    "title": "Input name",
+                    "type": "string",
+                    "maxLength": 64
+                  },
+                  "enabled": {
+                    "title": "Request input enabled after commissioning",
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "source": {
+                    "type": "object",
+                    "description": "deCONZ button/keypad or Homebridge button/switch identity. Input listeners are pending; see the JSON example."
+                  },
+                  "trigger": {
+                    "title": "Button event, switch edge, or native-outcome",
+                    "description": "Integer button event; on/off/either for switches; native-outcome for enrolled deCONZ keypad. Use JSON configuration until the device selector is implemented."
+                  },
+                  "action": {
+                    "title": "Action",
+                    "type": "string",
+                    "enum": [
+                      "open",
+                      "close",
+                      "toggle",
+                      "keypad"
+                    ]
+                  },
+                  "motorPath": {
+                    "title": "Motor path ID",
+                    "type": "string",
+                    "description": "primary or one of this garage\u2019s additional motor-path IDs."
+                  },
+                  "busyBehavior": {
+                    "title": "While another operation is in progress",
+                    "type": "string",
+                    "enum": [
+                      "drop",
+                      "interrupt"
+                    ],
+                    "default": "drop",
+                    "description": "No queued commands. Interrupt requires a compatible configured relay path and the supported indoor-button runtime."
+                  },
+                  "rearmSeconds": {
+                    "title": "Quiet time before accepting new events (seconds)",
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 10,
+                    "default": 1.5
+                  },
+                  "timing": {
+                    "type": "object",
+                    "description": "Optional per-input openRetractSettleSeconds, closeRetractSettleSeconds, openingSeconds and closingSeconds."
+                  }
+                }
+              }
             }
           }
         }

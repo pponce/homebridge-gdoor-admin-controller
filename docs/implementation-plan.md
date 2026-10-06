@@ -44,6 +44,7 @@ M1 does not publish accessories, operate hardware or replace the admin extension
 ### M2 — Driver and behavior parity
 
 - Inventory the current runtime and tests at the recorded source commit. Include keypad valid/invalid behavior while moving, indoor-button interruption, source-specific Tailwind versus pulse-relay routing, manual bolt overrides, auto-bolt policy, restart/fault holds, stale event rejection and no ambiguous retries.
+- Retain source-specific motor routing through generalized profiles: input event/action, target assembly, selected motor path and per-input settings. HomeKit/virtual keypad use the primary opener; physical inputs may use a named pulse relay. Preserve optional indoor stop/reverse only with verified support. See input-routing.md.
 - Implement Tailwind local API and direct-deCONZ bolt drivers first. Add status-only probes and document Local Control Key setup and resource selection.
 - Implement existing Homebridge opener and bolt drivers with explicit supported service/capability mappings, independent child-bridge access and no source patching.
 - Preserve physical-feedback limitations and the distinction between gateway reports and physical sensing.
@@ -81,4 +82,4 @@ Host the standalone admin in a Homebridge plugin, keeping its own URL. This phas
 
 ## Current implementation checkpoint
 
-Direct Tailwind/deCONZ drivers, explicit read-only probes, private device credential loading, the movement-engine prototype and durable journal are implemented. The admin uses the actual probe API. See behavior-parity.md and status.md; M2/M3 are not complete and no physical testing is authorized by successful diagnostics. The remaining source-specific motor-route decision precedes wiring keypad/indoor input profiles. Actual Homebridge child-bridge loading and browser validation run in CI.
+Direct Tailwind/deCONZ drivers, explicit read-only probes, private device credential loading, the movement-engine prototype and durable journal are implemented. The admin uses the actual probe API. See behavior-parity.md and status.md; M2/M3 are not complete and no physical testing is authorized by successful diagnostics. The owner confirmed retaining the pulse-relay path for the physical keypad/indoor button, with HomeKit and virtual keypad using Tailwind. Generic profile validation, route selection, freshness gates, bounded relay pulses and sanitized routing inventory are implemented with synthetic tests; see input-routing.md. Live source adapters, optional interruption/partial-travel parity and commissioning are the next routing work. Actual Homebridge child-bridge loading and browser validation run in CI.

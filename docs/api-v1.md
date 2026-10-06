@@ -1,6 +1,6 @@
 # Coordinator management API v1
 
-This repository owns the protocol. The admin repository carries the same contract and tests its client against the actual server. Contract status: **development, read-only inventory and explicit device checks implemented**.
+This repository owns the protocol. The admin repository carries the same contract and tests its client against the actual server. Contract status: **development, read-only controller/routing inventory and explicit device checks implemented**.
 
 ## Transport and identity
 
@@ -15,9 +15,10 @@ The admin backend pins the expected instance UUID after explicit setup. A UUID m
 | GET /v1/identity | `apiVersion`, `instanceId`, `pluginVersion`, `mode`, `capabilities` |
 | GET /v1/controllers | API envelope plus `controllers` array |
 | GET /v1/controllers/{id} | API envelope plus one `controller` |
+| GET /v1/controllers/{id}/routing | API envelope plus sanitized `routing` metadata; no hardware reads |
 | POST /v1/controllers/{id}/probe | Explicit read-only hardware check; body `{"instanceId":"<pinned UUID>"}` |
 
-API envelopes repeat `apiVersion` and `instanceId`; validate both on every response. Identity mode is `observation` when diagnostics are available, otherwise `development`. Capabilities are `inventory: true`, `diagnostics: true` (or false when no probe provider is installed), `settingsWrite: false`, `motion: false`, `maintenance: false`, `keypad: false`. Older M1 responses omit diagnostics, which clients treat as false. Clients must not infer operational readiness from HTTP 200.
+API envelopes repeat `apiVersion` and `instanceId`; validate both on every response. Identity mode is `observation` when diagnostics are available, otherwise `development`. Capabilities are `inventory: true`, `routingInventory: true`, `diagnostics: true` (or false when no probe provider is installed), `settingsWrite: false`, `motion: false`, `maintenance: false`, `keypad: false`. Older responses may omit diagnostics and routingInventory; clients treat either omitted flag as false. The core inventory/settingsWrite/motion/maintenance/keypad flags remain required. Clients must not infer operational readiness from HTTP 200.
 
 Inventory records contain `id`, `name`, `doorBackend`, `boltBackend`, `exposeBoltLock`, `feedback` (closing, opening, bolt), and `status`. Feedback contains modes only, never device URLs/IDs, secret references or credentials. M1 status is `phase: not-commissioned`, `door: unknown`, `bolt: unknown`, `actuationEnabled: false`. Inventory never samples hardware. Only an explicit probe does; its observations do not commission the assembly or enable actuation.
 
@@ -50,3 +51,17 @@ Device errors are limited to credentials_unavailable, credential_reference_missi
 Tailwind and direct deCONZ probes are implemented. Homebridge accessory probes return backend_not_implemented. Tailwind performs one local dev_st POST using the TOKEN header; deCONZ performs only GET /config and GET /lights/{id}. Drivers default to read-only. No startup check, inventory refresh or probe can send a door_op or relay PUT. One probe per controller may be in progress; overlapping requests fail without queuing. Hardware requests have total deadlines, bounded responses and no redirects or retries. The administrator allows twelve seconds for a probe response.
 
 The admin exposes this through its authenticated, Admin-only Controller page. Its built-in POST_READ route selects a controller and bypasses mutation guards only for this read; external extensions cannot register that route class. Existing gateway-write, keypad and maintenance guards remain enforced. Browser requests retain same-origin, CSRF and account checks. Opening or refreshing the page does not probe devices; pressing Check connections does. Each result replaces any previous result and includes the observation time.
+
+## Read-only input routing inventory
+
+The routing response envelope contains `routing`, with exactly:
+
+- `controllerId`: requested controller ID.
+- `builtins`: `{"homekit":"primary","virtualKeypad":"primary"}`. Neither builtin inherits a physical input's route.
+- `motorPaths`: primary plus zero to four named pulse paths. Each exposes only id, name, type (tailwind/homebridge/pulse-relay), and interruption (disabled/stop-opening-reverse-closing). Primary interruption is disabled. A declared interruption policy is not a runtime capability.
+- `inputs`: zero to 32 profiles, each exposing id, name, enabled, source (type and kind only), action, trigger, motorPath, busyBehavior, rearmSeconds and timing.
+- `runtimeEnabled`: false. Metadata does not enable input listeners or movement.
+
+Source type is deconz or homebridge. deCONZ supports button/keypad declarations; Homebridge supports button/switch declarations. Button trigger values are integers (deCONZ 0..65535, Homebridge 0..2); switch triggers are on/off/either; keypad trigger is native-outcome. Actions are open/close/toggle or keypad for a keypad source. busyBehavior is drop/interrupt; interruption declarations require a toggle input on a path declaring stop-opening-reverse-closing. rearmSeconds is 0..10. Optional timing keys are openRetractSettleSeconds/closeRetractSettleSeconds (0..120) and openingSeconds/closingSeconds (1..300). Input motorPath must reference a declared path.
+
+No resource IDs, bridge/gateway URLs, alarm IDs, credential references or secrets are returned. Device connection declarations remain private. Loading this metadata has no hardware side effects. The administrator validates the response before displaying assignments and labels them as configured, inactive routes. Editable profiles and source device enrollment remain future operations.

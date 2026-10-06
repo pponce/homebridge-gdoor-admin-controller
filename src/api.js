@@ -1,9 +1,9 @@
 import { timingSafeEqual } from 'node:crypto';
 import http from 'node:http';
-import { inventory } from './config.js';
+import { inventory, routingInventory } from './config.js';
 
-export const PLUGIN_VERSION = '0.2.0-dev.1';
-export const CAPABILITIES = Object.freeze({ inventory: true, diagnostics: false, settingsWrite: false, motion: false, maintenance: false, keypad: false });
+export const PLUGIN_VERSION = '0.3.0-dev.1';
+export const CAPABILITIES = Object.freeze({ inventory: true, routingInventory: true, diagnostics: false, settingsWrite: false, motion: false, maintenance: false, keypad: false });
 export function createManagementServer({ identity, configuration, diagnostics }) {
   const expectedAuthorization = Buffer.from(`Bearer ${identity.token}`);
   const envelope = { apiVersion: 1, instanceId: identity.instanceId };
@@ -35,6 +35,9 @@ export function createManagementServer({ identity, configuration, diagnostics })
       if (request.url === '/v1/identity') return send(200, { ...envelope, pluginVersion: PLUGIN_VERSION,
         mode: diagnostics ? 'observation' : 'development', capabilities: { ...CAPABILITIES, diagnostics: Boolean(diagnostics) } });
       if (request.url === '/v1/controllers') return send(200, { ...envelope, controllers });
+      const routing = /^\/v1\/controllers\/([a-z][a-z0-9-]{0,47})\/routing$/.exec(request.url ?? '');
+      const routed = routing && configuration.controllers.find(item => item.id === routing[1]);
+      if (routed) return send(200, { ...envelope, routing: routingInventory(routed) });
       const match = /^\/v1\/controllers\/([a-z][a-z0-9-]{0,47})$/.exec(request.url ?? '');
       const controller = match && controllers.find(item => item.id === match[1]);
       if (controller) return send(200, { ...envelope, controller });

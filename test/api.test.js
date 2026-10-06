@@ -39,10 +39,20 @@ test('real socket identity and inventory explicitly report no operational capabi
 });
 test('every endpoint requires authentication including identity and error routes', async t => {
   const { port } = await fixture(t);
-  for (const path of ['/v1/identity', '/v1/controllers', '/missing']) {
+  for (const path of ['/v1/identity', '/v1/controllers', '/v1/controllers/example-garage/routing', '/missing']) {
     const result = await request(port, path, { headers: { Authorization: 'Bearer wrong' } });
     assert.equal(result.status, 401); assert.deepEqual(result.body, { error: 'unauthorized' });
   }
+});
+test('routing inventory is explicit, sanitized and read-only', async t => {
+  const { port } = await fixture(t);
+  const response = await request(port, '/v1/controllers/example-garage/routing');
+  assert.equal(response.status, 200);
+  assert.deepEqual(response.body.routing.builtins, { homekit: 'primary', virtualKeypad: 'primary' });
+  assert.equal(response.body.routing.runtimeEnabled, false);
+  assert.equal(response.body.routing.motorPaths[0].type, 'tailwind');
+  assert.equal(JSON.stringify(response).includes('example.invalid'), false);
+  assert.equal((await request(port, '/v1/controllers/example-garage/routing', { method: 'POST' })).status, 405);
 });
 test('rejects browser origins and alternate Host headers even with a valid token', async t => {
   const { port } = await fixture(t);

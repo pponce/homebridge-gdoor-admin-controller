@@ -12,9 +12,12 @@ const code = error => error instanceof Fault ? error.message : 'unexpected_adapt
  * No action in construction, initialization, observe(), or state publication.
  */
 export class MovementEngine {
-  constructor({ door, bolt, journal, feedback, timing = {}, clock = systemClock, publish = () => {} }) {
+  constructor({ door, bolt, journal, feedback, timing = {}, motorPaths = {}, clock = systemClock, publish = () => {} }) {
     this.door = door; this.bolt = bolt; this.journal = journal; this.clock = clock; this.publish = publish;
     this.feedback = { ...feedback }; this.timing = { ...defaults, ...timing };
+    requireValue(motorPaths && typeof motorPaths === 'object' && !Object.hasOwn(motorPaths, 'primary'), 'engine_motor_paths_invalid');
+    this.motorPaths = new Map([['primary', door], ...Object.entries(motorPaths)]);
+    this.motor = door;
     requireValue(['sensor', 'timed'].includes(feedback.opening) && ['sensor', 'timed'].includes(feedback.closing) &&
       ['position', 'relay'].includes(feedback.bolt) && typeof feedback.allowEstimatedBolting === 'boolean', 'engine_feedback_invalid');
     requireValue(Object.keys(timing).every(key => Object.hasOwn(defaults, key)) &&
@@ -49,6 +52,7 @@ export class MovementEngine {
   async read() {
     this.checkRunning();
     const [door, bolt] = await Promise.all([this.door.read(), this.bolt.read()]);
+    for (const motor of this.motorPaths.values()) if (typeof motor.verifyIdle === 'function') await motor.verifyIdle();
     this.checkRunning();
     requireValue(door && ['closed', 'open', 'not-closed', 'opening', 'closing'].includes(door.door) &&
       typeof door.blocked === 'boolean' && typeof door.obstruction === 'boolean' &&
@@ -118,12 +122,17 @@ export class MovementEngine {
       s => !s.locked && !['opening', 'closing'].includes(s.door), 'bolt_retract_confirmation_lost');
   }
 
-  async execute(command) {
+  async execute(command, { motorPath = 'primary', timing = {} } = {}) {
     requireValue(['open', 'close', 'unlock', 'lock', 'observed-close'].includes(command), 'command_invalid');
     requireValue(!this.busy, 'controller_busy');
     requireValue(this.initialized && !this.state.fault && !this.stopped, 'engine_unavailable');
     requireValue(command !== 'observed-close' || !this.state.externalUnlockOverride, 'manual_unlock_override');
+    requireValue(this.motorPaths.has(motorPath), 'motor_path_unavailable');
+    requireValue(Object.keys(timing).every(key => ['openRetractSettleMs', 'closeRetractSettleMs', 'openingMs', 'closingMs'].includes(key)) &&
+      Object.entries(timing).every(([key, value]) => Number.isFinite(value) && value >= (key.includes('Retract') ? 0 : 1) && value <= 300000), 'engine_input_timing_invalid');
+    const previousTiming = this.timing;
     this.busy = true; // Claim ownership synchronously, before any await.
+    this.motor = this.motorPaths.get(motorPath); this.timing = { ...this.timing, ...timing };
     try {
       await this.journal.write({ inProgress: true, fault: false }); // Durable intent before any actuator request.
       this.update({ externalUnlockOverride: command === 'unlock', target: command === 'open' ? 'open' : command === 'close' ? 'closed' : this.state.target });
@@ -149,8 +158,15 @@ export class MovementEngine {
       }
       await this.journal.write({ inProgress: false, fault: false });
     } catch (error) { await this.fail(code(error)); }
-    finally { this.busy = false; }
+    finally { this.motor = this.door; this.timing = previousTiming; this.busy = false; }
     return this.snapshot();
+  }
+
+  async motorCommand(command) {
+    await this.motor.write(command, { beforeWrite: async () => {
+      const fresh = await this.read();
+      requireValue(!fresh.locked && (command === 'open' ? fresh.door === 'closed' : ['open', 'not-closed'].includes(fresh.door)), 'motor_precondition_lost');
+    } });
   }
 
   async open() {
@@ -161,7 +177,7 @@ export class MovementEngine {
     requireValue(sample.door === 'closed', 'opening_requires_known_start');
     this.update({ phase: 'opening', openEstimated: false, closeEstimated: false });
     const deadline = this.clock.now() + this.timing.motionTimeoutMs;
-    await this.door.write('open'); // Never retry an ambiguous motor request.
+    await this.motorCommand('open'); // No retry or fallback to another route.
     let departed = null;
     for (;;) {
       const fresh = await this.read();
@@ -197,7 +213,7 @@ export class MovementEngine {
     requireValue(!['opening', 'closing'].includes(sample.door), 'external_movement');
     const started = this.clock.now(); const deadline = started + this.timing.motionTimeoutMs;
     this.update({ phase: 'closing', openEstimated: false, closeEstimated: false });
-    if (!(sample.door === 'closed' && this.feedback.closing === 'sensor' && sample.evidence === 'closed-sensor')) await this.door.write('close');
+    if (!(sample.door === 'closed' && this.feedback.closing === 'sensor' && sample.evidence === 'closed-sensor')) await this.motorCommand('close');
     let closedSince = null; let retractPending = null;
     for (;;) {
       sample = await this.read();

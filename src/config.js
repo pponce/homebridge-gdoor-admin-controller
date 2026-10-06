@@ -89,9 +89,103 @@ function resourceKeys(value) {
   if (value.type === 'homebridge') return [JSON.stringify(['homebridge', value.bridgeId.toLowerCase(), value.serviceId])];
   if (value.type === 'tailwind') return [JSON.stringify(['tailwind', value.baseUrl, value.doorIndex])];
   return [
-    ['deconz-identity', value.gatewayId.toLowerCase(), value.uniqueId.toLowerCase()],
-    ['deconz-resource', value.gatewayId.toLowerCase(), value.resourceId],
+    ['deconz-identity', value.gatewayId.replaceAll(':', '').toLowerCase(), value.uniqueId.toLowerCase()],
+    ['deconz-resource', value.gatewayId.replaceAll(':', '').toLowerCase(), value.resourceId],
     ['deconz-endpoint', value.baseUrl, value.resourceId],
+  ].map(key => JSON.stringify(key));
+}
+
+function pulseConnection(value) {
+  fields(value, ['type', 'baseUrl', 'gatewayId', 'resourceId', 'uniqueId', 'resourceType', 'modelId', 'manufacturer',
+    'bridgeId', 'serviceId', 'credentialRef', 'activeValue'], 'invalid_pulse_connection');
+  if (typeof value.activeValue !== 'boolean') fail('invalid_pulse_mapping');
+  const { activeValue, ...connection } = value;
+  if (value.type === 'deconz') {
+    fields(value, ['type', 'baseUrl', 'gatewayId', 'resourceId', 'uniqueId', 'resourceType', 'modelId', 'manufacturer', 'credentialRef', 'activeValue'], 'invalid_pulse_connection');
+    const checked = bolt({ ...connection, lockedValue: activeValue });
+    if (!checked.resourceType || !checked.modelId || !checked.manufacturer) fail('pulse_identity_required');
+    delete checked.lockedValue;
+    return { ...checked, activeValue };
+  }
+  fields(value, ['type', 'bridgeId', 'serviceId', 'credentialRef', 'activeValue'], 'invalid_pulse_connection');
+  if (value.type !== 'homebridge') fail('unsupported_pulse_backend');
+  return { ...homebridge(connection, false), activeValue };
+}
+
+function motorPaths(value = []) {
+  if (!Array.isArray(value) || value.length > 4) fail('invalid_motor_paths');
+  const ids = new Set(['primary']);
+  return value.map(row => {
+    fields(row, ['id', 'name', 'type', 'connection', 'openPulseSeconds', 'closePulseSeconds', 'interruption'], 'invalid_motor_path');
+    if (!identifier(row.id) || ids.has(row.id)) fail('duplicate_motor_path');
+    ids.add(row.id);
+    if (row.type !== 'pulse-relay') fail('unsupported_motor_path');
+    return { id: row.id, name: string(row.name, 'invalid_motor_path_name', 64), type: row.type,
+      connection: pulseConnection(row.connection),
+      openPulseSeconds: number(row.openPulseSeconds, 0.1, 2, 'invalid_pulse_duration'),
+      closePulseSeconds: number(row.closePulseSeconds, 0.1, 2, 'invalid_pulse_duration'),
+      interruption: choice(row.interruption, ['disabled', 'stop-opening-reverse-closing'], 'invalid_interruption_policy') };
+  });
+}
+
+function source(value) {
+  if (!object(value)) fail('invalid_input_source');
+  if (value.type === 'homebridge') {
+    fields(value, ['type', 'kind', 'bridgeId', 'serviceId', 'credentialRef'], 'invalid_input_source');
+    const { kind, ...connection } = value;
+    return { ...homebridge(connection, false), kind: choice(kind, ['button', 'switch'], 'unsupported_input_kind') };
+  }
+  fields(value, ['type', 'kind', 'baseUrl', 'gatewayId', 'resourceId', 'uniqueId', 'resourceType', 'modelId', 'manufacturer', 'credentialRef', 'alarmId'], 'invalid_input_source');
+  if (value.type !== 'deconz') fail('unsupported_input_backend');
+  if (typeof value.resourceId !== 'string' || !/^[1-9][0-9]{0,5}$/.test(value.resourceId)) fail('invalid_input_resource');
+  const result = { type: 'deconz', kind: choice(value.kind, ['button', 'keypad'], 'unsupported_input_kind'),
+    baseUrl: baseUrl(value.baseUrl), gatewayId: string(value.gatewayId, 'invalid_gateway_id'),
+    resourceId: value.resourceId, uniqueId: string(value.uniqueId, 'invalid_resource_identity'),
+    resourceType: string(value.resourceType, 'invalid_resource_type'), modelId: string(value.modelId, 'invalid_resource_model'),
+    manufacturer: string(value.manufacturer, 'invalid_resource_manufacturer'), credentialRef: secretRef(value.credentialRef) };
+  if (result.kind === 'keypad') {
+    if (!Number.isInteger(value.alarmId) || value.alarmId < 1 || value.alarmId > 255) fail('invalid_input_alarm');
+    result.alarmId = value.alarmId;
+  } else if (value.alarmId !== undefined) fail('invalid_input_alarm');
+  return result;
+}
+
+const timingFields = ['openRetractSettleSeconds', 'closeRetractSettleSeconds', 'openingSeconds', 'closingSeconds'];
+function inputs(value = [], paths) {
+  if (!Array.isArray(value) || value.length > 32) fail('invalid_inputs');
+  const ids = new Set();
+  return value.map(row => {
+    fields(row, ['id', 'name', 'enabled', 'source', 'trigger', 'action', 'motorPath', 'busyBehavior', 'rearmSeconds', 'timing'], 'invalid_input');
+    if (!identifier(row.id) || ['homekit', 'virtual-keypad'].includes(row.id) || ids.has(row.id)) fail('invalid_or_duplicate_input_id');
+    ids.add(row.id);
+    if (typeof row.enabled !== 'boolean') fail('invalid_input_enabled');
+    const selected = source(row.source);
+    const path = paths.find(path => path.id === row.motorPath);
+    if (row.motorPath !== 'primary' && !path) fail('input_motor_path_not_found');
+    const action = choice(row.action, selected.kind === 'keypad' ? ['keypad'] : ['open', 'close', 'toggle'], 'invalid_input_action');
+    let trigger;
+    if (selected.kind === 'button') {
+      if (!Number.isInteger(row.trigger) || row.trigger < 0 || row.trigger > (selected.type === 'homebridge' ? 2 : 65535)) fail('invalid_button_event');
+      trigger = row.trigger;
+    } else if (selected.kind === 'switch') trigger = choice(row.trigger, ['on', 'off', 'either'], 'invalid_switch_edge');
+    else { if (row.trigger !== 'native-outcome') fail('invalid_keypad_trigger'); trigger = row.trigger; }
+    const busyBehavior = choice(row.busyBehavior, ['drop', 'interrupt'], 'invalid_busy_behavior');
+    if (busyBehavior === 'interrupt' && (selected.kind === 'keypad' || action !== 'toggle' || path?.interruption !== 'stop-opening-reverse-closing')) fail('unsupported_input_interruption');
+    const timing = row.timing ?? {};
+    fields(timing, timingFields, 'invalid_input_timing');
+    for (const key of Object.keys(timing)) number(timing[key], key.includes('Retract') ? 0 : 1, key.includes('Retract') ? 120 : 300, 'invalid_input_timing');
+    return { id: row.id, name: string(row.name, 'invalid_input_name', 64), enabled: row.enabled, source: selected,
+      trigger, action, motorPath: row.motorPath, busyBehavior,
+      rearmSeconds: number(row.rearmSeconds, 0, 10, 'invalid_input_rearm'), timing: { ...timing } };
+  });
+}
+
+function inputKeys(value) {
+  if (value.type === 'homebridge') return resourceKeys(value);
+  return [
+    ['deconz-sensor-identity', value.gatewayId.replaceAll(':', '').toLowerCase(), value.uniqueId.toLowerCase()],
+    ['deconz-sensor-resource', value.gatewayId.replaceAll(':', '').toLowerCase(), value.resourceId],
+    ['deconz-sensor-endpoint', value.baseUrl, value.resourceId],
   ].map(key => JSON.stringify(key));
 }
 
@@ -102,12 +196,14 @@ export function validateConfiguration(input) {
   if (!Number.isInteger(port) || port < 1024 || port > 65535) fail('invalid_management_port');
   const ids = new Set(); const resources = new Set();
   const controllers = input.controllers.map(value => {
-    fields(value, ['id', 'name', 'door', 'bolt', 'feedback', 'exposeBoltLock'], 'invalid_controller');
+    fields(value, ['id', 'name', 'door', 'bolt', 'feedback', 'exposeBoltLock', 'motorPaths', 'inputs'], 'invalid_controller');
     if (!identifier(value.id) || ids.has(value.id)) fail('invalid_or_duplicate_controller_id');
     ids.add(value.id);
     if (typeof value.exposeBoltLock !== 'boolean') fail('bolt_tile_choice_required');
     const result = { id: value.id, name: string(value.name, 'invalid_controller_name', 64), door: door(value.door), bolt: bolt(value.bolt), feedback: feedback(value.feedback), exposeBoltLock: value.exposeBoltLock };
-    for (const item of [result.door, result.bolt]) {
+    result.motorPaths = motorPaths(value.motorPaths);
+    result.inputs = inputs(value.inputs, result.motorPaths);
+    for (const item of [result.door, result.bolt, ...result.motorPaths.map(path => path.connection)]) {
       for (const key of resourceKeys(item)) {
         if (resources.has(key)) fail('duplicate_hardware_owner');
         resources.add(key);
@@ -115,7 +211,29 @@ export function validateConfiguration(input) {
     }
     return result;
   });
+  const bindings = new Map();
+  for (const controller of controllers) for (const input of controller.inputs) {
+    for (const key of inputKeys(input.source)) {
+      if (resources.has(key)) fail('input_output_feedback_loop');
+      const existing = bindings.get(key) ?? [];
+      if (existing.some(other => other.source.kind !== input.source.kind || other.trigger === input.trigger ||
+        other.trigger === 'either' || input.trigger === 'either')) fail('overlapping_input_binding');
+      existing.push(input); bindings.set(key, existing);
+    }
+  }
   return { managementPort: port, controllers };
+}
+
+export function routingInventory(controller) {
+  return {
+    controllerId: controller.id,
+    builtins: { homekit: 'primary', virtualKeypad: 'primary' },
+    motorPaths: [{ id: 'primary', name: 'Primary opener', type: controller.door.type, interruption: 'disabled' },
+      ...(controller.motorPaths ?? []).map(({ id, name, type, interruption }) => ({ id, name, type, interruption }))],
+    inputs: (controller.inputs ?? []).map(({ id, name, enabled, source, action, trigger, motorPath, busyBehavior, rearmSeconds, timing }) =>
+      ({ id, name, enabled, source: { type: source.type, kind: source.kind }, action, trigger, motorPath, busyBehavior, rearmSeconds, timing })),
+    runtimeEnabled: false,
+  };
 }
 
 export function inventory(configuration) {
