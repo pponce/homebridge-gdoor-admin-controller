@@ -1,0 +1,80 @@
+# Implementation plan
+
+Decision date: 2026-10-06. Development is authorized; live migration is a later owner-run operation.
+
+## Product and repository boundaries
+
+This is a combined garage-door/bolt coordinator. Every configured controller requires both components. Door connections are existing Homebridge GarageDoorOpener services or direct APIs, initially Tailwind. Bolt connections are existing Homebridge LockMechanism, Switch or Lightbulb services, or direct deCONZ. Any combination is allowed. The plugin owns a combined GarageDoorOpener accessory and optionally a LockMechanism accessory. It does not repurpose or intercept another plugin's accessories.
+
+No native HomeKit pairing, Apple Home automation backend, door-only or bolt-only mode. Additional manufacturer APIs can be added later behind the same driver contract. Excluding native HomeKit control does not require removing an existing Tailwind native tile; this plugin uses the local API.
+
+The current standalone installation stays separate. The new admin repository initially contains a standalone web application, with its own URL and accounts. Converting that application into a Homebridge plugin is deferred. Development here must not silently redirect the current installation or migrate private state.
+
+## Architecture
+
+Run as a Homebridge dynamic platform, preferably in its own child bridge. Homebridge manages the process. Store plugin data, journals, API identity and credentials beneath api.user.storagePath(); never install systemd units or patch other plugins. The initial dependency-free Node ESM foundation uses Homebridge's injected API; the existing Python movement engine has not yet been ported.
+
+Separate driver connections, state estimation, one coordinator per physical assembly, event/input profiles, accessory publication and the versioned management API. Several keypads/buttons may target one assembly with separate input policies, but do not instantiate competing movement engines. Validate hardware identity and prevent duplicate ownership, including cross-process ownership at deployment.
+
+Existing Homebridge access must support child bridges, bridge-specific credentials, stable service identifiers, current-state reads and event subscriptions. Target state is not current state. Exclude this plugin's own accessories as input devices to prevent cycles. Capability checks determine whether movement/obstruction/stop/reverse semantics are available.
+
+## Feedback and configuration experience
+
+Ask what Closed and Open mean in the upstream integration: physical sensor, not-closed indication, command acknowledgement, or unknown. Offer independent opening/closing travel times, command-to-motion delay where needed, stable-closed interval, operation timeouts, bolt mapping and settling. An extra closed sensor is optional. A user answer declares a policy; it does not prove the driver's state is fresh.
+
+Sensor mode waits for suitable current state, reachability and stability. Timed mode produces explicitly estimated state; time does not establish successful travel. A combined timed-close setup must separately select whether bolting after estimated closure is permitted. Observed obstruction, interruption, reversal or lost connectivity invalidates the estimate. Without feedback, undetected failures remain a stated limitation. Do not invent obstruction state or replay a movement on restart.
+
+Offer an optional plugin-owned Lock tile for both bolt backends. Its SET handler enters the coordinator; feedback updates never call that handler. Existing upstream controls remain independently usable and cannot be intercepted. Preserve the existing paired-relay mechanism: model a logical bolt command, do not infer two independent directions from relay names.
+
+Homebridge's configuration UI and the admin adapter use one plugin-owned profile configuration with revision checks. Bootstrap settings stay in Homebridge configuration. Plan a single migration from the milestone-1 declaration format before profile writes are enabled; do not introduce two competing writable stores.
+
+## Milestones and acceptance
+
+### M1 — Contract and read-only development foundation
+
+- [x] Establish repository scope, migration plan and source provenance.
+- [x] Implement combined-controller declaration validation and duplicate declared-resource detection. Discovery must later resolve hostname aliases and connections that reach the same hardware through different backends.
+- [x] Implement persistent local API identity/token and authenticated read-only inventory.
+- [x] Add Homebridge platform lifecycle scaffold without accessory or hardware side effects.
+- [x] Create the matching Python admin client and a real Node/Python contract test.
+- [ ] Run the same scaffold inside an actual supported Homebridge 2 installation; local API/lifecycle tests alone do not establish this.
+
+M1 does not publish accessories, operate hardware or replace the admin extension. No migration instructions are enabled by this milestone.
+
+### M2 — Driver and behavior parity
+
+- Inventory the current runtime and tests at the recorded source commit. Include keypad valid/invalid behavior while moving, indoor-button interruption, source-specific Tailwind versus pulse-relay routing, manual bolt overrides, auto-bolt policy, restart/fault holds, stale event rejection and no ambiguous retries.
+- Implement Tailwind local API and direct-deCONZ bolt drivers first. Add status-only probes and document Local Control Key setup and resource selection.
+- Implement existing Homebridge opener and bolt drivers with explicit supported service/capability mappings, independent child-bridge access and no source patching.
+- Preserve physical-feedback limitations and the distinction between gateway reports and physical sensing.
+- Prove each driver against fake transports, malformed/unavailable data and ambiguous writes before physical commissioning.
+
+### M3 — Coordinator, accessories and configuration
+
+- Port the complete agreed behavior to one serialized coordinator per assembly; add durable intent/fault state and observation-only recovery after restart.
+- Implement sensor/timed feedback policies, configuration questionnaire, per-controller/input profiles, multiple doors, combined GarageDoorOpener and optional LockMechanism services.
+- Persist stable accessory identifiers; propagate reliable upstream obstruction/fault information without fabrication. Document limitations where stop/reverse is unavailable.
+- Implement settings revisions, command request IDs, expiring input events, sanitized event history, and persistent pause/maintenance state.
+- Verify stop/restart while moving, conflicting inputs, lost gateway/HB connections, interrupted changes, stale state and feedback loops. Hardware timing parity is assessed separately.
+
+### M4 — Existing admin compatibility and new admin parity
+
+- Implement the old extension's full registered contract as an adapter to this API: settings review/apply/cancel/confirmation, status/assets, virtual keypad and maintenance lifecycle.
+- Keep original web URL, roles, navigation and activity semantics. Protect credentials and do not send raw keypad PINs to this plugin.
+- A stopped child bridge must not erase durable maintenance holds. A missing plugin must not be treated as a successful no-op participant.
+- Complete the new admin source extraction, identical core UX and controlled coexistence policy in the companion repository.
+- Make existing-admin compatibility a prerequisite for controller cutover; the user need not migrate web interfaces first.
+
+### M5 — Release and owner migration
+
+- Pass supported Node/Homebridge checks and simulated behavioral parity, review npm contents and publish a tested installable version when authorized.
+- Install the controller plugin first in a non-actuating commissioning mode while the existing service remains active.
+- For the owner's migration use Tailwind local API for the opener and direct deCONZ for the bolt; publish both new combined Garage Door and Lock tiles.
+- Deploy the existing-admin compatibility adapter before activation. Stop the old movement controller and its automatic inputs before the new coordinator gains ownership.
+- Commission real opening, closing, bolting, input behavior and restart recovery with the owner. Confirm both administration paths and HomeKit state.
+- Rebind scenes/automations as necessary. Remove only the obsolete HTTP Webhooks garage/bolt entries after acceptance; retain the plugin if it serves other accessories.
+- Retain one bounded rollback baseline, receipt and explicit cleanup inventory. Final old-installation cleanup is separate.
+
+## Later phase
+
+Host the standalone admin in a Homebridge plugin, keeping its own URL. This phase is deferred. It must retain the API and access model already established here.

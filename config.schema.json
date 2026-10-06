@@ -1,0 +1,28 @@
+{
+  "pluginAlias": "GDoorAndBoltCoordinator",
+  "pluginType": "platform",
+  "singular": true,
+  "headerDisplay": "Development foundation only. Does not publish accessories or operate hardware. The guided configuration UI is a later milestone.",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "name": { "title": "Name", "type": "string", "default": "Garage Door and Bolt Coordinator" },
+      "managementPort": { "title": "Local management API port", "type": "integer", "minimum": 1024, "maximum": 65535, "default": 27773 },
+      "controllers": {
+        "title": "Combined controllers (development declarations)",
+        "type": "array", "minItems": 1, "maxItems": 32,
+        "items": {
+          "type": "object", "required": ["id", "name", "door", "bolt", "feedback", "exposeBoltLock"],
+          "properties": {
+            "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,47}$" },
+            "name": { "type": "string", "minLength": 1, "maxLength": 64 },
+            "exposeBoltLock": { "title": "Expose optional Lock accessory", "type": "boolean", "default": false },
+            "door": { "type": "object", "description": "Tailwind or existing Homebridge garage service. See the synthetic configuration example." },
+            "bolt": { "type": "object", "description": "deCONZ or existing Homebridge Lock/Switch/Light service. Both door and bolt are required." },
+            "feedback": { "type": "object", "description": "Declare sensor/estimated feedback and independent travel times. Runtime validation is authoritative in this development milestone." }
+          }
+        }
+      }
+    }
+  }
+}

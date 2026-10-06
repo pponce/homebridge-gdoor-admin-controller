@@ -1,0 +1,7 @@
+node_modules/
+coverage/
+*.tgz
+private/
+.env
+*.local.json
+__pycache__/
