@@ -34,6 +34,14 @@ Observed: after saving connection keys, the owner asked whether to click **Revie
 
 Proposed improvement: confirm that **Save connection key** saves immediately, then guide the owner to add/configure the garage door. Explain that **Review changes** reviews the door configuration after the Devices, Inputs and Behavior steps. Keep activation as a separately explained **Enable** step.
 
+### Explain which Tailwind door to select
+
+Observed: the numeric Door field prompted questions about multi-door controllers, whether the first door is 0, and how to confirm the selection in the Tailwind app.
+
+Proposed improvement: label the field **Which door on this Tailwind controller?** and show **Door 1**, **Door 2**, **Door 3** while preserving API indices 0, 1, 2 internally. Explain that the address identifies the controller and the selection identifies its door/output. Include a short help link for checking the configured door count in Tailwind's Devices/My Devices screen, using the gear beside the device. Where doors have custom names and the channel is unclear, the numbered physical connection or an existing working integration can establish the mapping; do not suggest test movement just to identify a door.
+
+Reference: [Tailwind support's device settings guidance](https://gotailwind.zendesk.com/hc/en-us/community/posts/360077567852-2nd-Garage-Door). Checking the configured count does not require changing it.
+
 ### Scope of the next change
 
 Apply the agreed terminology and entry-flow improvements to the shared editor in both repositories when implemented. Verify the first-use path with an empty configuration. Preserve existing coordination and commissioning behavior.
