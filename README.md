@@ -1,0 +1,30 @@
+# Garage Door and Bolt Coordinator
+
+A Homebridge platform for coordinating **one garage door and a separate bolt/lock per configured controller**. Multiple doors are supported by separate controller definitions. Multiple input profiles for the same physical door must share its coordinator.
+
+**Status: milestone 1 development foundation. Not ready for installation, physical operation, or migration.** The current implementation validates configuration and serves authenticated, read-only controller inventory. It does not contact hardware, publish HomeKit accessories, or accept movement commands.
+
+## Agreed product scope
+
+- Opener: a garage accessory supplied by another Homebridge plugin, or Tailwind's local API.
+- Bolt: a Lock, Switch, or Light accessory supplied by another Homebridge plugin, or direct deCONZ relay access.
+- Always publish a combined Garage Door accessory once the operational runtime is implemented.
+- Optionally publish a separate Lock accessory for either bolt backend.
+- Configure sensor-based or explicitly estimated travel feedback, independent opening/closing times, settling delays, and per-input behavior.
+- No door-only, bolt-only, native HomeKit pairing, or Apple Home automation backend.
+- No dependency on HTTP Webhooks for the coordinator's accessories or state publication.
+
+The separately installed [administration application](https://github.com/pponce/homebridge-deconzKeypadAlarm-admin) retains its own URL and accounts. The existing standalone installation remains a separate project. Its Controller page and virtual keypad need a compatibility adapter before controlling this plugin.
+
+## Development
+
+Node.js 22 or 24; no development dependencies are needed for this milestone:
+
+```sh
+npm test
+npm pack --dry-run --ignore-scripts
+```
+
+The package is private to prevent accidental npm publication during development. Do not copy example settings into a live installation yet. Configured controller devices are declarations only in milestone 1.
+
+Read the [implementation plan](docs/implementation-plan.md), [migration plan](docs/migration.md), [API contract](docs/api-v1.md), and [current status](docs/status.md).
