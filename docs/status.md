@@ -23,3 +23,7 @@ Validation passed:
 - Companion administrator: 28 client/installation checks on Python 3.10/3.12, 162 retained application checks on Linux, and existing desktop/mobile plus Controller-page browser checks.
 
 No npm publication, live host installation, household state transfer or physical acceptance has occurred. Remaining acceptance is on the owner's host: identities/wiring, travel and pulse timings, real HomeKit/keypad/button behavior, maintenance and rollback. Timers estimate travel; relay state is not physical bolt-position sensing. Native HomeKit pairing, unsupported generic devices and timer-only bolt feedback are outside this build. The original installation/source remains unchanged. Source reference: pponce/garageDoorController@7d4e0f04e4ef3631e721e571adb292cf11988e87.
+
+## npm publication preparation
+
+Version 0.4.0 removes the development-only publication block, declares public npm publication and includes a maintainer release script. Runtime, drivers, UI and API behavior are unchanged from the validated source above. The script packs reviewed tracked files, publishes once and verifies registry integrity; it can verify an already-published identical artifact after an interrupted connection. Publication itself remains pending the maintainer's authenticated terminal run. See [npm-release.md](npm-release.md).

@@ -5,3 +5,4 @@ private/
 .env
 *.local.json
 __pycache__/
+.release/

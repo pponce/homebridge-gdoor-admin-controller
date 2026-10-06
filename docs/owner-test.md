@@ -6,17 +6,13 @@ Use the revisions marked as passed in status.md. This is an initial owner test, 
 
 Requirements: Homebridge 2, Node 22/24, same-host access for the separate administrator's authenticated loopback API, and the Tailwind local control key plus a deCONZ API key with access to the selected devices. Keep the coordinator in its **own child bridge**, separate from homebridge-deconz: administration maintenance may restart the deCONZ child bridge while the coordinator must remain reachable.
 
-Clone this private repository on the Homebridge host using your normal GitHub account access. From its directory:
+After version 0.4.0 is published to npm, install it using Homebridge's managed plugin command:
 
 ```sh
-npm pack --ignore-scripts
+sudo hb-service add homebridge-gdoorandbolt-coordinator@0.4.0
 ```
 
-Install the resulting `homebridge-gdoorandbolt-coordinator-0.4.0-dev.1.tgz` into the same npm prefix used by Homebridge (or the Homebridge UI's local package installation method). On a standard system-wide npm Homebridge installation this is:
-
-```sh
-sudo npm install -g ./homebridge-gdoorandbolt-coordinator-0.4.0-dev.1.tgz
-```
+On installations without hb-service plugin management, use the Homebridge UI's npm plugin installer. Source/tarball installation remains available for development: clone the repository, run `npm pack --ignore-scripts`, then install `homebridge-gdoorandbolt-coordinator-0.4.0.tgz` into the same npm prefix used by Homebridge.
 
 For Docker/custom prefixes use that installation's package workflow. Do not create a plugin systemd service: Homebridge owns its process. Add a GDoorAndBoltCoordinator platform, enable its child bridge, and restart that child bridge. A newly installed profile makes no hardware requests until an explicit check; no profile can actuate until enabled.
 
