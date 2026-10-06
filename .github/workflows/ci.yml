@@ -50,7 +50,7 @@ jobs:
 
   config-ui:
     runs-on: ubuntu-latest
-    timeout-minutes: 6
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -60,9 +60,9 @@ jobs:
       - name: Actual custom UI server IPC and management integration
         run: node scripts/config-ui-server-smoke.mjs
       - name: Install browser tool
-        run: |
-          npm install --prefix "$RUNNER_TEMP/coordinator-browser" --no-save --package-lock=false --ignore-scripts playwright@1.58.2
-          node "$RUNNER_TEMP/coordinator-browser/node_modules/playwright/cli.js" install --with-deps chromium webkit
+        run: npm install --prefix "$RUNNER_TEMP/coordinator-browser" --no-save --package-lock=false --ignore-scripts playwright@1.58.2
+      - name: Install browsers and system libraries
+        run: node "$RUNNER_TEMP/coordinator-browser/node_modules/playwright/cli.js" install --with-deps chromium webkit
       - name: Guided configuration on desktop and mobile
         id: browser
         env:
