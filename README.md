@@ -2,7 +2,7 @@
 
 A Homebridge platform for coordinating **one garage door and a separate bolt/lock per configured controller**. Multiple doors are supported by separate controller definitions. Multiple input profiles for the same physical door must share its coordinator.
 
-**Status: ready for initial supervised owner testing.** The runtime, combined Garage Door and optional Lock accessories, generalized physical inputs, standalone-admin API and modern custom Homebridge settings UI are connected. New garages stay disabled until explicitly checked and enabled. Start with the [installation and test guide](docs/owner-test.md); [validated revisions and limits](docs/status.md) are recorded separately.
+**Status: correcting issues found in initial owner testing.** The runtime, combined Garage Door and optional Lock accessories, generalized physical inputs, standalone-admin API and custom Homebridge settings UI are connected. Physical testing has exposed status and input failures; full original-controller parity is not established. New garages stay disabled until explicitly checked and enabled. See the [installation and test guide](docs/owner-test.md), [validated revisions and limits](docs/status.md), and [old-to-new field-name mapping](docs/settings-mapping.md).
 
 ## Agreed product scope
 
@@ -22,7 +22,7 @@ The separately installed [administration application](https://github.com/pponce/
 After npm publication, install on a Homebridge 2 / Node 22 or 24 host:
 
 ```sh
-sudo hb-service add homebridge-gdoorandbolt-coordinator@0.4.2
+sudo hb-service add homebridge-gdoorandbolt-coordinator@0.4.3
 ```
 
 Use Homebridge settings to configure the plugin in its own child bridge. New garages remain disabled until checked and enabled. Follow the [owner installation guide](docs/owner-test.md) for taking over from an existing controller. This package does not install a separate system service.
@@ -38,6 +38,6 @@ npm test
 npm pack --dry-run --ignore-scripts
 ```
 
-The next npm release is prepared as version 0.4.2; registry publication is performed by the maintainer. Examples contain synthetic devices and require real discovery/configuration. Uncommissioned startup and inventory make no hardware requests; commissioned operation reads devices. No startup, probe or discovery sends actuator commands. See [device checks](docs/device-checks.md) and the [behavior parity inventory](docs/behavior-parity.md).
+The next npm release is prepared as version 0.4.3; registry publication is performed by the maintainer after release checks pass. Examples contain synthetic devices and require real discovery/configuration. Uncommissioned startup and inventory make no hardware requests; commissioned operation reads devices. No startup, probe or discovery sends actuator commands. See [device checks](docs/device-checks.md) and the [behavior parity inventory](docs/behavior-parity.md).
 
 Read the [implementation plan](docs/implementation-plan.md), [migration plan](docs/migration.md), [API contract](docs/api-v1.md), and [current status](docs/status.md).
