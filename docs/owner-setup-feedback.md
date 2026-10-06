@@ -42,6 +42,23 @@ Proposed improvement: label the field **Which door on this Tailwind controller?*
 
 Reference: [Tailwind support's device settings guidance](https://gotailwind.zendesk.com/hc/en-us/community/posts/360077567852-2nd-Garage-Door). Checking the configured count does not require changing it.
 
+### Select saved credentials or create them where needed
+
+Owner request: populate the connection-key field from saved keys. Let the user create a key beside the device connection when none are saved, instead of requiring a trip to the separate form.
+
+Current limitation: the field is free text with a browser datalist containing the keys present at initial load. Saving a key does not refresh that list in the active editor. This is not an obvious or complete selection flow.
+
+Requested improvement:
+- Use a visible saved-credential picker rather than requiring the user to type a key label.
+- Include **Add a new key** beside the picker, including when saved keys already exist.
+- When there are no saved keys, show the inline creation form as the next action.
+- After saving, refresh the available choices and select the new credential without losing pending garage-door settings.
+- Show only credential labels in the picker; keep stored secret values private.
+
+Explain the credential according to the selected connection: Tailwind local API requires its six-digit local control key; an existing Homebridge garage requires the source bridge's pairing PIN and accessory endpoint with unpaired accessory control enabled. That Homebridge route does not require a Tailwind key in this coordinator. Direct deCONZ still requires a deCONZ key for its selected outputs/inputs. Tailwind-specific fields should be visible only for the Tailwind connection.
+
+Acceptance: both first-key creation and existing-key selection work without leaving the device setup or retyping labels; the selected backend clearly explains which credential is required.
+
 ### Scope of the next change
 
 Apply the agreed terminology and entry-flow improvements to the shared editor in both repositories when implemented. Verify the first-use path with an empty configuration. Preserve existing coordination and commissioning behavior.
