@@ -14,7 +14,7 @@ A Homebridge platform for coordinating **one garage door and a separate bolt/loc
 - No door-only, bolt-only, native HomeKit pairing, or Apple Home automation backend.
 - No dependency on HTTP Webhooks for the coordinator's accessories or state publication.
 
-The separately installed [administration application](https://github.com/pponce/homebridge-deconzKeypadAlarm-admin) retains its own URL and accounts. The existing standalone installation remains a separate project. Its Controller page and virtual keypad need a compatibility adapter before controlling this plugin.
+The separately installed [administration application](https://github.com/pponce/homebridge-deconzKeypadAlarm-admin) retains its own URL and accounts. The existing standalone installation remains a separate project. The owner will switch to the new standalone administrator and stop the existing one when both projects are ready.
 
 ## Development
 

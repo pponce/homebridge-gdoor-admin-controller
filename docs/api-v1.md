@@ -30,4 +30,4 @@ Errors are `{ "error": "<fixed_code>" }`: 401 `unauthorized`, 403 `origin_not_al
 - Durable maintenance preflight/pause/verify/resume/complete; no acknowledgement until an operation actually succeeds.
 - Bounded event history and health reflecting actual hardware freshness and reachability.
 
-Keep the old extension's settings, keypad and maintenance contracts in the admin-side compatibility adapter. Transport loss must retain a maintenance hold or unknown operation, not imply successful resume. Capabilities are enabled only with implemented, tested behavior.
+Preserve the existing settings, keypad and maintenance behavior in the new standalone administrator's coordinator adapter. The owner will stop the old administrator at cutover; adapting that installation is not required. Transport loss must retain a maintenance hold or unknown operation, not imply successful resume. Capabilities are enabled only with implemented, tested behavior.

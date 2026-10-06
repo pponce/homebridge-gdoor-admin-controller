@@ -57,20 +57,20 @@ M1 does not publish accessories, operate hardware or replace the admin extension
 - Implement settings revisions, command request IDs, expiring input events, sanitized event history, and persistent pause/maintenance state.
 - Verify stop/restart while moving, conflicting inputs, lost gateway/HB connections, interrupted changes, stale state and feedback loops. Hardware timing parity is assessed separately.
 
-### M4 — Existing admin compatibility and new admin parity
+### M4 — New standalone administrator integration
 
-- Implement the old extension's full registered contract as an adapter to this API: settings review/apply/cancel/confirmation, status/assets, virtual keypad and maintenance lifecycle.
-- Keep original web URL, roles, navigation and activity semantics. Protect credentials and do not send raw keypad PINs to this plugin.
-- A stopped child bridge must not erase durable maintenance holds. A missing plugin must not be treated as a successful no-op participant.
-- Complete the new admin source extraction, identical core UX and controlled coexistence policy in the companion repository.
-- Make existing-admin compatibility a prerequisite for controller cutover; the user need not migrate web interfaces first.
+- Preserve the complete existing web UI in the companion repository, with its own URL, accounts and roles. Adapt controller settings, virtual keypad, activity and maintenance to this API.
+- The owner has chosen to stop the existing administrator and switch to the new one when ready. Supporting simultaneous admins or adapting the old installation is not a phase-1 requirement.
+- Bind requests to the expected plugin, gateway, alarm and controller. Do not forward raw keypad PINs to the coordinator.
+- Preserve review/apply/cancel/confirmation behavior, protected identities, fresh outcome delivery and durable maintenance holds. A missing plugin cannot count as successful maintenance.
+- Validate the two new projects together before owner installation/testing. Generic UI extraction or read-only API success does not establish operational readiness.
 
 ### M5 — Release and owner migration
 
 - Pass supported Node/Homebridge checks and simulated behavioral parity, review npm contents and publish a tested installable version when authorized.
 - Install the controller plugin first in a non-actuating commissioning mode while the existing service remains active.
 - For the owner's migration use Tailwind local API for the opener and direct deCONZ for the bolt; publish both new combined Garage Door and Lock tiles.
-- Deploy the existing-admin compatibility adapter before activation. Stop the old movement controller and its automatic inputs before the new coordinator gains ownership.
+- Install the completed new administrator, stop the existing administrator, and switch to the new interface. Stop the old movement controller and its automatic inputs before the new coordinator gains ownership.
 - Commission real opening, closing, bolting, input behavior and restart recovery with the owner. Confirm both administration paths and HomeKit state.
 - Rebind scenes/automations as necessary. Remove only the obsolete HTTP Webhooks garage/bolt entries after acceptance; retain the plugin if it serves other accessories.
 - Retain one bounded rollback baseline, receipt and explicit cleanup inventory. Final old-installation cleanup is separate.
