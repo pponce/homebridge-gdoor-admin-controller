@@ -44,7 +44,8 @@ export class CoordinatorAccessories {
     for (const [uuid,a] of removed) if (!retained.has(uuid)) { this.api.unregisterPlatformAccessories('homebridge-gdoorandbolt-coordinator', 'GDoorAndBoltCoordinator', [a]); this.active.delete(uuid); }
     this.cached.clear();
   }
-  doorState(s) { return s.phase === 'opening' ? 2 : ['closing','bolting'].includes(s.phase) ? 3 : s.phase === 'closed' ? 1 : s.phase === 'open' ? 0 : 4; }
+  doorState(s) { return s.phase === 'opening' || s.phase === 'unbolting' && s.target === 'open' ? 2 :
+    ['closing','bolting'].includes(s.phase) || s.phase === 'unbolting' && s.target === 'closed' ? 3 : s.phase === 'closed' ? 1 : s.phase === 'open' ? 0 : 4; }
   update(id, state) {
     if (id === null) { this.sync(); return; }
     const C = this.api.hap.Characteristic;
@@ -55,7 +56,13 @@ export class CoordinatorAccessories {
         v.service.updateCharacteristic(C.ObstructionDetected, state.obstruction === true ? true : unavailable ? failure : false);
         v.service.updateCharacteristic(C.CurrentDoorState, unavailable ? failure : this.doorState(state));
         if (state.target) v.service.updateCharacteristic(C.TargetDoorState, state.target === 'open' ? 0 : 1);
-      } else v.service.updateCharacteristic(C.LockCurrentState, unavailable ? failure : state.bolt === 'locked' ? 1 : state.bolt === 'unlocked' ? 0 : 3);
+      } else {
+        // Garage operations also move the bolt. Keep HomeKit's target in sync
+        // with the reported relay state instead of leaving a stale "locking"
+        // target behind after the garage has retracted the bolt.
+        v.service.updateCharacteristic(C.LockCurrentState, unavailable ? failure : state.bolt === 'locked' ? 1 : state.bolt === 'unlocked' ? 0 : 3);
+        if (['locked','unlocked'].includes(state.bolt)) v.service.updateCharacteristic(C.LockTargetState, unavailable ? failure : state.bolt === 'locked' ? 1 : 0);
+      }
     }
   }
 }

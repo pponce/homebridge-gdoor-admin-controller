@@ -94,7 +94,7 @@ export class CoordinatorRuntime {
       try {
         if (!this.changing && !this.state.maintenance && !entry.job && !entry.engine.busy && entry.engine.initialized) {
           await entry.engine.observe();
-          if (entry.profile.autoBolt && entry.engine.autoClosePending && !entry.engine.snapshot().externalUnlockOverride && entry.engine.initialized) {
+          if (!this.changing && !this.state.maintenance && !entry.job && !entry.engine.busy && entry.profile.autoBolt && entry.engine.autoClosePending && !entry.engine.snapshot().externalUnlockOverride && entry.engine.initialized) {
             await this.submit(entry.profile.id, { command: 'observed-close', requestId: randomUUID(), issuedAt: Date.now(), bootId: this.bootId }, 'automatic');
           }
         }
@@ -121,7 +121,7 @@ export class CoordinatorRuntime {
     this.reviews.set(token, { revision, configuration, expires: performance.now() + 300000 });
     return { token, revision, configuration, requiresCommissioning: configuration.controllers.filter(p => this.state.commissioned[p.id] !== hash(p)).map(p => p.id) };
   }
-  assertIdle() { requireValue(!this.stopped && !this.storageFault && !this.changing && [...this.entries.values()].every(e => !e.job && !e.engine?.busy), 'controller_busy'); }
+  assertIdle() { requireValue(!this.stopped && !this.storageFault && !this.changing && [...this.entries.values()].every(e => !e.job && !e.engine?.busy && !e.engine?.observation), 'controller_busy'); }
   cancelReview(token) { this.reviews.delete(token); return { cancelled: true }; }
   async apply(token) {
     const review = this.reviews.get(token);
@@ -272,6 +272,6 @@ export class CoordinatorRuntime {
   async stop() {
     this.stopped = true; this.tickets.clear();
     for (const e of this.entries.values()) { clearTimeout(e.timer); for (const l of e.listeners) l.stop(); e.engine?.stop(); }
-    await Promise.allSettled([...this.entries.values()].flatMap(e => [e.job, e.router?.operation]).filter(x => x && x !== true)); await this.pendingWrites;
+    await Promise.allSettled([...this.entries.values()].flatMap(e => [e.job, e.router?.operation, e.engine?.observation]).filter(x => x && x !== true)); await this.pendingWrites;
   }
 }

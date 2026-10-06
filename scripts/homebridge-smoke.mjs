@@ -8,6 +8,7 @@ import net from 'node:net';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import { hardwareFixture } from '../test/support/hardware.mjs';
+import { HapSubscription } from '../src/homebridge-devices.js';
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function freePort() {
@@ -27,11 +28,12 @@ async function main() {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'coordinator-homebridge-'));
   const platform = JSON.parse(await readFile(path.join(root, 'examples/development-config.json'), 'utf8'));
   const hardware = await hardwareFixture(platform.controllers[0]);
-  let child; let logs = ''; let identity;
+  let child; let logs = ''; let identity; const subscriptions=[];let releaseRead;
   try {
     platform.controllers[0] = hardware.config;
     Object.assign(hardware.config.feedback,{openingSeconds:1,closedStableSeconds:0,boltSettleSeconds:0});
-    hardware.config.timing={openRetractSettleSeconds:0,closeRetractSettleSeconds:0,operationPollSeconds:.1,idlePollSeconds:30};
+    hardware.config.timing={openRetractSettleSeconds:0,closeRetractSettleSeconds:0,operationPollSeconds:.1,idlePollSeconds:.5};
+    hardware.state.closeDelayMs=500;
     platform.managementPort = await freePort();
     platform._bridge = { username: '0E:11:22:33:44:66', port: await freePort() };
     await writeFile(path.join(directory, 'config.json'), JSON.stringify({
@@ -70,22 +72,43 @@ async function main() {
     const serviceType=(s,type)=>s.type.toUpperCase().replace(/^0+/,'').startsWith(type+'-')||s.type.toUpperCase()===type;
     const garage=accessories.accessories.find(a=>a.services.some(s=>serviceType(s,'41')));
     const garageService=garage.services.find(s=>serviceType(s,'41'));const target=garageService.characteristics.find(c=>serviceType(c,'32'));
+    const current=garageService.characteristics.find(c=>serviceType(c,'E'));
+    const bolt=accessories.accessories.find(a=>a.services.some(s=>serviceType(s,'45')));
+    const lock=bolt.services.find(s=>serviceType(s,'45'));
+    const lockTarget=lock.characteristics.find(c=>serviceType(c,'1E'));
+    const lockCurrent=lock.characteristics.find(c=>serviceType(c,'1D'));
+    const lockTargets=[];const subscription=new HapSubscription(hapOrigin,'031-45-154',bolt.aid,lockTarget.iid);
+    subscriptions.push(subscription);subscription.on('value',value=>lockTargets.push(value));subscription.start();await until(async()=>subscription.ready);
+    const readCharacteristics=async()=>{
+      const ids=garage.aid+'.'+current.iid+','+bolt.aid+'.'+lockCurrent.iid;
+      const result=await fetch(hapOrigin+'/characteristics?id='+ids,{headers:{Authorization:'031-45-154'},signal:AbortSignal.timeout(3000)});
+      const body=await result.json();assert.equal(result.status,200,JSON.stringify(body));
+      assert.ok(body.characteristics.every(c=>c.status===undefined||c.status===0),JSON.stringify(body));
+    };
     for(const [value,phase]of [[0,'open'],[1,'closed']]){
+      let reading=false;const heldRead=new Promise(resolve=>{releaseRead=resolve;});
+      hardware.state.beforeDoorRead=async()=>{hardware.state.beforeDoorRead=null;reading=true;await heldRead;};
+      await until(async()=>reading);
+      const before=hardware.state.writes.length;
       const write=await fetch(hapOrigin+'/characteristics',{method:'PUT',headers:{Authorization:'031-45-154','Content-Type':'application/hap+json'},body:JSON.stringify({characteristics:[{aid:garage.aid,iid:target.iid,value}]}),signal:AbortSignal.timeout(5000)});if(write.status!==204)throw Error('HAP write rejected '+write.status+' '+await write.text()+' runtime '+JSON.stringify((await management(endpoint+'/state')).status));
-      await until(async()=>{const s=(await management(endpoint+'/state')).status.state;return s.phase===phase&&!s.busy;});
+      assert.equal(hardware.state.writes.length,before,'HAP must acknowledge before waiting for the outstanding read; no overlapping actuator command');
+      releaseRead();releaseRead=null;
+      await until(async()=>{await readCharacteristics();const s=(await management(endpoint+'/state')).status.state;return s.phase===phase&&!s.busy;});
+      await until(async()=>lockTargets.at(-1)===(value===0?0:1));
     }
     assert.deepEqual(hardware.state.writes,[['bolt',false],['door','open'],['bolt',false],['door','close'],['bolt',true]]);
     assert.equal(logs.includes(identity.token), false);
     child.kill('SIGTERM');
     await until(async () => child.exitCode !== null || child.signalCode !== null, 10000);
     await assert.rejects(fetch(origin + '/v1/identity', { signal: AbortSignal.timeout(1000) }));
-    console.log('Actual Homebridge 2 child-bridge startup, private storage, explicit commissioning, actual HAP open/close handlers, ordered bolt coordination and shutdown passed.');
+    console.log('Actual Homebridge child bridge passed prompt HAP command acknowledgement during idle reads, healthy current-state reads during travel, lock-target event updates, ordered coordination and shutdown.');
   } catch (error) {
     // Synthetic logs only, with the generated management token still redacted.
     const safeLogs = logs.replaceAll(identity?.token || 'never-match-placeholder', '[redacted]');
     console.error(safeLogs);
     throw new Error(String(error) + ': ' + safeLogs.slice(-1400));
   } finally {
+    releaseRead?.();for(const subscription of subscriptions)subscription.stop();
     if (child && child.exitCode === null && child.signalCode === null) { child.kill('SIGTERM'); await sleep(1000); child.kill('SIGKILL'); }
     await hardware.close(); await rm(directory, { recursive: true, force: true });
   }

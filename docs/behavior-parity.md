@@ -2,6 +2,10 @@
 
 Reviewed source: `pponce/garageDoorController` at `7d4e0f04e4ef3631e721e571adb292cf11988e87`. Reference files: controller/garage_controller.py, controller/deconz_bolt.py, scripts/garage_service.py, scripts/aqara_button_service.py, scripts/keypad_service.py, and private_extensions/controller/{extension,keypad,runtime,settings}.py. No household configuration, runtime credentials or original Git history was imported. The JavaScript engine is a new implementation tested against the reviewed behavior.
 
+The inventory below describes intended behaviors and implemented test boundaries, not complete equivalence to the original. The first physical tests exposed defects in HomeKit reporting and input admission. The [field-name mapping](settings-mapping.md) records corresponding, missing and new controls. Settings from the old controller are not imported automatically.
+
+Known gaps from the source audit: five configurable notification/reconciliation controls are absent; the original service required two healthy observations after an idle outage while this implementation recovers after one; the original commissioned Aqara input used a polling release gate while this implementation uses a generalized WebSocket listener; timing defaults, accepted ranges and related-field validation are not identical. The 0.4.3 status/input correction does not resolve those additional gaps. The old example file is stale for the retired second pre-bolt wait; use the original settings validator and current page when comparing behavior.
+
 | Behavior | Implemented boundary |
 | --- | --- |
 | HomeKit / virtual keypad use Tailwind; physical controls use the assigned relay | Shared worker, native adapters and real loopback HTTP/WebSocket tests |

@@ -139,6 +139,16 @@ test('two different button providers and physical keypad share the relay route; 
   assert.deepEqual(f.state.commands, [['wall-relay', 'open'], ['primary', 'close'], ['wall-relay', 'open'], ['primary', 'close'], ['wall-relay', 'open']]);
 });
 
+test('an idle observation does not invalidate an armed physical button or discard a fresh press',async()=>{
+  const f=routerFixture();await f.engine.initialize();f.arm('indoor-button');
+  const before=f.router.context('indoor-button');const read=f.engine.door.read;let release;
+  f.engine.door.read=()=>{f.engine.door.read=read;return new Promise(resolve=>{release=resolve;});};
+  const observation=f.engine.observe();assert.deepEqual(f.router.context('indoor-button'),before);
+  const operation=f.offer('indoor-button',1002);assert.deepEqual(f.state.commands,[]);
+  release(await read());await observation;
+  assert.equal((await operation).accepted,true);assert.deepEqual(f.state.commands,[['wall-relay','open']]);
+});
+
 test('native keypad requires disarmed confirmation, rejected code closes, receipt cannot replay', async () => {
   const f = routerFixture(); await f.engine.initialize(); f.arm('physical-keypad');
   assert.equal((await f.offer('physical-keypad', 'accepted-disarm')).accepted, false);

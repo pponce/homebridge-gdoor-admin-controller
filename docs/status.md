@@ -1,6 +1,6 @@
 # Development status
 
-2026-10-06: ready for initial supervised owner installation/testing. Physical acceptance remains outstanding. Follow [owner-test.md](owner-test.md), starting with the coordinator disabled while the old controller remains active.
+2026-10-06: owner testing has exposed HomeKit reporting and physical-input failures. Physical acceptance is not established. The owner has stopped the old services and enabled the new coordinator. The initial disabled-install instructions below describe the earlier cutover stage; the active work is the 0.4.3 correction and original-settings audit at the end of this document.
 
 ## Validated source
 
@@ -57,3 +57,13 @@ Local validation passed all 93 Node tests and 16 Node/Python cross-repository te
 ## Owner activation follow-up — 2026-10-06
 
 After receiving the 0.4.2 publication/update instructions, the owner reported successfully enabling the garage. Supervised HomeKit, indoor-button and physical-keypad movement tests have not yet been reported. The disabled Homebridge footer Save and a still-visible review action left completion unclear; the next UI update must distinguish immediate persisted enablement from pending configuration edits and offer a clear completion/close action. See the setup feedback notes. The new standalone administrator still needs owner installation and migration.
+
+## First movement failures and settings audit — 0.4.3 preparation
+
+The owner subsequently reported that HomeKit and a correct physical keypad PIN opened the door, but the separate bolt tile continued to display Locking. HomeKit close moved the door and eventually locked the bolt while the garage tile displayed No Response. The indoor button did not operate either direction, and an incorrect physical PIN did not close. The current live profile/status snapshot has not yet been received; do not assign every reported symptom a single proven root cause.
+
+The correction updates both current and target Lock characteristics when the shared controller moves the bolt; reports the requested garage direction during retraction; separates routine observations from movement ownership so reads do not reject commands or repeatedly disarm inputs; clears stale idle communication errors on successful operation reads; and prevents periodic deCONZ health reads from consuming or discarding an otherwise fresh live input event. Commands admitted during an idle read claim the worker immediately, wait before any actuator write, and remain blocked if the read discovers an identity/physical fault. Stop/maintenance serialization includes outstanding observations. No actuator retries, settings migrations or live hardware commands are introduced.
+
+Regression checks cover the original input routes and valid/invalid keypad semantics, a fresh event racing health polling, prompt HomeKit acknowledgement during observation, cached Lock target event notifications, healthy characteristic reads during travel, and prevention of overlapping actuation. Local validation passed 101 Node tests and all 16 Node/Python cross-repository checks. The enhanced actual-Homebridge and configuration UI checks are pending CI. The management API contract and companion administrator code are unchanged.
+
+The [complete field-name mapping](settings-mapping.md) records all 18 original page timers/reporting controls, the interruption checkbox, and new plugin fields. Five reporting settings have no equivalent. The separate behavior audit records changed defaults/ranges, two-pass idle recovery and exact Aqara event-gate parity as remaining gaps. The new controller did not import the old saved values. This patch does not resolve those other gaps or the setup UI backlog, and it must not be described as full original-controller parity.

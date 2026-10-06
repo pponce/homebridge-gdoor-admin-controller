@@ -93,8 +93,10 @@ export class DeconzInputListener {
         const inspection = await this.driver.inspect();
         if (!this.running || generation !== this.generation || key !== this.context()) return;
         this.verifyAt = this.clock.now() + 5000;
-        // Never move a live high-water mark backwards after an older GET.
-        this.highWater = Math.max(this.highWater, inspection.stamp);
+        // Only establish a baseline when rearming. A periodic GET can already
+        // contain a press whose live notification is still in transit; reading
+        // that snapshot must not consume the unseen live event.
+        if (!this.ready) this.highWater = Math.max(this.highWater, inspection.stamp);
         if (!this.ready && this.router.context(this.profile.id).eligible && initialSequence === this.sequence) {
           this.router.arm(this.profile.id, { session: this.session, sequence: this.sequence, value: inspection.value });
           this.ready = true; this.onState('ready');
@@ -110,7 +112,7 @@ export class DeconzInputListener {
     const sequence = ++this.sequence;
     if (event.occurredAt <= this.highWater) return;
     this.highWater = event.occurredAt;
-    if (!this.ready || !this.running || this.handling || this.checking || this.contextKey !== this.context()) return;
+    if (!this.ready || !this.running || this.handling || this.contextKey !== this.context()) return;
     this.handling = true; const generation = this.generation; const receipt = this.router.capture(this.profile.id);
     try {
       const fresh = await this.driver.inspect(); // Pin source identity/enrollment again before admission.

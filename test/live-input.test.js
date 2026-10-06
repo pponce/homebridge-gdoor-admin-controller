@@ -24,4 +24,10 @@ test('real deCONZ WebSocket event drives its selected relay, while virtual keypa
  assert.deepEqual(hw.state.writes.slice(3),[['bolt',false],['door','close'],['bolt',true]]);
  await until(()=>{const listener=runtime.entry(p.id).listeners.find(l=>l.profile.id==='physical-keypad');return listener.ready&&!listener.checking&&listener.contextKey===listener.context();});hw.emit('8','disarmed');await until(()=>runtime.entry(p.id).engine.state.phase==='open'&&!runtime.entry(p.id).engine.busy);
  assert.deepEqual(hw.state.writes.slice(6),[['bolt',false],['motor',true],['motor',false]]);
+ await until(()=>{const listener=runtime.entry(p.id).listeners.find(l=>l.profile.id==='physical-keypad');return listener.ready&&!listener.checking&&listener.contextKey===listener.context();});
+ hw.emit('8','invalid_code');await until(()=>runtime.entry(p.id).engine.state.phase==='closed'&&!runtime.entry(p.id).engine.busy);
+ assert.deepEqual(hw.state.writes.slice(9),[['bolt',false],['motor',true],['motor',false],['bolt',true]]);
+ await until(()=>{const listener=runtime.entry(p.id).listeners.find(l=>l.profile.id==='indoor-button');return listener.ready&&!listener.checking&&listener.contextKey===listener.context();});
+ hw.emit('4',1002);await until(()=>runtime.entry(p.id).engine.state.phase==='open'&&!runtime.entry(p.id).engine.busy);
+ assert.deepEqual(hw.state.writes.slice(13),[['bolt',false],['motor',true],['motor',false]]);
 });

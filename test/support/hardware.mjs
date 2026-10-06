@@ -19,12 +19,14 @@ export async function hardwareFixture(configuration) {
     response.setHeader('Content-Type', 'application/json');
     const send = value => response.end(JSON.stringify(value));
     if (request.url === '/json' && request.method === 'POST' && request.headers.token === '123456') {
-      if (body?.data?.type === 'get' && body.data.name === 'dev_st') return send({ result: 'OK', data: {
+      if (body?.data?.type === 'get' && body.data.name === 'dev_st') { await state.beforeDoorRead?.(); return send({ result: 'OK', data: {
         ['door' + (config.door.doorIndex + 1)]: { index: config.door.doorIndex, status: state.closed ? 'close' : 'open',
-          lockup: state.blocked, disabled: false } } });
+          lockup: state.blocked, disabled: false } } }); }
       if (body?.data?.type === 'set' && body.data.name === 'door_op' && body.product === 'iQ3') {
         state.writes.push(['door', body.data.value.cmd]);
-        state.closed = body.data.value.cmd === 'close';
+        if (body.data.value.cmd === 'close' && state.closeDelayMs > 0) {
+          setTimeout(() => { state.closed = true; }, state.closeDelayMs).unref();
+        } else state.closed = body.data.value.cmd === 'close';
         if (state.ambiguousDoorWrite) return request.socket.destroy();
         return send({ result: 'OK' });
       }

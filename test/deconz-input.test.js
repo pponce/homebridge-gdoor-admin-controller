@@ -28,6 +28,23 @@ test('deCONZ startup/reconnect snapshots never become button presses and live ti
   await f.emit();assert.deepEqual(f.state.operations,['open']);
   f.listener.socket.close();f.state.now=2500;await f.open();await f.emit();assert.deepEqual(f.state.operations,['open']);
 });
+test('periodic snapshots do not consume a fresh button notification that arrives afterward',async t=>{
+  const f=fixture();t.after(()=>f.listener.stop());await f.open();
+  f.state.now=5000;f.state.stamp=f.state.wall;
+  await f.listener.tick();assert.deepEqual(f.state.operations,[]);
+  await f.emit();assert.deepEqual(f.state.operations,['open']);
+  await f.emit();assert.deepEqual(f.state.operations,['open']);
+});
+test('a healthy periodic input check does not discard a concurrent live button event',async t=>{
+  const f=fixture();t.after(()=>f.listener.stop());await f.open();
+  const inspect=f.driver.inspect.bind(f.driver);let release;let first=true;
+  f.driver.inspect=()=>{if(first){first=false;return new Promise(resolve=>{release=resolve;});}return inspect();};
+  f.state.now=5000;f.state.stamp=f.state.wall;
+  const health=f.listener.tick();assert.equal(f.listener.checking,true);
+  await f.emit();assert.deepEqual(f.state.operations,['open']);
+  release(await inspect());await health;
+  await f.emit();assert.deepEqual(f.state.operations,['open']);
+});
 test('keypad outcomes reverify identity, public alarm membership and disarmed state without any alarm writes',async t=>{
   const f=fixture('keypad');t.after(()=>f.listener.stop());await f.open();f.state.stamp=f.state.wall;f.state.disarmed=false;await f.emit();assert.deepEqual(f.state.operations,[]);
   f.state.stamp+=1;f.state.disarmed=true;await f.emit();assert.deepEqual(f.state.operations,['open']);

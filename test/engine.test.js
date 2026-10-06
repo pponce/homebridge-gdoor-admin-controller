@@ -40,6 +40,39 @@ test('startup and observations never operate hardware; incomplete journal holds'
   }
 });
 
+test('a command arriving during an idle read claims the worker without overlapping reads and actuation', async () => {
+  const {engine,model}=fixture({door:(_command,m)=>{m.door='not-closed';}});
+  await engine.initialize();const read=engine.door.read;let release;
+  engine.door.read=()=>{engine.door.read=read;return new Promise(resolve=>{release=resolve;});};
+  const observed=engine.observe();
+  assert.equal(engine.snapshot().busy,false);
+  const operation=engine.execute('open');
+  assert.equal(engine.busy,true);assert.deepEqual(model.writes,[]);assert.equal(model.journal.inProgress,false);
+  await assert.rejects(engine.execute('close'),/controller_busy/);
+  release(await read());await observed;await operation;
+  assert.equal(engine.state.phase,'open');assert.equal(engine.state.fault,null);
+  assert.deepEqual(model.writes.map(row=>row.slice(0,2)),[['bolt',false],['door','open']]);
+});
+
+test('an identity fault discovered by an outstanding idle check blocks an already admitted command', async () => {
+  const {engine,model}=fixture();await engine.initialize();let reject;
+  engine.door.read=()=>new Promise((_resolve,fail)=>{reject=fail;});
+  const observed=engine.observe();const operation=engine.execute('open');
+  reject(new Fault('bolt_resource_identity_mismatch'));await observed;await operation;
+  assert.equal(engine.state.fault,'bolt_resource_identity_mismatch');assert.deepEqual(model.writes,[]);
+});
+
+test('successful operation reads clear a recovered idle communication error during closing', async () => {
+  const {engine,model}=fixture({model:{door:'not-closed',locked:false},door:(_command,m)=>{m.door='closed';}});
+  await engine.initialize();const read=engine.door.read;
+  engine.door.read=async()=>{throw new Fault('door_read_failed');};
+  await engine.observe();assert.equal(engine.state.unavailable,'door_read_failed');
+  engine.door.read=read;let healthyDuringClose=false;
+  const write=engine.door.write;engine.door.write=async command=>{healthyDuringClose=engine.state.unavailable===null;await write(command);};
+  await engine.execute('close');assert.equal(healthyDuringClose,true);
+  assert.equal(engine.state.unavailable,null);assert.equal(engine.state.phase,'closed');assert.equal(engine.state.fault,null);
+});
+
 test('open retracts, settles, commands once, then estimates from closed-sensor departure', async () => {
   const { engine, model } = fixture({ door: (_command, m) => { m.departAt = m.now + 50; },
     tick: m => { if (m.departAt && m.now >= m.departAt) m.door = 'not-closed'; } });

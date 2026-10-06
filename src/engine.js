@@ -24,7 +24,7 @@ export class MovementEngine {
     requireValue(Object.keys(timing).every(key => Object.hasOwn(defaults, key)) &&
       Object.values(this.timing).every(value => Number.isFinite(value) && value >= 0 && value <= 300000) &&
       ['pollMs', 'boltTimeoutMs', 'motionTimeoutMs', 'openingMs', 'closingMs'].every(key => this.timing[key] > 0), 'engine_timing_invalid');
-    this.busy = false; this.initialized = false; this.stopped = false; this.lastBolt = null;
+    this.busy = false; this.observation = null; this.initialized = false; this.stopped = false; this.lastBolt = null;
     this.state = { phase: 'starting', door: 'unknown', bolt: 'unknown', target: null,
       openEstimated: false, closeEstimated: false, fault: null, externalUnlockOverride: false };
   }
@@ -76,7 +76,7 @@ export class MovementEngine {
     // The transport evidence and user's configured meaning must both agree.
     const sample = { ...door, locked: bolt.locked, boltEvidence: bolt.evidence };
     this.sample = sample; this.observedAt = Date.now();
-    this.update({ door: sample.door, bolt: sample.locked ? 'locked' : 'unlocked', obstruction: sample.obstruction });
+    this.update({ door: sample.door, bolt: sample.locked ? 'locked' : 'unlocked', obstruction: sample.obstruction, unavailable: null });
     requireValue(!door.blocked, 'door_blocked');
     requireValue(!door.obstruction, 'obstruction');
     return sample;
@@ -91,8 +91,17 @@ export class MovementEngine {
   }
 
   async observe() {
-    requireValue(this.initialized && !this.state.fault && !this.busy, 'engine_unavailable');
-    this.busy = true;
+    requireValue(this.initialized && !this.state.fault && !this.busy && !this.observation, 'engine_unavailable');
+    // Routine reads must not repeatedly disarm inputs or reject HomeKit writes.
+    // An admitted operation claims busy immediately and waits for this read to
+    // finish before it journals intent or operates any output.
+    const observation = this.observeOnce();
+    this.observation = observation;
+    try { return await observation; }
+    finally { if (this.observation === observation) this.observation = null; }
+  }
+
+  async observeOnce() {
     const previousBolt = this.lastBolt; const previousDoor = this.state.door;
     try {
       const sample = await this.read();
@@ -115,7 +124,7 @@ export class MovementEngine {
       if (['door_read_failed', 'bolt_read_failed', 'bolt_unreachable', 'motor_read_failed', 'motor_unreachable', 'homebridge_read_failed'].includes(code(error))) {
         this.update({ phase: 'unavailable', unavailable: code(error), openEstimated: false, closeEstimated: false });
       } else await this.fail(code(error));
-    } finally { this.busy = false; }
+    }
     return this.snapshot();
   }
 
@@ -167,6 +176,10 @@ export class MovementEngine {
     this.interruptionOperation = interruption; this.operationOwner = owner; this.autoClosePending = false;
     this.motor = selected; this.timing = { ...this.timing, ...timing };
     try {
+      if (this.observation) await this.observation;
+      this.checkRunning();
+      requireValue(this.initialized && !this.state.fault, this.state.fault ?? 'engine_unavailable');
+      this.autoClosePending = false;
       await this.journal.write({ inProgress: true, fault: false }); // Durable intent before any actuator request.
       this.update({ externalUnlockOverride: command === 'unlock', target: command === 'open' ? 'open' : command === 'close' ? 'closed' : this.state.target });
       const sample = await this.read();
