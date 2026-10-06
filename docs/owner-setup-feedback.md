@@ -49,6 +49,8 @@ Owner request: populate the connection-key field from saved keys. Let the user c
 Current limitation: the field is free text with a browser datalist containing the keys present at initial load. Saving a key does not refresh that list in the active editor. This is not an obvious or complete selection flow.
 
 Requested improvement:
+- Ask **How is this garage door controlled?** first, with **Tailwind local API** and **Existing Homebridge garage** choices, before showing any Tailwind-specific fields or asking for credentials. Apply the same connection-first order to the bolt and other device setup sections.
+- After the connection choice, show the appropriate device address/discovery and saved-credential picker with inline creation. The standalone credential form should not lead the first-use flow.
 - Use a visible saved-credential picker rather than requiring the user to type a key label.
 - Include **Add a new key** beside the picker, including when saved keys already exist.
 - When there are no saved keys, show the inline creation form as the next action.
