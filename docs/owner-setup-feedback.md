@@ -61,6 +61,14 @@ Explain the credential according to the selected connection: Tailwind local API 
 
 Acceptance: both first-key creation and existing-key selection work without leaving the device setup or retyping labels; the selected backend clearly explains which credential is required.
 
+### Separate credential fields for each connection
+
+Owner clarification: provide separate Tailwind and deCONZ credential fields, where entering and saving a credential completes that connection's credential setup. The shared connection-name/key form was mistaken for a Tailwind-only form, leaving no apparent place to save the deCONZ key requested by the bolt configuration.
+
+Preferred first-use flow: choose the connection type, then enter its clearly labeled credential in that connection's section: **Tailwind local control key**, **deCONZ API key**, or **Homebridge pairing PIN** as applicable. Each has a clear save action and a **Key saved** confirmation; saving automatically attaches the private credential reference to the connection. Creating and retyping a connection name must not be required in the normal flow. Keep a visible **Use a saved key** option for reuse, particularly the same deCONZ connection across bolt, motor relay and inputs. Refresh saved choices without losing pending settings. Do not return stored secret values to the browser.
+
+This refines the earlier picker proposal: separate connection-specific credential entry is the obvious first-use path; saved-key selection remains an available reuse path. These are recorded requirements for a future UI update, not changes to the installed 0.4.0 build.
+
 ### Scope of the next change
 
 Apply the agreed terminology and entry-flow improvements to the shared editor in both repositories when implemented. Verify the first-use path with an empty configuration. Preserve existing coordination and commissioning behavior.
