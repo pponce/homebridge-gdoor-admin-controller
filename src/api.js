@@ -1,9 +1,10 @@
 import { timingSafeEqual } from 'node:crypto';
 import http from 'node:http';
+import { readFileSync } from 'node:fs';
 import { inventory, routingInventory, ConfigurationError } from './config.js';
 import { Fault, requireValue } from './fault.js';
 
-export const PLUGIN_VERSION = '0.4.0-dev.1';
+export const PLUGIN_VERSION = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
 export const CAPABILITIES = Object.freeze({ inventory: true, routingInventory: true, diagnostics: false, settingsWrite: false, motion: false, maintenance: false, keypad: false });
 export function createManagementServer({ identity, configuration, diagnostics, runtime }) {
   const expectedAuthorization = Buffer.from(`Bearer ${identity.token}`);

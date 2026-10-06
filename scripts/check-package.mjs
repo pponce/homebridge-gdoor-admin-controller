@@ -4,6 +4,7 @@ import { readFile, realpath } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
+import { PLUGIN_VERSION } from '../src/api.js';
 
 const manifestPath = process.argv[2];
 assert.ok(manifestPath, 'Usage: node scripts/check-package.mjs /path/to/pack.json');
@@ -12,6 +13,7 @@ assert.equal(pkg.name, 'homebridge-gdoorandbolt-coordinator');
 assert.equal(pkg.private, undefined);
 assert.equal(pkg.publishConfig.registry, 'https://registry.npmjs.org/');
 assert.equal(pkg.publishConfig.access, 'public');
+assert.equal(PLUGIN_VERSION, pkg.version, 'API version label must match the npm package');
 for (const hook of ['preinstall', 'install', 'postinstall', 'prepare', 'prepack', 'postpack', 'prepublish', 'prepublishOnly', 'publish', 'postpublish']) {
   assert.equal(pkg.scripts?.[hook], undefined, 'Unexpected release/install lifecycle hook: ' + hook);
 }

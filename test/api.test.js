@@ -28,6 +28,7 @@ test('real socket identity and inventory explicitly report no operational capabi
   assert.equal(server.address().address, '127.0.0.1');
   const identity = await request(port, '/v1/identity');
   assert.equal(identity.status, 200); assert.equal(identity.body.instanceId, instanceId);
+  assert.equal(identity.body.pluginVersion, JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')).version);
   assert.equal(identity.body.capabilities.motion, false); assert.equal(identity.body.capabilities.maintenance, false);
   assert.equal(identity.headers['cache-control'], 'no-store');
   const all = await request(port, '/v1/controllers');
