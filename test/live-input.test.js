@@ -22,6 +22,6 @@ test('real deCONZ WebSocket event drives its selected relay, while virtual keypa
  assert.deepEqual(hw.state.writes,[['bolt',false],['motor',true],['motor',false]]);
  const ticket=runtime.keypadBegin(p.id,{gatewayId:p.bolt.gatewayId,alarmId:1});const after=await runtime.keypadAfter(ticket.token,'rejected','disarm',.1);assert.match(after.note,/Close requested/);await runtime.entry(p.id).job;
  assert.deepEqual(hw.state.writes.slice(3),[['bolt',false],['door','close'],['bolt',true]]);
- await until(()=>runtime.entry(p.id).inputStates['physical-keypad']==='ready');hw.emit('8','disarmed');await until(()=>runtime.entry(p.id).engine.state.phase==='open'&&!runtime.entry(p.id).engine.busy);
+ await until(()=>{const listener=runtime.entry(p.id).listeners.find(l=>l.profile.id==='physical-keypad');return listener.ready&&!listener.checking&&listener.contextKey===listener.context();});hw.emit('8','disarmed');await until(()=>runtime.entry(p.id).engine.state.phase==='open'&&!runtime.entry(p.id).engine.busy);
  assert.deepEqual(hw.state.writes.slice(6),[['bolt',false],['motor',true],['motor',false]]);
 });

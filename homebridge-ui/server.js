@@ -1,4 +1,5 @@
 import { HomebridgePluginUiServer, RequestError } from '@homebridge/plugin-ui-utils';
+import path from 'node:path';
 import { readFile } from 'node:fs/promises';
 import { loadIdentity } from '../src/storage.js';
 import { readCredentials } from '../src/credentials.js';
@@ -44,7 +45,7 @@ export class UiServer extends HomebridgePluginUiServer {
     let credentials = []; try { credentials = Object.keys(await readCredentials(this.homebridgeStoragePath)); } catch { /* Not yet configured. */ }
     try {
       const [identity, settings, controllers, routing] = await Promise.all([this.api('/v1/identity'), this.api('/v1/settings'), this.api('/v1/controllers'), this.api('/v1/maintenance')]);
-      return { connected: true, settings: settings.settings, controllers: controllers.controllers, maintenance: routing.maintenance, credentials, pluginVersion: identity.pluginVersion };
+      return { connected: true, adminConnection: { baseUrl: 'http://127.0.0.1:' + (await this.bootstrap()).port, identityFile: path.join(this.homebridgeStoragePath, 'gdoorandbolt-coordinator', 'identity.json') }, settings: settings.settings, controllers: controllers.controllers, maintenance: routing.maintenance, credentials, pluginVersion: identity.pluginVersion };
     } catch {
       const { block } = await this.bootstrap();
       return { connected: false, settings: { revision: null, configuration: { managementPort: block.managementPort ?? 27773, controllers: block.controllers ?? [] } }, controllers: [], credentials };

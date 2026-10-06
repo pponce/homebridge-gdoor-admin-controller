@@ -21,7 +21,8 @@
     "config.schema.json",
     "docs/",
     "README.md",
-    "homebridge-ui"
+    "homebridge-ui",
+    "examples"
   ],
   "scripts": {
     "test": "node --test test/*.test.js"

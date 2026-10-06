@@ -124,9 +124,10 @@ export class CoordinatorRuntime {
   assertIdle() { requireValue(!this.stopped && !this.storageFault && !this.changing && [...this.entries.values()].every(e => !e.job && !e.engine?.busy), 'controller_busy'); }
   cancelReview(token) { this.reviews.delete(token); return { cancelled: true }; }
   async apply(token) {
-    const review = this.reviews.get(token); this.reviews.delete(token);
+    const review = this.reviews.get(token);
     requireValue(review && review.expires >= performance.now() && review.revision === this.state.revision, 'settings_review_expired');
     this.assertIdle(); requireValue(!this.state.maintenance, 'maintenance_held'); this.changing = true;
+    this.reviews.delete(token);
     try {
       this.state.configuration = review.configuration; this.state.revision++; this.tickets.clear();
       for (const id of Object.keys(this.state.commissioned)) if (!review.configuration.controllers.some(p => p.id === id && hash(p) === this.state.commissioned[id])) delete this.state.commissioned[id];

@@ -4,6 +4,7 @@ const $ = id => document.getElementById(id);
 let editor, loaded, blocks = [], reviewToken = null, busy = false;
 function notice(message, error=false){$('notice').textContent=message;$('notice').dataset.error=String(error);hb?.fixScrollHeight?.();}
 async function action(fn){if(busy)return;busy=true;try{await fn();}catch{notice('Could not complete the request. Check the selected devices, required fields and coordinator connection.',true);}finally{busy=false;hb?.fixScrollHeight?.();}}
+new ResizeObserver(()=>hb?.fixScrollHeight?.()).observe(document.body);
 function changed(){reviewToken=null;$('review').hidden=true;$('save-hint').textContent='Unsaved changes';}
 async function load(){
   if(!hb){notice('Open this screen from the coordinator’s Settings in Homebridge.',true);$('review-button').disabled=true;return;}
@@ -12,6 +13,7 @@ async function load(){
   blocks=await hb.getPluginConfig(); loaded=await hb.request('/load');
   // Unsaved bootstrap configuration belongs to Homebridge until its first start.
   if(!loaded.connected&&blocks[0]?.controllers)loaded.settings.configuration.controllers=blocks[0].controllers;
+  $('admin-setup').hidden=!loaded.adminConnection;if(loaded.adminConnection){$('admin-address').value=loaded.adminConnection.baseUrl;$('admin-identity-file').value=loaded.adminConnection.identityFile;}
   $('connection').textContent=loaded.connected?'Connected':'Initial setup';
   editor=new ProfileEditor($('editor'),{configuration:loaded.settings.configuration,credentials:loaded.credentials,changed,
     discoverHomebridge:body=>hb.request('/homebridge',body),discover:body=>hb.request('/deconz',body),error:message=>notice(message,true)});

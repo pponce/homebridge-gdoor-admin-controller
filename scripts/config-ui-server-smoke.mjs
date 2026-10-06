@@ -1,0 +1,31 @@
+import {fork} from 'node:child_process';
+import {mkdtemp,readFile,writeFile,rm} from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
+import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
+import {once} from 'node:events';
+import {loadIdentity} from '../src/storage.js';
+import {CoordinatorRuntime} from '../src/runtime.js';
+import {createManagementServer,listenLocal,closeServer} from '../src/api.js';
+import {hardwareFixture} from '../test/support/hardware.mjs';
+const storagePath=await mkdtemp(path.join(os.tmpdir(),'coordinator-ui-ipc-'));const identity=await loadIdentity(storagePath);
+const example=JSON.parse(await readFile('examples/development-config.json','utf8'));const hardware=await hardwareFixture(example.controllers[0]);example.controllers=[hardware.config];
+const runtime=new CoordinatorRuntime({storagePath,configuration:example});await runtime.start();const server=createManagementServer({identity,configuration:example,runtime});const port=await listenLocal(server,0);
+const configPath=path.join(storagePath,'config.json');await writeFile(configPath,JSON.stringify({platforms:[{...example,managementPort:port}]}),{mode:0o600});let logs='';let child;
+try{
+ child=fork(path.resolve('homebridge-ui/server.js'),[],{env:{...process.env,HOMEBRIDGE_STORAGE_PATH:storagePath,HOMEBRIDGE_CONFIG_PATH:configPath},stdio:['ignore','pipe','pipe','ipc']});
+ child.stdout.on('data',data=>{logs+=data;});child.stderr.on('data',data=>{logs+=data;});
+ const wait=(predicate)=>new Promise((resolve,reject)=>{const timeout=setTimeout(()=>{child.off('message',listen);reject(Error('UI IPC deadline'));},10000);const listen=m=>{if(predicate(m)){clearTimeout(timeout);child.off('message',listen);resolve(m);}};child.on('message',listen);});
+ await wait(m=>m.action==='ready');
+ const request=async(path,body={})=>{const requestId=randomUUID();const promise=wait(m=>m.action==='response'&&m.payload.requestId===requestId);child.send({action:'request',requestId,path,body});const m=await promise;assert.equal(m.payload.success,true,JSON.stringify(m.payload.data));return m.payload.data;};
+ let loaded=await request('/load');assert.equal(loaded.connected,true);assert.deepEqual(hardware.state.requests,[]);
+ for(const[reference,secret]of Object.entries(hardware.credentials))await request('/credentials',{reference,secret});
+ const configuration=await request('/validate',{configuration:loaded.settings.configuration});configuration.controllers[0].name='IPC edited garage';
+ const review=await request('/review',{configuration,revision:loaded.settings.revision});await request('/apply',{token:review.review.token});
+ loaded=await request('/load');assert.equal(loaded.settings.configuration.controllers[0].name,'IPC edited garage');assert.equal(loaded.settings.revision,2);
+ const result=await request('/commission',{controller:hardware.config.id,revision:2,previousControllerStopped:true,physicalSetupReviewed:true,recover:false});assert.equal(result.status.actuationEnabled,true);assert.deepEqual(hardware.state.writes,[]);
+ const [reference,secret]=Object.entries(hardware.credentials)[0];await request('/credentials',{reference,secret});assert.equal(runtime.status(hardware.config.id).actuationEnabled,false);assert.deepEqual(hardware.state.writes,[]);
+ for(const secret of [identity.token,...Object.values(hardware.credentials)])assert.equal(logs.includes(secret),false);
+ console.log('Real custom UI server IPC passed: initial load, private credentials, review/apply, commissioning and credential-change pause with no hardware writes.');
+}finally{if(child){const exited=once(child,'exit');child.kill('SIGTERM');await exited;}await runtime.stop();await closeServer(server);await hardware.close();await rm(storagePath,{recursive:true,force:true});}

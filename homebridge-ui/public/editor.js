@@ -1,5 +1,5 @@
 const el = (tag, text, cls) => { const n = document.createElement(tag); if (text !== undefined) n.textContent = text; if (cls) n.className = cls; return n; };
-const freshId = prefix => prefix + '-' + crypto.randomUUID().slice(0,8);
+const freshId = prefix => prefix + '-' + Array.from(crypto.getRandomValues(new Uint8Array(4)), byte=>byte.toString(16).padStart(2,'0')).join('');
 export function newGarage() {
   const id = freshId('garage');
   return { id, name: 'My garage', exposeBoltLock: true, autoBolt: true,
@@ -28,7 +28,7 @@ export class ProfileEditor {
   }
   grid(parent){const g=el('div',undefined,'field-grid');parent.append(g);return g;}
   panel(parent,title,subtitle){const p=el('section',undefined,'device-block');p.append(el('h3',title));if(subtitle)p.append(el('p',subtitle,'subtle small'));parent.append(p);return p;}
-  credential(grid,connection){this.input(grid,'Saved connection key',connection,'credentialRef',{help:'Use the connection name you saved below. The key itself stays private.'});}
+  credential(grid,connection){const input=this.input(grid,'Saved connection key',connection,'credentialRef',{help:'Use the connection name you saved below. The key itself stays private.'});if(this.credentials.length){const list=el('datalist');list.id=freshId('keys');for(const key of this.credentials)list.append(Object.assign(el('option'),{value:key}));input.setAttribute('list',list.id);grid.append(list);}}
   connection(parent, obj, key, kind) {
     const current=obj[key];const types=kind==='garage'?[['tailwind','Tailwind local API'],['homebridge','Existing Homebridge garage']]:[['deconz','deCONZ directly'],['homebridge','Existing Homebridge device']];
     const choice=this.input(this.grid(parent),'Connection',current,'type',{options:types});
@@ -89,7 +89,7 @@ export class ProfileEditor {
     if(this.step===0)this.devices(content,p);else if(this.step===1)this.inputs(content,p);else this.behavior(content,p);
   }
   devices(root,p){
-    const identity=this.panel(root,'Garage details');const grid=this.grid(identity);this.input(grid,'Garage name',p,'name');this.input(grid,'Show a separate bolt Lock tile',p,'exposeBoltLock',{type:'checkbox'});
+    const identity=this.panel(root,'Garage details');const grid=this.grid(identity);this.input(grid,'Garage name',p,'name');identity.append(el('p','Controller ID: '+p.id+' · Use this to link the standalone administrator.','help'));this.input(grid,'Show a separate bolt Lock tile',p,'exposeBoltLock',{type:'checkbox'});
     const opener=this.panel(root,'Garage opener','HomeKit and the virtual keypad use this connection.');const dg=this.grid(opener);
     this.connection(opener,p,'door','garage');
     if(p.door.type==='homebridge')this.bridgeDevice(opener,p.door,'garage');else {
