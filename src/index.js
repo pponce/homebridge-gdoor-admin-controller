@@ -1,6 +1,8 @@
 import { createManagementServer, listenLocal, closeServer } from './api.js';
 import { validateConfiguration, ConfigurationError } from './config.js';
 import { loadIdentity } from './storage.js';
+import { readCredentials } from './credentials.js';
+import { Diagnostics } from './diagnostics.js';
 
 export const PLUGIN_NAME = 'homebridge-gdoorandbolt-coordinator';
 export const PLATFORM_NAME = 'GDoorAndBoltCoordinator';
@@ -33,11 +35,12 @@ export class CoordinatorPlatform {
     if (this.stopped || this.server || !this.configuration) return;
     const identity = await loadIdentity(this.api.user.storagePath());
     if (this.stopped) return;
-    this.server = createManagementServer({ identity, configuration: this.configuration });
+    const diagnostics = new Diagnostics(this.configuration, () => readCredentials(this.api.user.storagePath()));
+    this.server = createManagementServer({ identity, configuration: this.configuration, diagnostics });
     this.server.on('error', () => this.log.error('Coordinator management API error.'));
     await listenLocal(this.server, this.configuration.managementPort);
     if (this.stopped) { await closeServer(this.server); return; }
-    this.log.info('Coordinator development API started; hardware control and accessory publication are not implemented.');
+    this.log.info('Coordinator observation API started. Explicit connection checks are available; hardware control and accessory publication remain disabled.');
   }
 
   async shutdown() {

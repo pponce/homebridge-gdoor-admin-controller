@@ -6,7 +6,7 @@
     "id": "example-garage",
     "name": "Example garage and bolt",
     "door": { "type": "tailwind", "baseUrl": "http://tailwind.example.invalid", "doorIndex": 0, "credentialRef": "example-tailwind-key" },
-    "bolt": { "type": "deconz", "baseUrl": "http://gateway.example.invalid", "gatewayId": "example-gateway", "resourceId": "1", "uniqueId": "example-bolt-endpoint", "credentialRef": "example-deconz-key", "lockedValue": true },
+    "bolt": { "type": "deconz", "baseUrl": "http://gateway.example.invalid", "gatewayId": "0011223344556677", "resourceId": "1", "uniqueId": "example-bolt-endpoint", "resourceType": "On/Off output", "modelId": "EXAMPLE-RELAY", "manufacturer": "Example", "credentialRef": "example-deconz-key", "lockedValue": true },
     "exposeBoltLock": true,
     "feedback": { "closing": "sensor", "opening": "timed", "bolt": "relay", "openingSeconds": 20, "closingSeconds": 20, "closedStableSeconds": 2, "boltSettleSeconds": 5, "allowEstimatedBolting": false }
   }]

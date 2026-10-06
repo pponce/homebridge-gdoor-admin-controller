@@ -1,14 +1,32 @@
 {
   "name": "homebridge-gdoorandbolt-coordinator",
-  "version": "0.1.0-dev.1",
+  "version": "0.2.0-dev.1",
   "description": "Coordinate a garage door and separate bolt through Homebridge",
   "private": true,
   "type": "module",
   "main": "src/index.js",
-  "engines": { "node": "^22.0.0 || ^24.0.0", "homebridge": "^2.0.0" },
-  "peerDependencies": { "homebridge": "^2.0.0" },
-  "keywords": ["homebridge-plugin", "supports-hap"],
-  "files": ["src/", "config.schema.json", "docs/api-v1.md", "README.md"],
-  "scripts": { "test": "node --test test/*.test.js" },
-  "repository": { "type": "git", "url": "https://github.com/pponce/homebridge-gDoorAndBolt-coordinator.git" }
+  "engines": {
+    "node": "^22.0.0 || ^24.0.0",
+    "homebridge": "^2.0.0"
+  },
+  "peerDependencies": {
+    "homebridge": "^2.0.0"
+  },
+  "keywords": [
+    "homebridge-plugin",
+    "supports-hap"
+  ],
+  "files": [
+    "src/",
+    "config.schema.json",
+    "docs/",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pponce/homebridge-gDoorAndBolt-coordinator.git"
+  }
 }

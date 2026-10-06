@@ -1,11 +1,15 @@
 # Development status
 
-2026-10-06: initial plan and milestone 1 foundation.
+2026-10-06: direct-device diagnostics and simulated movement engine implemented.
 
-Implemented: combined-profile validation, strict read-only API with persistent local identity/token, a Homebridge platform lifecycle scaffold, and the companion admin's Python client. No hardware connections, accessory publication, engine port, configuration wizard, maintenance adapter, installer, npm publication or live changes.
+The running Homebridge platform supports authenticated inventory and explicit read-only Tailwind/deCONZ probes. Device credentials stay beneath Homebridge-owned storage. deCONZ reads pin gateway and endpoint identity/type/model/manufacturer; Tailwind not-closed is never labelled fully open. Read-only checks do not commission or actuate. The matching admin now displays per-controller checks, timestamps, relay/sensor evidence and setup guidance.
 
-Source reference for behavior and current-admin coupling: `pponce/garageDoorController` at `7d4e0f04e4ef3631e721e571adb292cf11988e87`. Reviewed current controller/deCONZ bolt documentation and existing extension, settings, registry and writer-fence code. This is a reference, not a claim that historical operational notes all describe today's deployment. No source history or household configuration was copied.
+The new movement engine and durable journal are implemented as unconnected modules. Tests cover distinct retract delays, stable closure, opening estimates from sensor departure, corrective bolt retraction during closing, no ambiguous retry, manual-unlock overrides, serialized admission, shutdown and restart holds. The running platform does not instantiate them. See behavior-parity.md for exact coverage and gaps.
 
-Local validation: 21 Node tests pass on Node 24.19.0; the companion's 11 Python client tests and 5 cross-repository tests pass on Python 3.12.14. The latter launch this repository's real API with synthetic fixtures. `npm pack --dry-run --ignore-scripts` succeeds and includes only the documented package files. GitHub Actions is configured for Node 22/24; its results are separate from these local checks.
+Local validation: 50 Node tests passed on Node 24.19.0; 24 companion client/adapter checks and 7 actual cross-repository checks passed on Python 3.12.14. Cross-repository checks use the real API and direct drivers against loopback emulators. The retained admin suite passed 160 checks, with 2 local Unix-socket checks skipped; Linux CI runs all 162. New browser and real Homebridge 2.0.0 child-bridge smoke checks are configured; results will be recorded after publication.
 
-Actual Homebridge runtime and physical behavior remain unverified. Next milestone: inventory complete runtime parity and implement Tailwind/direct-deCONZ drivers and the coordinator engine; validate the new standalone administrator with the plugin before owner testing. The owner will stop the existing administrator at cutover; simultaneous-admin management and an adapter for the old interface are no longer migration prerequisites.
+Source reference: pponce/garageDoorController at `7d4e0f04e4ef3631e721e571adb292cf11988e87`. No original private history, household mappings or credentials were copied. The current source repository and host installation remain unchanged.
+
+**Not ready for physical owner testing or migration.** Remaining: input routing (existing HomeKit path is Tailwind, physical-keypad/indoor path is Aqara relay), pulse/interrupt behavior if retained, physical/virtual keypad delivery, Homebridge accessory backend, automatic idle recovery/locking, stable combined/Lock accessories, commissioning, revision-checked settings, maintenance, and the new admin installer. Timed bolt mode is not implemented. No npm publication or host installation occurred.
+
+Before wiring input behavior, confirm whether the new plugin should preserve the existing Aqara motor path for physical-keypad/indoor-button operation, including optional stop/reverse, or use Tailwind for all inputs. The implemented shared engine and read-only checks support either direction without changing the running installation.

@@ -2,7 +2,7 @@
 
 A Homebridge platform for coordinating **one garage door and a separate bolt/lock per configured controller**. Multiple doors are supported by separate controller definitions. Multiple input profiles for the same physical door must share its coordinator.
 
-**Status: milestone 1 development foundation. Not ready for installation, physical operation, or migration.** The current implementation validates configuration and serves authenticated, read-only controller inventory. It does not contact hardware, publish HomeKit accessories, or accept movement commands.
+**Status: observation and engine development. Not ready for physical operation or migration.** Authenticated inventory and explicit Tailwind/deCONZ connection checks are implemented. The movement engine and durable journal are tested with simulated hardware but are not connected to the running plugin. The platform publishes no HomeKit accessories and accepts no movement commands.
 
 ## Agreed product scope
 
@@ -25,6 +25,6 @@ npm test
 npm pack --dry-run --ignore-scripts
 ```
 
-The package is private to prevent accidental npm publication during development. Do not copy example settings into a live installation yet. Configured controller devices are declarations only in milestone 1.
+The package is private to prevent accidental npm publication during development. Do not copy example settings into a live installation yet. Device reads happen only through an explicit authenticated connection check. Startup and inventory never touch hardware. See [device checks](docs/device-checks.md) and the [behavior parity inventory](docs/behavior-parity.md).
 
 Read the [implementation plan](docs/implementation-plan.md), [migration plan](docs/migration.md), [API contract](docs/api-v1.md), and [current status](docs/status.md).

@@ -59,12 +59,15 @@ function bolt(value) {
   if (!object(value)) fail('door_and_bolt_required');
   if (value.type === 'homebridge') return homebridge(value, true);
   if (value.type !== 'deconz') fail('unsupported_bolt_backend');
-  fields(value, ['type', 'baseUrl', 'gatewayId', 'resourceId', 'uniqueId', 'credentialRef', 'lockedValue'], 'invalid_deconz_connection');
+  fields(value, ['type', 'baseUrl', 'gatewayId', 'resourceId', 'uniqueId', 'resourceType', 'modelId', 'manufacturer', 'credentialRef', 'lockedValue'], 'invalid_deconz_connection');
   if (typeof value.resourceId !== 'string' || !/^[1-9][0-9]{0,5}$/.test(value.resourceId)) fail('invalid_deconz_resource');
   if (typeof value.lockedValue !== 'boolean') fail('invalid_bolt_mapping');
   return {
     type: 'deconz', baseUrl: baseUrl(value.baseUrl), gatewayId: string(value.gatewayId, 'invalid_gateway_id'),
     resourceId: value.resourceId, uniqueId: string(value.uniqueId, 'invalid_resource_identity'),
+    ...(value.resourceType !== undefined ? { resourceType: choice(value.resourceType, ['On/Off light', 'On/Off output'], 'invalid_resource_type') } : {}),
+    ...(value.modelId !== undefined ? { modelId: string(value.modelId, 'invalid_resource_model') } : {}),
+    ...(value.manufacturer !== undefined ? { manufacturer: string(value.manufacturer, 'invalid_resource_manufacturer') } : {}),
     credentialRef: secretRef(value.credentialRef), lockedValue: value.lockedValue,
   };
 }

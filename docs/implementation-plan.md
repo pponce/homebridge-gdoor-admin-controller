@@ -12,7 +12,7 @@ The current standalone installation stays separate. The new admin repository ini
 
 ## Architecture
 
-Run as a Homebridge dynamic platform, preferably in its own child bridge. Homebridge manages the process. Store plugin data, journals, API identity and credentials beneath api.user.storagePath(); never install systemd units or patch other plugins. The initial dependency-free Node ESM foundation uses Homebridge's injected API; the existing Python movement engine has not yet been ported.
+Run as a Homebridge dynamic platform, preferably in its own child bridge. Homebridge manages the process. Store plugin data, journals, API identity and credentials beneath api.user.storagePath(); never install systemd units or patch other plugins. The initial dependency-free Node ESM foundation uses Homebridge's injected API; the shared movement engine has a tested JavaScript prototype, deliberately not connected to the platform until commissioning/input/API integration is complete.
 
 Separate driver connections, state estimation, one coordinator per physical assembly, event/input profiles, accessory publication and the versioned management API. Several keypads/buttons may target one assembly with separate input policies, but do not instantiate competing movement engines. Validate hardware identity and prevent duplicate ownership, including cross-process ownership at deployment.
 
@@ -78,3 +78,7 @@ M1 does not publish accessories, operate hardware or replace the admin extension
 ## Later phase
 
 Host the standalone admin in a Homebridge plugin, keeping its own URL. This phase is deferred. It must retain the API and access model already established here.
+
+## Current implementation checkpoint
+
+Direct Tailwind/deCONZ drivers, explicit read-only probes, private device credential loading, the movement-engine prototype and durable journal are implemented. The admin uses the actual probe API. See behavior-parity.md and status.md; M2/M3 are not complete and no physical testing is authorized by successful diagnostics. The remaining source-specific motor-route decision precedes wiring keypad/indoor input profiles. Actual Homebridge child-bridge loading and browser validation run in CI.

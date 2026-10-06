@@ -2,24 +2,254 @@
   "pluginAlias": "GDoorAndBoltCoordinator",
   "pluginType": "platform",
   "singular": true,
-  "headerDisplay": "Development foundation only. Does not publish accessories or operate hardware. The guided configuration UI is a later milestone.",
+  "headerDisplay": "Development observation build. The standalone admin can explicitly check Tailwind and deCONZ connections. No accessories or movement are enabled yet. Keep credentials in Homebridge-owned private storage; see docs/device-checks.md.",
   "schema": {
     "type": "object",
     "properties": {
-      "name": { "title": "Name", "type": "string", "default": "Garage Door and Bolt Coordinator" },
-      "managementPort": { "title": "Local management API port", "type": "integer", "minimum": 1024, "maximum": 65535, "default": 27773 },
+      "name": {
+        "title": "Name",
+        "type": "string",
+        "default": "Garage Door and Bolt Coordinator"
+      },
+      "managementPort": {
+        "title": "Local management API port",
+        "type": "integer",
+        "minimum": 1024,
+        "maximum": 65535,
+        "default": 27773
+      },
       "controllers": {
-        "title": "Combined controllers (development declarations)",
-        "type": "array", "minItems": 1, "maxItems": 32,
+        "title": "Garage and bolt assemblies",
+        "type": "array",
+        "minItems": 1,
+        "maxItems": 32,
         "items": {
-          "type": "object", "required": ["id", "name", "door", "bolt", "feedback", "exposeBoltLock"],
+          "type": "object",
+          "required": [
+            "id",
+            "name",
+            "door",
+            "bolt",
+            "feedback",
+            "exposeBoltLock"
+          ],
           "properties": {
-            "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,47}$" },
-            "name": { "type": "string", "minLength": 1, "maxLength": 64 },
-            "exposeBoltLock": { "title": "Expose optional Lock accessory", "type": "boolean", "default": false },
-            "door": { "type": "object", "description": "Tailwind or existing Homebridge garage service. See the synthetic configuration example." },
-            "bolt": { "type": "object", "description": "deCONZ or existing Homebridge Lock/Switch/Light service. Both door and bolt are required." },
-            "feedback": { "type": "object", "description": "Declare sensor/estimated feedback and independent travel times. Runtime validation is authoritative in this development milestone." }
+            "id": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "exposeBoltLock": {
+              "title": "Expose optional Lock accessory",
+              "type": "boolean",
+              "default": false
+            },
+            "door": {
+              "type": "object",
+              "required": [
+                "type",
+                "credentialRef"
+              ],
+              "properties": {
+                "type": {
+                  "title": "Door connection",
+                  "type": "string",
+                  "enum": [
+                    "tailwind",
+                    "homebridge"
+                  ],
+                  "default": "tailwind"
+                },
+                "baseUrl": {
+                  "title": "Tailwind local URL",
+                  "type": "string",
+                  "description": "Origin only, for example http://192.0.2.10. No key or /json suffix."
+                },
+                "doorIndex": {
+                  "title": "Tailwind door index",
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 2,
+                  "default": 0
+                },
+                "credentialRef": {
+                  "title": "Credential reference",
+                  "type": "string",
+                  "description": "Name of an entry in private credentials.json, not the key itself."
+                },
+                "bridgeId": {
+                  "title": "Homebridge bridge identity (future adapter)",
+                  "type": "string"
+                },
+                "serviceId": {
+                  "title": "Homebridge service identity (future adapter)",
+                  "type": "string"
+                }
+              },
+              "description": "Only Tailwind checks are operational. Homebridge mappings remain development declarations. Use JSON configuration for that future backend."
+            },
+            "bolt": {
+              "type": "object",
+              "required": [
+                "type",
+                "credentialRef"
+              ],
+              "properties": {
+                "type": {
+                  "title": "Bolt connection",
+                  "type": "string",
+                  "enum": [
+                    "deconz",
+                    "homebridge"
+                  ],
+                  "default": "deconz"
+                },
+                "baseUrl": {
+                  "title": "deCONZ local URL",
+                  "type": "string"
+                },
+                "gatewayId": {
+                  "title": "deCONZ bridge ID",
+                  "type": "string",
+                  "description": "Expected 16-hex-digit gateway identity."
+                },
+                "resourceId": {
+                  "title": "deCONZ light resource number",
+                  "type": "string"
+                },
+                "uniqueId": {
+                  "title": "deCONZ endpoint unique ID",
+                  "type": "string"
+                },
+                "resourceType": {
+                  "title": "Expected deCONZ resource type",
+                  "type": "string",
+                  "enum": [
+                    "On/Off light",
+                    "On/Off output"
+                  ]
+                },
+                "modelId": {
+                  "title": "Expected deCONZ model ID",
+                  "type": "string"
+                },
+                "manufacturer": {
+                  "title": "Expected deCONZ manufacturer",
+                  "type": "string"
+                },
+                "credentialRef": {
+                  "title": "Credential reference",
+                  "type": "string"
+                },
+                "lockedValue": {
+                  "title": "Relay ON means bolt extended",
+                  "type": "boolean",
+                  "default": true
+                },
+                "bridgeId": {
+                  "title": "Homebridge bridge identity (future adapter)",
+                  "type": "string"
+                },
+                "serviceId": {
+                  "title": "Homebridge service identity (future adapter)",
+                  "type": "string"
+                },
+                "serviceType": {
+                  "title": "Homebridge service type (future adapter)",
+                  "type": "string",
+                  "enum": [
+                    "lock",
+                    "switch",
+                    "light"
+                  ]
+                }
+              },
+              "description": "Expected identity fields are checked before any relay read is accepted. Use JSON configuration for Homebridge declarations."
+            },
+            "feedback": {
+              "type": "object",
+              "properties": {
+                "closing": {
+                  "title": "Does closed come from a door sensor?",
+                  "type": "string",
+                  "enum": [
+                    "sensor",
+                    "timed"
+                  ],
+                  "default": "sensor",
+                  "description": "Tailwind has a closed sensor. A command-only value needs an explicit timed policy once that backend is implemented."
+                },
+                "opening": {
+                  "title": "Does open mean physically fully open?",
+                  "type": "string",
+                  "enum": [
+                    "sensor",
+                    "timed"
+                  ],
+                  "default": "timed",
+                  "description": "For Tailwind choose timed: its open state only means not closed. Opening time starts after the closed sensor departs."
+                },
+                "bolt": {
+                  "title": "What proves the bolt state?",
+                  "type": "string",
+                  "enum": [
+                    "position",
+                    "relay",
+                    "timed"
+                  ],
+                  "default": "relay",
+                  "description": "Direct deCONZ reports relay state. It does not prove physical bolt position. Timed bolt mode is not operational yet."
+                },
+                "openingSeconds": {
+                  "title": "Estimated full opening travel (seconds)",
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 300,
+                  "default": 20
+                },
+                "closingSeconds": {
+                  "title": "Estimated full closing travel (seconds)",
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 300,
+                  "default": 20
+                },
+                "closedStableSeconds": {
+                  "title": "Continuous closed confirmation (seconds)",
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 60,
+                  "default": 2
+                },
+                "boltSettleSeconds": {
+                  "title": "Bolt extension settling time (seconds)",
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 60,
+                  "default": 2
+                },
+                "allowEstimatedBolting": {
+                  "title": "Allow bolting after an estimated close",
+                  "type": "boolean",
+                  "default": false,
+                  "description": "Explicit future policy for command-only closing feedback; elapsed time cannot prove the door is closed."
+                }
+              },
+              "required": [
+                "closing",
+                "opening",
+                "bolt",
+                "openingSeconds",
+                "closingSeconds",
+                "closedStableSeconds",
+                "boltSettleSeconds",
+                "allowEstimatedBolting"
+              ]
+            }
           }
         }
       }

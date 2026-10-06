@@ -2,9 +2,9 @@ name: Coordinator checks
 on:
   push:
     branches: [main]
-    paths: ['src/**', 'test/**', 'examples/**', 'package.json', 'config.schema.json', '.github/workflows/ci.yml']
+    paths: ['src/**', 'test/**', 'scripts/**', 'examples/**', 'package.json', 'config.schema.json', '.github/workflows/ci.yml']
   pull_request:
-    paths: ['src/**', 'test/**', 'examples/**', 'package.json', 'config.schema.json', '.github/workflows/ci.yml']
+    paths: ['src/**', 'test/**', 'scripts/**', 'examples/**', 'package.json', 'config.schema.json', '.github/workflows/ci.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -24,3 +24,21 @@ jobs:
           node-version: ${{ matrix.node }}
       - run: npm test
       - run: npm pack --dry-run --ignore-scripts
+  homebridge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install minimum supported Homebridge for isolated smoke test
+        run: npm install --prefix "$RUNNER_TEMP/coordinator-hb" --no-save --package-lock=false --ignore-scripts --no-audit --no-fund homebridge@2.0.0
+      - name: Actual Homebridge child bridge with synthetic hardware
+        id: smoke
+        env:
+          HOMEBRIDGE_BIN: ${{ runner.temp }}/coordinator-hb/node_modules/homebridge/bin/homebridge.js
+        run: node scripts/homebridge-smoke.mjs
+      - name: "Homebridge result: ${{ steps.smoke.outputs.result || steps.smoke.outcome }}"
+        if: always()
+        run: echo "Homebridge diagnostics are recorded in this step name."
