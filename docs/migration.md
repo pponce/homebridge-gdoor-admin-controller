@@ -16,4 +16,4 @@ The owner's target uses Tailwind local API for the door and direct deCONZ for th
 
 The old movement engine and new coordinator must not command the same assembly concurrently. This requirement is separate from whether both web applications remain installed.
 
-This document is not an executable migration procedure. Hardware drivers, the coordination engine, HomeKit accessories and complete administrator integration must be validated before the owner tests the two projects on the live setup.
+This is the migration overview. Follow [owner-test.md](owner-test.md) and the companion administrator's owner guide for commands, review points and rollback, using the revisions recorded in [status.md](status.md). Source validation and physical acceptance are recorded separately.

@@ -2,7 +2,7 @@
   "pluginAlias": "GDoorAndBoltCoordinator",
   "pluginType": "platform",
   "singular": true,
-  "headerDisplay": "Development observation build. The standalone admin can explicitly check Tailwind and deCONZ connections. No accessories or movement are enabled yet. Keep credentials in Homebridge-owned private storage; see docs/device-checks.md.",
+  "headerDisplay": "Coordinate a garage door and separate bolt. Use the guided settings to choose devices, assign controls and review feedback. New or changed garages stay disabled until explicitly checked and enabled. See docs/owner-test.md for installation.",
   "schema": {
     "type": "object",
     "properties": {
@@ -181,7 +181,7 @@
                     "timed"
                   ],
                   "default": "sensor",
-                  "description": "Tailwind has a closed sensor. A command-only value needs an explicit timed policy once that backend is implemented."
+                  "description": "Tailwind has a closed sensor. A command-only Homebridge value needs an explicit timed policy."
                 },
                 "opening": {
                   "title": "Does open mean physically fully open?",
@@ -198,11 +198,10 @@
                   "type": "string",
                   "enum": [
                     "position",
-                    "relay",
-                    "timed"
+                    "relay"
                   ],
                   "default": "relay",
-                  "description": "Direct deCONZ reports relay state. It does not prove physical bolt position. Timed bolt mode is not operational yet."
+                  "description": "Direct deCONZ reports relay state. It does not prove physical bolt position. Timer-only bolt feedback is unsupported."
                 },
                 "openingSeconds": {
                   "title": "Estimated full opening travel (seconds)",
@@ -236,7 +235,7 @@
                   "title": "Allow bolting after an estimated close",
                   "type": "boolean",
                   "default": false,
-                  "description": "Explicit future policy for command-only closing feedback; elapsed time cannot prove the door is closed."
+                  "description": "Explicit policy for command-only closing feedback; elapsed time cannot prove the door is closed."
                 }
               },
               "required": [
