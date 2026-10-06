@@ -48,7 +48,7 @@ Perform these tests while observing the mechanism:
 - Virtual keypad accepted disarm opens through Tailwind; a rejected code requests close. Busy/expired results are ignored.
 - Physical keypad and indoor button use the Aqara opener relay, with OFF/released after every pulse. Confirm their individual delays. If configured, verify indoor stop-opening and reverse-closing; a partial stop is estimated and only that control may continue its close.
 - Restart while stationary: no movement. An interrupted movement, ambiguous device write or partial-stop restart must hold for physical review, with no replay.
-- New admin: preserved accounts/roles, virtual keypad, editable settings, activity and a normal deCONZ setting change. For Homebridge/PIN maintenance follow the existing preparation, bolt-test and stillness prompts; confirm the coordinator remains paused until completion.
+- New admin: preserved accounts/roles, virtual keypad, editable settings, activity and a normal deCONZ setting change. For Homebridge/PIN maintenance follow the existing preparation, bolt-test and stillness prompts; while paused, use the direct deCONZ output control for the physical bolt test (the coordinator’s Lock tile also stays paused); confirm the coordinator remains paused until completion.
 
 On a hold, inspect the mechanism first. Recovery is an explicit re-enable with a physically closed door and released relay; do not repeatedly press commands or assume relay state proves bolt position. A timer-only closer cannot prove physical closure even when estimated bolting is enabled.
 

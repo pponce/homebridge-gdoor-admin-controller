@@ -31,7 +31,7 @@ async function main() {
   try {
     platform.controllers[0] = hardware.config;
     Object.assign(hardware.config.feedback,{openingSeconds:1,closedStableSeconds:0,boltSettleSeconds:0});
-    hardware.config.timing={openRetractSettleSeconds:0,closeRetractSettleSeconds:0,operationPollSeconds:.1,idlePollSeconds:.5};
+    hardware.config.timing={openRetractSettleSeconds:0,closeRetractSettleSeconds:0,operationPollSeconds:.1,idlePollSeconds:30};
     platform.managementPort = await freePort();
     platform._bridge = { username: '0E:11:22:33:44:66', port: await freePort() };
     await writeFile(path.join(directory, 'config.json'), JSON.stringify({
@@ -71,7 +71,7 @@ async function main() {
     const garage=accessories.accessories.find(a=>a.services.some(s=>serviceType(s,'41')));
     const garageService=garage.services.find(s=>serviceType(s,'41'));const target=garageService.characteristics.find(c=>serviceType(c,'32'));
     for(const [value,phase]of [[0,'open'],[1,'closed']]){
-      const write=await fetch(hapOrigin+'/characteristics',{method:'PUT',headers:{Authorization:'031-45-154','Content-Type':'application/hap+json'},body:JSON.stringify({characteristics:[{aid:garage.aid,iid:target.iid,value}]}),signal:AbortSignal.timeout(5000)});assert.equal(write.status,204);
+      const write=await fetch(hapOrigin+'/characteristics',{method:'PUT',headers:{Authorization:'031-45-154','Content-Type':'application/hap+json'},body:JSON.stringify({characteristics:[{aid:garage.aid,iid:target.iid,value}]}),signal:AbortSignal.timeout(5000)});if(write.status!==204)throw Error('HAP write rejected '+write.status+' '+await write.text()+' runtime '+JSON.stringify((await management(endpoint+'/state')).status));
       await until(async()=>{const s=(await management(endpoint+'/state')).status.state;return s.phase===phase&&!s.busy;});
     }
     assert.deepEqual(hardware.state.writes,[['bolt',false],['door','open'],['bolt',false],['door','close'],['bolt',true]]);

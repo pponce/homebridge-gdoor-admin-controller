@@ -94,3 +94,11 @@ test('generic deCONZ motor relay pins identity and maps active/inactive using re
   await assert.rejects(motor.write('close', { beforeWrite: async () => {} }), /motor_resource_identity_mismatch/);
   assert.equal(hardware.state.writes.length, 2);
 });
+
+test('shutdown interrupts the pulse wait and completes OFF cleanup before settling', async () => {
+  let active=false;let markOn;const on=new Promise(resolve=>{markOn=resolve;});const writes=[];
+  const relay={capabilities:{inactiveWriteIdempotent:true},read:async()=>({active}),write:async value=>{active=value;writes.push(value);if(value)markOn();}};
+  const motor=new PulseMotor({relay,openPulseMs:2000,closePulseMs:2000,readOnly:false,clock:{now:()=>0,sleep:()=>new Promise(()=>{})}});
+  const result=motor.write('open',{beforeWrite:async()=>{}});await on;motor.stop();await assert.rejects(result,/operation_interrupted/);
+  assert.deepEqual(writes,[true,false]);assert.equal(active,false);
+});

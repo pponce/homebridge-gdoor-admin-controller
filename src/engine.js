@@ -32,7 +32,7 @@ export class MovementEngine {
   snapshot() { return structuredClone({ ...this.state, busy: this.busy }); }
   update(changes) { Object.assign(this.state, changes); this.publish(this.snapshot()); }
   checkRunning() { requireValue(!this.stopped, 'operation_interrupted'); }
-  stop() { this.stopped = true; this.admitInterruption(false); }
+  stop() { this.stopped = true; this.admitInterruption(false); for (const motor of this.motorPaths.values()) motor.stop?.(); }
   admitInterruption(allowed) {
     this.interruptionAllowed = allowed && this.interruptionOperation && this.interruptionRequest === null;
     if (!allowed) this.interruptionRequest = null;
@@ -143,7 +143,7 @@ export class MovementEngine {
     requireValue(!['opening', 'closing'].includes(sample.door), 'external_movement');
     // A close always refreshes OFF, including an already-OFF relay. An open
     // only writes OFF if needed; both directions apply their own settle delay.
-    if (sample.locked || closing) await this.bolt.write(false);
+    if (sample.locked || closing) await this.bolt.write(false, { beforeWrite: () => this.checkRunning() });
     await this.wait(s => !s.locked, this.timing.boltTimeoutMs, 'bolt_retract_timeout');
     await this.hold(closing ? this.timing.closeRetractSettleMs : this.timing.openRetractSettleMs,
       s => !s.locked && !['opening', 'closing'].includes(s.door), 'bolt_retract_confirmation_lost');
@@ -172,7 +172,7 @@ export class MovementEngine {
       const sample = await this.read();
       requireValue(!['opening', 'closing'].includes(sample.door), 'external_movement');
       if (command === 'unlock') {
-        await this.bolt.write(false);
+        await this.bolt.write(false, { beforeWrite: () => this.checkRunning() });
         await this.wait(s => !s.locked, this.timing.boltTimeoutMs, 'bolt_retract_timeout');
         await this.hold(this.timing.openRetractSettleMs, s => !s.locked, 'bolt_retract_confirmation_lost');
       } else if (command === 'lock' || command === 'observed-close') {
@@ -259,9 +259,10 @@ export class MovementEngine {
       await this.extend(false);
       this.update({ phase: 'closed', closeEstimated: false, openEstimated: false }); return;
     }
-    const started = this.clock.now(); const deadline = started + this.timing.motionTimeoutMs;
+    let started = this.clock.now(); const deadline = started + this.timing.motionTimeoutMs;
     this.update({ phase: 'closing', openEstimated: false, closeEstimated: false });
     if (!(sample.door === 'closed' && this.feedback.closing === 'sensor' && sample.evidence === 'closed-sensor')) await this.motorCommand('close');
+    started = this.clock.now(); // A timed close allows full travel after the command acknowledgement.
     let closedSince = null; let retractPending = null;
     for (;;) {
       sample = await this.read();
@@ -271,7 +272,7 @@ export class MovementEngine {
       if (sample.locked) {
         closedSince = null;
         if (retractPending === null) {
-          retractPending = this.clock.now(); await this.bolt.write(false);
+          retractPending = this.clock.now(); await this.bolt.write(false, { beforeWrite: () => this.checkRunning() });
         }
         requireValue(this.clock.now() - retractPending < this.timing.boltTimeoutMs, 'bolt_retract_timeout');
       } else {
@@ -296,7 +297,7 @@ export class MovementEngine {
     const closed = s => estimated ? !['opening', 'closing'].includes(s.door) : s.door === 'closed' && s.evidence === 'closed-sensor';
     const fresh = await this.read();
     requireValue(!fresh.locked && closed(fresh), 'closed_confirmation_lost');
-    await this.bolt.write(true);
+    await this.bolt.write(true, { beforeWrite: () => this.checkRunning() });
     await this.wait(s => { requireValue(closed(s), 'closed_confirmation_lost'); return s.locked; }, this.timing.boltTimeoutMs, 'bolt_extend_timeout');
     await this.hold(this.timing.boltSettleMs, s => closed(s) && s.locked, 'close_or_bolt_confirmation_lost');
   }

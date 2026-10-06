@@ -33,11 +33,12 @@ export class TailwindDoor {
       blocked: Boolean(row.lockup || row.disabled), obstruction: false, evidence: 'closed-sensor' };
   }
 
-  async write(command) {
+  async write(command, { beforeWrite } = {}) {
     requireValue(!this.readOnly, 'actuation_disabled');
     requireValue(['open', 'close'].includes(command), 'door_command_invalid');
     const fresh = await this.read();
     requireValue(!fresh.blocked, 'door_blocked');
+    await beforeWrite?.();
     await this.call({ type: 'set', name: 'door_op', value: { door_idx: this.config.doorIndex, cmd: command } }, true);
   }
 }
@@ -70,12 +71,13 @@ export class DeconzBolt {
     return { locked: row.state.on === this.config.lockedValue, evidence: 'relay' };
   }
 
-  async write(locked) {
+  async write(locked, { beforeWrite } = {}) {
     requireValue(!this.readOnly, 'actuation_disabled');
     requireValue(typeof locked === 'boolean', 'bolt_command_invalid');
     await this.read(); // Re-verify gateway, endpoint identity and reachability before PUT.
     const value = locked ? this.config.lockedValue : !this.config.lockedValue;
     const path = '/lights/' + this.config.resourceId + '/state';
+    await beforeWrite?.();
     const result = await this.call(path, 'PUT', { on: value });
     requireValue(Array.isArray(result) && result.length === 1 && object(result[0]) &&
       Object.keys(result[0]).join() === 'success' && object(result[0].success) &&

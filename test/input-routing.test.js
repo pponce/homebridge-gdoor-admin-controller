@@ -50,7 +50,7 @@ test('Homebridge switch inputs cannot be motor/bolt feedback and edge bindings c
   const cfg = copy(); const c = cfg.controllers[0]; const input = c.inputs[2];
   input.source.kind = 'switch'; input.trigger = 'on';
   c.motorPaths[0].connection = { type: 'homebridge', bridgeId: input.source.bridgeId,
-    serviceId: input.source.serviceId, credentialRef: input.source.credentialRef, activeValue: true };
+    serviceId: input.source.serviceId, credentialRef: input.source.credentialRef, activeValue: true, inactiveWriteIdempotent: true };
   assert.throws(() => validateConfiguration(cfg), /input_output_feedback_loop/);
   c.motorPaths[0].connection.serviceId = 'separate-output';
   assert.equal(validateConfiguration(cfg).controllers[0].inputs.length, 3);

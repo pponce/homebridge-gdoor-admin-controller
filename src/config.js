@@ -99,9 +99,9 @@ function resourceKeys(value) {
 
 function pulseConnection(value) {
   fields(value, ['type', 'baseUrl', 'gatewayId', 'resourceId', 'uniqueId', 'resourceType', 'modelId', 'manufacturer',
-    'bridgeId', 'serviceId', 'accessoryIdentity', 'credentialRef', 'activeValue'], 'invalid_pulse_connection');
+    'bridgeId', 'serviceId', 'accessoryIdentity', 'credentialRef', 'activeValue', 'inactiveWriteIdempotent'], 'invalid_pulse_connection');
   if (typeof value.activeValue !== 'boolean') fail('invalid_pulse_mapping');
-  const { activeValue, ...connection } = value;
+  const { activeValue, inactiveWriteIdempotent, ...connection } = value;
   if (value.type === 'deconz') {
     fields(value, ['type', 'baseUrl', 'gatewayId', 'resourceId', 'uniqueId', 'resourceType', 'modelId', 'manufacturer', 'credentialRef', 'activeValue'], 'invalid_pulse_connection');
     const checked = bolt({ ...connection, lockedValue: activeValue });
@@ -109,9 +109,10 @@ function pulseConnection(value) {
     delete checked.lockedValue;
     return { ...checked, activeValue };
   }
-  fields(value, ['type', 'baseUrl', 'bridgeId', 'serviceId', 'accessoryIdentity', 'credentialRef', 'activeValue'], 'invalid_pulse_connection');
+  fields(value, ['type', 'baseUrl', 'bridgeId', 'serviceId', 'accessoryIdentity', 'credentialRef', 'activeValue', 'inactiveWriteIdempotent'], 'invalid_pulse_connection');
   if (value.type !== 'homebridge') fail('unsupported_pulse_backend');
-  return { ...homebridge(connection, false), activeValue };
+  if (inactiveWriteIdempotent !== true) fail('pulse_release_confirmation_required');
+  return { ...homebridge(connection, false), activeValue, inactiveWriteIdempotent };
 }
 
 function motorPaths(value = []) {

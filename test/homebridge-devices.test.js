@@ -20,7 +20,7 @@ test('Homebridge adapters pin identity, read live characteristics and accept 204
  const f=await fixture(t);const cfg=f.connection('garage');const door=new HomebridgeDoor(cfg,'031-45-154',{readOnly:false,feedback:{opening:'sensor',closing:'sensor'}});
  assert.equal((await door.read()).door,'closed');await door.write('open');assert.equal(f.writes.length,1);assert.deepEqual(f.writes[0],{characteristics:[{aid:2,iid:13,value:0}]});
  const bolt=new HomebridgeBolt({...f.connection('switch'),serviceType:'switch',lockedValue:false},'031-45-154',{readOnly:false});assert.equal((await bolt.read()).locked,false);await bolt.write(true);assert.equal(f.writes[1].characteristics[0].value,false);
- const motor=new HomebridgeMotorRelay({...f.connection('switch'),activeValue:true},'031-45-154',{readOnly:false});assert.equal((await motor.read()).active,true);
+ const motor=new HomebridgeMotorRelay({...f.connection('switch'),activeValue:true,inactiveWriteIdempotent:true},'031-45-154',{readOnly:false});assert.equal((await motor.read()).active,true);
  f.data.accessories[1].services[0].characteristics.find(c=>c.type==='30').value='replacement';await assert.rejects(door.write('close'),/identity_mismatch/);assert.equal(f.writes.length,2);
 });
 test('Homebridge errors and read-only mode do not write; button discovery is not an event',async t=>{

@@ -22,8 +22,11 @@ export async function acquireOwnership(storagePath) {
       requireValue(Number.isInteger(value.pid) && value.pid > 0, 'ownership_requires_review');
       let alive = true; try { process.kill(value.pid, 0); } catch (e) { if (e.code === 'ESRCH') alive = false; }
       requireValue(!alive, 'coordinator_already_running');
-      const current = await lstat(file); requireValue(current.ino === meta.ino && current.dev === meta.dev, 'ownership_changed');
-      await unlink(file);
+      // Serialize stale reclamation, so two restarting instances cannot both
+      // unlink a new owner's record after observing the same dead PID.
+      const reclaim = await open(file + '.reclaim', constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY | constants.O_NOFOLLOW, 0o600);
+      try { const current = await lstat(file); requireValue(current.ino === meta.ino && current.dev === meta.dev, 'ownership_changed'); await unlink(file); }
+      finally { await reclaim.close(); await unlink(file + '.reclaim'); }
     }
   }
   requireValue(handle, 'ownership_unavailable');

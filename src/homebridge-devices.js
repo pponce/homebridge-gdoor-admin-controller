@@ -62,9 +62,10 @@ export class HomebridgeService {
     requireValue(Array.isArray(data?.characteristics) && data.characteristics.length===selected.length,'homebridge_response_invalid');
     return selected.map(c=>{const found=data.characteristics.filter(v=>v.aid===row.aid && v.iid===c.iid);requireValue(found.length===1 && (found[0].status===undefined||found[0].status===0) && Object.hasOwn(found[0],'value'),'homebridge_state_unavailable');return found[0].value;});
   }
-  async writeCharacteristic(kind,type,value) {
+  async writeCharacteristic(kind,type,value,{beforeWrite}={}) {
     requireValue(!this.readOnly,'actuation_disabled');const row=await this.inspect(kind);const c=characteristic(row.service,type);
     requireValue(c?.perms?.includes('pw'),'homebridge_characteristic_unavailable');
+    await beforeWrite?.();
     let result;try{result=await this.request({url:this.config.baseUrl+'/characteristics',method:'PUT',headers:{Authorization:this.pin},
       body:{characteristics:[{aid:row.aid,iid:c.iid,value}]},allowEmpty:true});}catch{throw new Fault('homebridge_write_ambiguous');}
     requireValue(result===null || Array.isArray(result?.characteristics) && result.characteristics.length===1 &&
@@ -78,20 +79,20 @@ export class HomebridgeDoor extends HomebridgeService {
     requireValue(current!==4,'door_position_requires_review');
     return {door:current===0?(this.feedback.opening==='sensor'?'open':'not-closed'):current===1?'closed':current===2?'opening':'closing',
       evidence:this.feedback.closing==='sensor'?'closed-sensor':'command',obstruction,blocked:false};}
-  async write(command){requireValue(['open','close'].includes(command),'door_command_invalid');await this.read();return this.writeCharacteristic('garage','32',command==='open'?0:1);}
+  async write(command,options){requireValue(['open','close'].includes(command),'door_command_invalid');await this.read();return this.writeCharacteristic('garage','32',command==='open'?0:1,options);}
 }
 export class HomebridgeBolt extends HomebridgeService {
   constructor(config,pin,options={}){super(config,pin,options);this.feedback=options.feedback??'relay';}
   async read(){const kind=this.config.serviceType;const [v]=await this.readCharacteristics(kind,[kind==='lock'?'1D':'25']);
     requireValue(kind==='lock'?v===0||v===1:typeof v==='boolean','homebridge_bolt_state_unknown');
     return {locked:kind==='lock'?v===1:v===this.config.lockedValue,evidence:kind==='lock'?this.feedback:'relay'};}
-  async write(locked){requireValue(typeof locked==='boolean','bolt_command_invalid');await this.read();const k=this.config.serviceType;
-    return this.writeCharacteristic(k,k==='lock'?'1E':'25',k==='lock'?(locked?1:0):(locked?this.config.lockedValue:!this.config.lockedValue));}
+  async write(locked,options){requireValue(typeof locked==='boolean','bolt_command_invalid');await this.read();const k=this.config.serviceType;
+    return this.writeCharacteristic(k,k==='lock'?'1E':'25',k==='lock'?(locked?1:0):(locked?this.config.lockedValue:!this.config.lockedValue),options);}
 }
 export class HomebridgeMotorRelay extends HomebridgeService {
-  constructor(config,pin,options){super(config,pin,options);this.capabilities={inactiveWriteIdempotent:true};}
+  constructor(config,pin,options){super(config,pin,options);requireValue(config.inactiveWriteIdempotent===true,'pulse_release_confirmation_required');this.capabilities={inactiveWriteIdempotent:true};}
   async read(){const [v]=await this.readCharacteristics(['switch','light'],['25']);requireValue(typeof v==='boolean','motor_relay_state_unknown');return {active:v===this.config.activeValue};}
-  async write(active){requireValue(typeof active==='boolean','motor_command_invalid');await this.read();return this.writeCharacteristic(['switch','light'],'25',active?this.config.activeValue:!this.config.activeValue);}
+  async write(active,options){requireValue(typeof active==='boolean','motor_command_invalid');await this.read();return this.writeCharacteristic(['switch','light'],'25',active?this.config.activeValue:!this.config.activeValue,options);}
 }
 
 // HAP insecure-mode event transport to one explicitly selected Homebridge. No

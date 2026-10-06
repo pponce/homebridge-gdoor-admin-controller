@@ -105,6 +105,7 @@ export class CoordinatorRuntime {
   entry(id) { const e = this.entries.get(id); requireValue(e, 'controller_not_found'); return e; }
   status(id) {
     const e = this.entry(id); const sample = e.engine?.snapshot();
+    if (sample) sample.busy = sample.busy || Boolean(e.job) || e.router?.activeInput !== null;
     return { controllerId: id, bootId: this.bootId, commissioned: this.state.commissioned[id] === hash(e.profile),
       actuationEnabled: e.enabled && !this.storageFault && !this.state.maintenance && !this.changing && !this.stopped,
       held: this.state.maintenance ? 'maintenance' : e.held, inputStates: { ...e.inputStates },
@@ -270,6 +271,6 @@ export class CoordinatorRuntime {
   async stop() {
     this.stopped = true; this.tickets.clear();
     for (const e of this.entries.values()) { clearTimeout(e.timer); for (const l of e.listeners) l.stop(); e.engine?.stop(); }
-    await Promise.allSettled([...this.entries.values()].map(e => e.job).filter(x => x && x !== true)); await this.pendingWrites;
+    await Promise.allSettled([...this.entries.values()].flatMap(e => [e.job, e.router?.operation]).filter(x => x && x !== true)); await this.pendingWrites;
   }
 }

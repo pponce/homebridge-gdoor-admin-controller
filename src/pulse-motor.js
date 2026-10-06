@@ -18,8 +18,8 @@ export class DeconzMotorRelay {
     try { return { active: (await this.output.read()).locked }; }
     catch (error) { throw this.error(error); }
   }
-  async write(active) {
-    try { return await this.output.write(active); }
+  async write(active, options) {
+    try { return await this.output.write(active, options); }
     catch (error) { throw this.error(error); }
   }
   error(error) {
@@ -37,10 +37,12 @@ export class PulseMotor {
     requireValue([openPulseMs, closePulseMs].every(ms => Number.isFinite(ms) && ms >= 100 && ms <= 2000), 'motor_pulse_duration_invalid');
     requireValue(relay?.capabilities?.inactiveWriteIdempotent === true, 'motor_relay_release_not_supported');
     this.relay = relay; this.openPulseMs = openPulseMs; this.closePulseMs = closePulseMs;
-    this.clock = clock; this.readOnly = readOnly; this.busy = false;
+    this.clock = clock; this.readOnly = readOnly; this.busy = false; this.stopped = false;
+    this.cancelled = new Promise(resolve => { this.cancel = resolve; });
     this.capabilities = Object.freeze({ pulse: true, interruption: interruption === true });
   }
 
+  stop() { this.stopped = true; this.cancel(); }
   async verifyIdle() {
     const state = await this.relay.read();
     requireValue(state?.active === false, 'motor_relay_active_requires_review');
@@ -65,7 +67,7 @@ export class PulseMotor {
   }
 
   async write(command, { beforeWrite } = {}) {
-    requireValue(!this.readOnly, 'actuation_disabled');
+    requireValue(!this.readOnly && !this.stopped, 'actuation_disabled');
     requireValue((['open', 'close'].includes(command) || command === 'interrupt' && this.capabilities.interruption) && typeof beforeWrite === 'function', 'motor_pulse_context_required');
     requireValue(!this.busy, 'motor_relay_busy');
     this.busy = true;
@@ -76,8 +78,9 @@ export class PulseMotor {
       await beforeWrite();
       const started = this.clock.now();
       try {
-        await this.relay.write(true); // Exactly one ON attempt, including ambiguous outcomes.
-        await this.clock.sleep(Math.max(0, (command === 'close' ? this.closePulseMs : this.openPulseMs) - (this.clock.now() - started)));
+        await this.relay.write(true, { beforeWrite: () => requireValue(!this.stopped, 'operation_interrupted') }); // Exactly one ON attempt, including ambiguous outcomes.
+        await Promise.race([this.clock.sleep(Math.max(0, (command === 'close' ? this.closePulseMs : this.openPulseMs) - (this.clock.now() - started))), this.cancelled]);
+        requireValue(!this.stopped, 'operation_interrupted');
       } finally {
         // Always attempt release after ON was attempted. This does not establish
         // hardware auto-release after power loss; a restart journal remains held.
