@@ -116,6 +116,8 @@ Observed: after **Save reviewed settings** reported **Setup saved. Restart the c
 
 Owner request: allow the final save to close the configuration window.
 
+Follow-up after successful activation: the owner was unsure whether **Enable this garage** still required **Review changes**, with the disabled Homebridge footer Save reinforcing that doubt. Enablement is an immediate, persisted action, not an unsaved editor change. The completed state should explicitly say **Garage enabled. Setup complete. No further save is needed.**, provide a clear **Done / Close** action, and distinguish configuration edits that require review from enablement that has already completed. Do not prompt another configuration save solely because enablement succeeded.
+
 Requested improvement: provide a clear final **Save and close** action after review. Complete the appropriate save (initial Homebridge configuration or coordinator settings apply) before closing through the supported Homebridge UI lifecycle. Keep the editor open and preserve the draft if saving fails. Avoid a competing disabled footer Save that implies unfinished work; make the custom flow and Homebridge footer consistent using supported UI APIs. Present any restart requirement in a visible success confirmation that remains useful after closing. Saving and closing must not enable actuation or implicitly commission a garage.
 
 Status: recorded for the next UI update; not included in 0.4.1 or the focused 0.4.2 keypad fix.
