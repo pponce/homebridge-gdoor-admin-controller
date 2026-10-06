@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { createHash } from 'node:crypto';
 import { listenLocal, closeServer } from '../../src/api.js';
 
 // Closed-loop emulator. Requests to any unrecognised path fail; no LAN access.
@@ -8,6 +9,9 @@ export async function hardwareFixture(configuration) {
     gatewayId: config.bolt.gatewayId, uniqueId: config.bolt.uniqueId, modelId: config.bolt.modelId,
     manufacturer: config.bolt.manufacturer, resourceType: config.bolt.resourceType,
     ambiguousDoorWrite: false, badBoltAcknowledgement: false };
+  const sockets = new Set();
+  const sensors = new Map((config.inputs??[]).filter(i=>i.source.type==='deconz').map(i=>[i.source.resourceId,{...i.source,value:i.source.kind==='keypad'?'disarmed':i.trigger,stamp:new Date(Date.now()-10000).toISOString()}]));
+  const motors = new Map((config.motorPaths??[]).filter(m=>m.connection.type==='deconz' && m.connection.resourceId!==config.bolt.resourceId).map(m=>[m.connection.resourceId,{...m.connection,active:false}]));
   const server = http.createServer(async (request, response) => {
     let raw = ''; for await (const chunk of request) raw += chunk;
     const body = raw ? JSON.parse(raw) : null;
@@ -25,7 +29,18 @@ export async function hardwareFixture(configuration) {
         return send({ result: 'OK' });
       }
     }
-    if (request.url === '/api/synthetic-deconz-key/config' && request.method === 'GET') return send({ bridgeid: state.gatewayId });
+    if (request.url === '/api/synthetic-deconz-key/config' && request.method === 'GET') return send({ bridgeid: state.gatewayId, websocketport: server.address().port });
+    const sensor = /^\/api\/synthetic-deconz-key\/sensors\/([0-9]+)$/.exec(request.url);
+    if (sensor && request.method === 'GET' && sensors.has(sensor[1])) {
+      const row=sensors.get(sensor[1]);return send({uniqueid:row.uniqueId,type:row.resourceType,modelid:row.modelId,manufacturername:row.manufacturer,
+        config:{reachable:true,on:true,enrolled:1},state:{lastupdated:row.stamp,...(row.kind==='keypad'?{action:row.value}:{buttonevent:row.value})}});
+    }
+    if (/^\/api\/synthetic-deconz-key\/alarmsystems\/[0-9]+$/.test(request.url) && request.method==='GET') return send({config:{configured:true},state:{armstate:'disarmed'},devices:Object.fromEntries([...sensors.values()].filter(s=>s.kind==='keypad').map(s=>[s.uniqueId,{}]))});
+    const motor=/^\/api\/synthetic-deconz-key\/lights\/([0-9]+)(\/state)?$/.exec(request.url);
+    if(motor && motors.has(motor[1])){const row=motors.get(motor[1]);
+      if(request.method==='GET')return send({uniqueid:row.uniqueId,type:row.resourceType,modelid:row.modelId,manufacturername:row.manufacturer,state:{reachable:true,on:row.active?row.activeValue:!row.activeValue}});
+      if(request.method==='PUT'&&motor[2]){row.active=body.on===row.activeValue;state.writes.push(['motor',row.active]);if(row.active)state.closed=!state.closed;return send([{success:{['/lights/'+motor[1]+'/state/on']:body.on}}]);}
+    }
     const resource = '/lights/' + config.bolt.resourceId;
     if (request.url === '/api/synthetic-deconz-key' + resource && request.method === 'GET') return send({
       uniqueid: state.uniqueId, type: state.resourceType, modelid: state.modelId, manufacturername: state.manufacturer,
@@ -36,8 +51,17 @@ export async function hardwareFixture(configuration) {
     }
     response.writeHead(404); send({ error: 'fixture_request_rejected' });
   });
+  server.on('upgrade',(request,socket)=>{
+    const accept=createHash('sha1').update(request.headers['sec-websocket-key']+'258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
+    socket.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: '+accept+'\r\n\r\n');
+    sockets.add(socket);socket.on('data',chunk=>{if((chunk[0]&15)===8)socket.end(Buffer.from([0x88,0]));});socket.on('error',()=>{});socket.on('close',()=>sockets.delete(socket));
+  });
   const port = await listenLocal(server, 0);
   config.door.baseUrl = config.bolt.baseUrl = 'http://127.0.0.1:' + port;
+  for(const row of [...(config.inputs??[]).map(i=>i.source),...(config.motorPaths??[]).map(m=>m.connection)])if(row.type==='deconz')row.baseUrl=config.bolt.baseUrl;
   const credentials = { [config.door.credentialRef]: '123456', [config.bolt.credentialRef]: 'synthetic-deconz-key' };
-  return { config, state, credentials, server, close: () => closeServer(server) };
+  return { config, state, credentials, server, emit(id,value){const sensor=sensors.get(id);sensor.value=value;sensor.stamp=new Date().toISOString();
+    const event={t:'event',e:'changed',r:'sensors',id,uniqueid:sensor.uniqueId,state:{lastupdated:sensor.stamp,...(sensor.kind==='keypad'?{action:value}:{buttonevent:value})}};
+    const data=Buffer.from(JSON.stringify(event));const header=Buffer.alloc(4);header[0]=0x81;header[1]=126;header.writeUInt16BE(data.length,2);for(const socket of sockets)socket.write(Buffer.concat([header,data]));
+  }, close: async () => {for(const s of sockets)s.destroy();await closeServer(server);} };
 }

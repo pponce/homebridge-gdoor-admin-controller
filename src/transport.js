@@ -4,7 +4,7 @@ import { Fault } from './fault.js';
 
 // One attempt, no proxy environment, redirects, implicit credentials or retries.
 // The deadline covers the entire request, including a slow/dripping response.
-export function requestJson({ url, method = 'GET', headers = {}, body, timeoutMs = 3000 }) {
+export function requestJson({ url, method = 'GET', headers = {}, body, timeoutMs = 3000, maxRequestBytes = 4096, maxResponseBytes = 65536, allowEmpty = false }) {
   return new Promise((resolve, reject) => {
     let request; let timer; let finished = false;
     const finish = (error, value) => {
@@ -16,9 +16,10 @@ export function requestJson({ url, method = 'GET', headers = {}, body, timeoutMs
     try {
       const endpoint = new URL(url);
       if (!['http:', 'https:'].includes(endpoint.protocol) || endpoint.username || endpoint.password || endpoint.hash ||
-          !Number.isFinite(timeoutMs) || timeoutMs < 1 || timeoutMs > 8000) return finish(true);
+          !Number.isFinite(timeoutMs) || timeoutMs < 1 || timeoutMs > 30000) return finish(true);
       const data = body === undefined ? undefined : Buffer.from(JSON.stringify(body));
-      if (data && data.length > 4096) return finish(true);
+      if (![maxRequestBytes, maxResponseBytes].every(v => Number.isInteger(v) && v > 0 && v <= 2097152)) return finish(true);
+      if (data && data.length > maxRequestBytes) return finish(true);
       request = (endpoint.protocol === 'https:' ? https : http).request(endpoint, {
         method, agent: false, maxHeaderSize: 8192,
         headers: { ...headers, Accept: 'application/json', Connection: 'close',
@@ -30,10 +31,11 @@ export function requestJson({ url, method = 'GET', headers = {}, body, timeoutMs
         response.on('aborted', () => finish(true));
         response.on('data', chunk => {
           size += chunk.length;
-          if (size > 65536) { response.destroy(); return finish(true); }
+          if (size > maxResponseBytes) { response.destroy(); return finish(true); }
           chunks.push(chunk);
         });
         response.on('end', () => {
+          if (allowEmpty && response.statusCode === 204 && size === 0) return finish(false, null);
           try { finish(false, JSON.parse(Buffer.concat(chunks).toString('utf8'))); }
           catch { finish(true); }
         });

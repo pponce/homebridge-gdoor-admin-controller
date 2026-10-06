@@ -2,9 +2,9 @@ name: Coordinator checks
 on:
   push:
     branches: [main]
-    paths: ['src/**', 'test/**', 'scripts/**', 'examples/**', 'package.json', 'config.schema.json', '.github/workflows/ci.yml']
+    paths: ['src/**', 'homebridge-ui/**', 'test/**', 'scripts/**', 'examples/**', 'package.json', 'config.schema.json', '.github/workflows/ci.yml']
   pull_request:
-    paths: ['src/**', 'test/**', 'scripts/**', 'examples/**', 'package.json', 'config.schema.json', '.github/workflows/ci.yml']
+    paths: ['src/**', 'homebridge-ui/**', 'test/**', 'scripts/**', 'examples/**', 'package.json', 'config.schema.json', '.github/workflows/ci.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -42,3 +42,31 @@ jobs:
       - name: "Homebridge result: ${{ steps.smoke.outputs.result || steps.smoke.outcome }}"
         if: always()
         run: echo "Homebridge diagnostics are recorded in this step name."
+
+  config-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Install browser tool
+        run: |
+          npm install --prefix "$RUNNER_TEMP/coordinator-browser" --no-save --package-lock=false --ignore-scripts playwright@1.58.2
+          node "$RUNNER_TEMP/coordinator-browser/node_modules/playwright/cli.js" install --with-deps chromium webkit
+      - name: Guided configuration on desktop and mobile
+        id: browser
+        env:
+          PLAYWRIGHT_MODULE: ${{ runner.temp }}/coordinator-browser/node_modules/playwright
+          PREVIEW_OUTPUT: ${{ runner.temp }}/coordinator-browser/screenshots
+        run: node scripts/config-ui-browser.mjs
+      - name: "Configuration UI result: ${{ steps.browser.outputs.result || steps.browser.outcome }}"
+        if: always()
+        run: echo "Configuration UI diagnostics are recorded in this step name."
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: configuration-ui-screenshots
+          path: ${{ runner.temp }}/coordinator-browser/screenshots

@@ -24,7 +24,7 @@ Each assembly optionally declares `motorPaths` and `inputs`. `primary` is the re
 
 An input profile names the source, the triggering event/edge, the action, the motor path, busy behavior, quiet rearming time and optional opening/closing travel/retraction timing overrides. A deCONZ button uses its explicitly selected numeric button event. A Homebridge button uses the selected programmable-switch event; a Homebridge switch uses an on/off edge. A native deCONZ keypad uses accepted-disarm/rejected outcomes, with its gateway/sensor/alarm mapping. Neither a keypad PIN nor an arbitrary motor path from an event payload is accepted.
 
-See [the fully synthetic configuration example](../examples/input-routing-config.json). It includes a deCONZ button, a physical keypad and a button supplied by another Homebridge plugin. No brand name is a routing condition. The Homebridge schema exposes the profile structure; full device discovery/selectors and editable admin settings remain implementation work.
+See [the fully synthetic configuration example](../examples/input-routing-config.json). It includes a deCONZ button, a physical keypad and a button supplied by another Homebridge plugin. No brand name is a routing condition. The custom Homebridge configuration screen provides device discovery and guided profiles; the separate administrator edits the same authoritative profiles.
 
 Initial connector scope is deCONZ and existing Homebridge services. This does not add native HomeKit pairing, an arbitrary webhook or universal support for every device brand. An input must provide supported events; a relay must provide verified active/inactive level control and an idempotent inactive write. A command-only toggle is not interchangeable with that relay contract. Existing automations/local actions that independently move the door need review during commissioning: observing a button cannot intercept a separate direct motor action.
 
@@ -42,13 +42,11 @@ Initial connector scope is deCONZ and existing Homebridge services. This does no
 
 Keep the existing indoor-button behavior as an optional, separate policy for the verified pulse path: stop while opening, reverse while closing, and treat partial/open positions as estimates. Do not infer that behavior from a brand name, a switch service or the existence of a relay. Ordinary buttons may simply toggle while idle, and keypads retain their own policy.
 
-The profile declaration permits requesting that policy only for a toggle input on a compatible declared pulse path. **The current prototype does not yet execute stop/reverse.** PulseMotor reports interruption=false and the standard engine never opens interruption admission. The router includes admission hooks for the ported worker but drops busy events until that implementation is present. No configuration checkbox by itself enables unsupported movement.
+The optional policy is implemented for a toggle input on a declared compatible pulse path. Opening can stop at an estimated partial position; only the same control can initiate its follow-up close. Closing can reverse to an estimated open position. Sensor-confirmed closure wins a simultaneous interrupt, and the old close cannot later extend the bolt after a reversal. Uncertain writes and restart at a partial stop require physical review.
 
 ## Current implementation boundary
 
-Implemented and tested with synthetic devices: profile validation, generalized event gate, shared-engine route selection, per-input timing overrides, generic deCONZ motor-output adapter, bounded pulse/cleanup and sanitized routing inventory. The admin displays the actual configuration's routing table.
-
-The running platform remains observation-only. It does not instantiate movement workers, subscribe physical input devices, expose HomeKit control or accept keypad outcomes. Live deCONZ/Homebridge event adapters, supported Homebridge relay transport, interruption/partial-travel parity, commissioning and the remaining management API must be completed before owner testing. Generalized declarations are not a claim that those runtime connectors are already available.
+The running plugin connects deCONZ WebSocket inputs and selected Homebridge HAP event sources after commissioning. Startup and reconnect consume snapshots only. Homebridge connections select an explicit accessory port and pairing PIN, require insecure mode, and pin bridge/service/accessory identities. Native HomeKit pairing is excluded. Timed bolt-only feedback is unsupported: a configured bolt must provide a current relay or position report. Physical behavior on each particular opener/relay still needs supervised testing.
 
 ## Protocol references
 

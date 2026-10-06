@@ -12,7 +12,7 @@ The current standalone installation stays separate. The new admin repository ini
 
 ## Architecture
 
-Run as a Homebridge dynamic platform, preferably in its own child bridge. Homebridge manages the process. Store plugin data, journals, API identity and credentials beneath api.user.storagePath(); never install systemd units or patch other plugins. The initial dependency-free Node ESM foundation uses Homebridge's injected API; the shared movement engine has a tested JavaScript prototype, deliberately not connected to the platform until commissioning/input/API integration is complete.
+Run as a Homebridge dynamic platform, preferably in its own child bridge. Homebridge manages the process. Store plugin data, journals, API identity and credentials beneath api.user.storagePath(); never install systemd units or patch other plugins. The Node ESM platform uses Homebridge's injected API, with @homebridge/plugin-ui-utils for its custom configuration server. A commissioned runtime connects the shared movement engine to all supported inputs.
 
 Separate driver connections, state estimation, one coordinator per physical assembly, event/input profiles, accessory publication and the versioned management API. Several keypads/buttons may target one assembly with separate input policies, but do not instantiate competing movement engines. Validate hardware identity and prevent duplicate ownership, including cross-process ownership at deployment.
 
@@ -82,4 +82,4 @@ Host the standalone admin in a Homebridge plugin, keeping its own URL. This phas
 
 ## Current implementation checkpoint
 
-Direct Tailwind/deCONZ drivers, explicit read-only probes, private device credential loading, the movement-engine prototype and durable journal are implemented. The admin uses the actual probe API. See behavior-parity.md and status.md; M2/M3 are not complete and no physical testing is authorized by successful diagnostics. The owner confirmed retaining the pulse-relay path for the physical keypad/indoor button, with HomeKit and virtual keypad using Tailwind. Generic profile validation, route selection, freshness gates, bounded relay pulses and sanitized routing inventory are implemented with synthetic tests; see input-routing.md. Live source adapters, optional interruption/partial-travel parity and commissioning are the next routing work. Actual Homebridge child-bridge loading and browser validation run in CI.
+M2–M4 operational code is now connected, including the custom configuration UI and companion admin. Local behavior and cross-repository tests pass. M5 currently awaits release CI and the owner-run physical acceptance; see status.md and owner-test.md.

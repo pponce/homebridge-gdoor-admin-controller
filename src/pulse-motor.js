@@ -33,12 +33,12 @@ export class DeconzMotorRelay {
  * output adapter; an arbitrary "toggle" or command-only switch cannot be used.
  */
 export class PulseMotor {
-  constructor({ relay, openPulseMs, closePulseMs, clock = clockDefault, readOnly = true }) {
+  constructor({ relay, openPulseMs, closePulseMs, clock = clockDefault, readOnly = true, interruption = false }) {
     requireValue([openPulseMs, closePulseMs].every(ms => Number.isFinite(ms) && ms >= 100 && ms <= 2000), 'motor_pulse_duration_invalid');
     requireValue(relay?.capabilities?.inactiveWriteIdempotent === true, 'motor_relay_release_not_supported');
     this.relay = relay; this.openPulseMs = openPulseMs; this.closePulseMs = closePulseMs;
     this.clock = clock; this.readOnly = readOnly; this.busy = false;
-    this.capabilities = Object.freeze({ pulse: true, interruption: false });
+    this.capabilities = Object.freeze({ pulse: true, interruption: interruption === true });
   }
 
   async verifyIdle() {
@@ -59,9 +59,14 @@ export class PulseMotor {
     throw new Fault('motor_relay_release_unconfirmed');
   }
 
+  async interrupt(options) {
+    requireValue(this.capabilities.interruption, 'motor_interruption_unavailable');
+    return this.write('interrupt', options);
+  }
+
   async write(command, { beforeWrite } = {}) {
     requireValue(!this.readOnly, 'actuation_disabled');
-    requireValue(['open', 'close'].includes(command) && typeof beforeWrite === 'function', 'motor_pulse_context_required');
+    requireValue((['open', 'close'].includes(command) || command === 'interrupt' && this.capabilities.interruption) && typeof beforeWrite === 'function', 'motor_pulse_context_required');
     requireValue(!this.busy, 'motor_relay_busy');
     this.busy = true;
     try {
@@ -72,7 +77,7 @@ export class PulseMotor {
       const started = this.clock.now();
       try {
         await this.relay.write(true); // Exactly one ON attempt, including ambiguous outcomes.
-        await this.clock.sleep(Math.max(0, (command === 'open' ? this.openPulseMs : this.closePulseMs) - (this.clock.now() - started)));
+        await this.clock.sleep(Math.max(0, (command === 'close' ? this.closePulseMs : this.openPulseMs) - (this.clock.now() - started)));
       } finally {
         // Always attempt release after ON was attempted. This does not establish
         // hardware auto-release after power loss; a restart journal remains held.

@@ -88,7 +88,7 @@ test('misstated feedback modes and physically conflicting states are explicit li
   assert.deepEqual(f.state.writes, []);
 });
 
-test('missing credentials and unsupported backends fail without attempted requests', async t => {
+test('missing credentials and incomplete Homebridge identities fail without attempted requests', async t => {
   const f = await fixture(t);
   let d = new Diagnostics({ controllers: [f.config] }, async () => { throw Error('private path'); });
   assert.equal((await d.probe(f.config.id)).door.error, 'credentials_unavailable');
@@ -96,7 +96,7 @@ test('missing credentials and unsupported backends fail without attempted reques
   assert.equal((await d.probe(f.config.id)).bolt.error, 'credential_reference_missing');
   f.config.door.type = 'homebridge'; f.config.bolt.type = 'homebridge';
   d = new Diagnostics({ controllers: [f.config] }, async () => f.credentials);
-  assert.equal((await d.probe(f.config.id)).door.error, 'backend_not_implemented');
+  assert.equal((await d.probe(f.config.id)).door.error, 'device_probe_failed');
   assert.deepEqual(f.state.requests, []);
 });
 

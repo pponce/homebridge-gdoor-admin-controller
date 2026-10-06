@@ -1,67 +1,59 @@
 # Coordinator management API v1
 
-This repository owns the protocol. The admin repository carries the same contract and tests its client against the actual server. Contract status: **development, read-only controller/routing inventory and explicit device checks implemented**.
+The coordinator owns this contract; the companion administrator keeps a byte-identical copy. Version 1 supports managed operation as well as the earlier observation-only fixture.
 
-## Transport and identity
+## Transport
 
-Bind only to `127.0.0.1` in milestone 1. Configure a dedicated local port. Every request, including identity, requires `Authorization: Bearer <token>`. The plugin generates a random token and persistent UUID beneath its Homebridge storage directory, with owner-only permissions. Never place tokens in URLs, logs or browser JavaScript.
+Bind only to 127.0.0.1 on the configured management port (default 27773). Every request requires `Authorization: Bearer <token>`. Reject browser Origin headers and nonmatching Host headers. Every successful response repeats `apiVersion: 1` and the persistent `instanceId`; clients pin both. Token/UUID live in Homebridge-owned `gdoorandbolt-coordinator/identity.json` (directory 0700, file 0600). Never expose credentials to a browser, URL or log. No redirects or automatic write retries.
 
-The admin backend pins the expected instance UUID after explicit setup. A UUID mismatch, unsupported API version, redirect, oversized response or malformed payload fails closed. Responses use JSON and `Cache-Control: no-store`. Browser Origin requests are rejected: this is a server-to-server API, not an unauthenticated cross-origin website.
+POST bodies are JSON, include the pinned `instanceId`, and contain exactly the fields below. Bodies have a two-second receive deadline and a 256 KiB maximum (probe: 1 KiB). Fixed-code errors use 400/401/403/404/409/500; an error or lost acknowledgement never establishes success. Movement acceptance returns 202; completion is obtained from status. Bounded client deadlines cover the entire response.
 
-## Implemented endpoints
+## Endpoints
 
-| Method/path | Result |
-| --- | --- |
-| GET /v1/identity | `apiVersion`, `instanceId`, `pluginVersion`, `mode`, `capabilities` |
-| GET /v1/controllers | API envelope plus `controllers` array |
-| GET /v1/controllers/{id} | API envelope plus one `controller` |
-| GET /v1/controllers/{id}/routing | API envelope plus sanitized `routing` metadata; no hardware reads |
-| POST /v1/controllers/{id}/probe | Explicit read-only hardware check; body `{"instanceId":"<pinned UUID>"}` |
+| Method and path | Additional request fields | Envelope result |
+| --- | --- | --- |
+| GET /v1/identity | — | pluginVersion, mode, capabilities |
+| GET /v1/controllers | — | controllers |
+| GET /v1/controllers/{id} | — | controller |
+| GET /v1/controllers/{id}/state | — | status |
+| GET /v1/controllers/{id}/routing | — | routing |
+| POST /v1/controllers/{id}/probe | — | probe |
+| GET /v1/settings | — | settings |
+| POST /v1/settings/review | configuration, revision | review |
+| POST /v1/settings/cancel | token | review: {cancelled:true} |
+| POST /v1/settings/apply | token | settings |
+| POST /v1/commissioning/reset | — | result: {reset:true} |
+| POST /v1/controllers/{id}/commission | revision, previousControllerStopped, physicalSetupReviewed, recover | status |
+| POST /v1/controllers/{id}/commands | command, requestId, issuedAt, bootId | operation |
+| GET /v1/activity | — | events |
+| GET /v1/guard | — | ready |
+| GET /v1/maintenance | — | maintenance (null or transaction) |
+| POST /v1/maintenance/preflight,pause,verify,resume,complete | transactionId, physicalCheck, gateway | acknowledged |
+| POST /v1/maintenance/prepare | gateway, confirmedClosed | result |
+| POST /v1/maintenance/confirm | kind (bolt/still), token, confirmed | acknowledged |
+| POST /v1/controllers/{id}/keypad-begin | gatewayId, alarmId | receipt: {token} |
+| POST /v1/keypad-after | token, outcome, mode, elapsed | result: {note} |
 
-API envelopes repeat `apiVersion` and `instanceId`; validate both on every response. Identity mode is `observation` when diagnostics are available, otherwise `development`. Capabilities are `inventory: true`, `routingInventory: true`, `diagnostics: true` (or false when no probe provider is installed), `settingsWrite: false`, `motion: false`, `maintenance: false`, `keypad: false`. Older responses may omit diagnostics and routingInventory; clients treat either omitted flag as false. The core inventory/settingsWrite/motion/maintenance/keypad flags remain required. Clients must not infer operational readiness from HTTP 200.
+Each comma-separated maintenance action is its own final path component. Capabilities are inventory, routingInventory, diagnostics, settingsWrite, motion, maintenance and keypad. The running platform advertises `mode: managed`; per-controller actuation still requires commissioning. Observation fixtures advertise false operational capabilities. Never infer actuation from a successful identity or probe response.
 
-Inventory records contain `id`, `name`, `doorBackend`, `boltBackend`, `exposeBoltLock`, `feedback` (closing, opening, bolt), and `status`. Feedback contains modes only, never device URLs/IDs, secret references or credentials. M1 status is `phase: not-commissioned`, `door: unknown`, `bolt: unknown`, `actuationEnabled: false`. Inventory never samples hardware. Only an explicit probe does; its observations do not commission the assembly or enable actuation.
+## State and observations
 
-Errors are `{ "error": "<fixed_code>" }`: 401 `unauthorized`, 403 `origin_not_allowed`/`host_not_allowed`, 404 `not_found`, 405 `read_only_milestone`, 400 `invalid_request`, 409 `instance_mismatch`/`probe_busy`, 500 `internal_error`. Probe bodies are limited to 1 KiB, have a two-second receive deadline, require JSON content type, and must match the pinned instance before hardware is read. Error messages never include supplied URLs, credentials or exception text. No motion, configuration-write or maintenance route exists yet.
+Inventory contains id, name, doorBackend, boltBackend, exposeBoltLock, feedback and status. Operational status contains controllerId, bootId, commissioned, actuationEnabled, held, inputStates, state and revision. State reports phase, door, bolt, busy and fault, with target, openEstimated, closeEstimated, externalUnlockOverride, unavailable and obstruction when known. An estimate is not physical position. Faulted/stale HomeKit characteristics report communication failure; known obstruction is published. The poller reads commissioned devices; inventory simply returns the latest status.
 
-## Reserved future operations — not implemented
+Routing contains controllerId, builtins (`homekit: primary`, `virtualKeypad: primary`), motorPaths, inputs and runtimeEnabled. It excludes URLs, device identities and key references. Physical source adapters consume only eligible live notifications, never snapshots/startup/reconnect history. Homebridge events have receipt freshness, not provable physical event age.
 
-- Controller configuration read/review/apply with revision conflicts and secret redaction.
-- Explicit commands with controller ID, source, request ID and operation outcome; never automatically retry an ambiguous write.
-- Fresh, scoped virtual-keypad outcomes without the entered PIN; persist duplicate suppression and prevent replay after restarts.
-- Durable maintenance preflight/pause/verify/resume/complete; no acknowledgement until an operation actually succeeds.
-- Bounded event history and health reflecting actual hardware freshness and reachability.
+An explicit probe reads devices but never writes. Its result contains controllerId, checkedAt, door, bolt, limitations, compatible, actuationEnabled:false. Door contains state, feedback, blocked and error; bolt contains state, feedback and error. Direct Tailwind evidence is closed-sensor (closed/not-closed); direct deCONZ evidence is relay (locked/unlocked). Homebridge feedback follows the selected supported service and declared sensor/command meaning. A successful check does not commission anything. Failures replace values with unknown/unavailable and fixed errors.
 
-Preserve the existing settings, keypad and maintenance behavior in the new standalone administrator's coordinator adapter. The owner will stop the old administrator at cutover; adapting that installation is not required. Transport loss must retain a maintenance hold or unknown operation, not imply successful resume. Capabilities are enabled only with implemented, tested behavior.
+## Settings, commissioning and commands
 
-## Read-only probe result
+Homebridge config supplies the initial profiles. After first start, private profiles.json is authoritative for both configuration UIs; neither UI edits the other's files. Settings is {revision,configuration}. Review returns a random token, normalized configuration, revision and requiresCommissioning IDs, expiring after five minutes. Apply consumes the token and compares revisions; changing hardware or behavior removes commissioning for those garages. Cancel invalidates the review. Credential replacement resets commissioning before storing a private key. Credentials themselves are not in settings.
 
-The response envelope contains `probe`, with exactly:
+Commissioning requires explicit confirmation that the previous controller is stopped and the physical setup checked, then fresh read-only hardware/identity/relay checks. `recover:true` also acknowledges the interrupted/faulted journal. Commissioning does not move hardware. Timed closing still requires physical closed confirmation; an estimated closure alone cannot prove it.
 
-- `controllerId`: requested controller ID.
-- `checkedAt`: UTC ISO timestamp with milliseconds; the time of this explicit observation, never an ongoing freshness guarantee.
-- `door`: `state` closed/not-closed, `feedback` closed-sensor, `blocked` boolean and `error` null on success. Tailwind open means not-closed, never fully open. On failure: unknown/unavailable/null and a fixed error code.
-- `bolt`: `state` locked/unlocked, `feedback` relay and `error` null on success. This is a relay indication, not sensed bolt position. On failure: unknown/unavailable and a fixed error code.
-- `limitations`: zero or more of tailwind_open_requires_estimate, tailwind_closed_sensor_available, deconz_relay_is_not_position, door_blocked, bolt_extended_with_door_not_closed.
-- `compatible`: true only if both device reads succeeded and limitations is empty. This means that the declared direct-device connection and feedback modes passed the check, not readiness for movement or migration.
-- `actuationEnabled`: always false.
+Commands are open, close, lock or unlock. requestId is 16–64 alphanumeric/hyphen characters, issuedAt is epoch milliseconds within 15 seconds, and bootId must match the current runtime. Persist pending intent before executing. Repeated IDs return duplicate:true and never repeat movement; changed payloads conflict. Retain recent requests for at least their validity window and all pending requests. A new boot rejects old boot IDs; interrupted work becomes unknown/held. No waiting command queue, automatic movement retry or route fallback. The combined garage always goes through the shared worker, including an optional bolt Lock tile.
 
-Device errors are limited to credentials_unavailable, credential_reference_missing, backend_not_implemented, tailwind_credential_invalid, door_read_failed, door_response_invalid, bolt_credential_invalid, bolt_identity_configuration_required, bolt_read_failed, bolt_gateway_identity_mismatch, bolt_resource_identity_mismatch, bolt_unreachable, bolt_response_invalid, device_probe_failed. Never include raw device responses, endpoints, secret references or credential values.
+## Keypad and maintenance
 
-Tailwind and direct deCONZ probes are implemented. Homebridge accessory probes return backend_not_implemented. Tailwind performs one local dev_st POST using the TOKEN header; deCONZ performs only GET /config and GET /lights/{id}. Drivers default to read-only. No startup check, inventory refresh or probe can send a door_op or relay PUT. One probe per controller may be in progress; overlapping requests fail without queuing. Hardware requests have total deadlines, bounded responses and no redirects or retries. The administrator allows twelve seconds for a probe response.
+Before deCONZ PIN submission, the admin requests a one-use receipt scoped to gateway/alarm/controller. After deCONZ's outcome, it forwards only accepted/rejected/unknown, disarm/arm_away/arm_stay/arm_night and elapsed seconds. The PIN never reaches this API. The two-second receipt captures eligibility and the operation epoch. Accepted disarm additionally reads the configured alarm's fresh disarmed state; rejected closes. Busy, late, changed-epoch and unknown outcomes do not move anything. Both paths use the primary opener.
 
-The admin exposes this through its authenticated, Admin-only Controller page. Its built-in POST_READ route selects a controller and bypasses mutation guards only for this read; external extensions cannot register that route class. Existing gateway-write, keypad and maintenance guards remain enforced. Browser requests retain same-origin, CSRF and account checks. Opening or refreshing the page does not probe devices; pressing Check connections does. Each result replaces any previous result and includes the observation time.
-
-## Read-only input routing inventory
-
-The routing response envelope contains `routing`, with exactly:
-
-- `controllerId`: requested controller ID.
-- `builtins`: `{"homekit":"primary","virtualKeypad":"primary"}`. Neither builtin inherits a physical input's route.
-- `motorPaths`: primary plus zero to four named pulse paths. Each exposes only id, name, type (tailwind/homebridge/pulse-relay), and interruption (disabled/stop-opening-reverse-closing). Primary interruption is disabled. A declared interruption policy is not a runtime capability.
-- `inputs`: zero to 32 profiles, each exposing id, name, enabled, source (type and kind only), action, trigger, motorPath, busyBehavior, rearmSeconds and timing.
-- `runtimeEnabled`: false. Metadata does not enable input listeners or movement.
-
-Source type is deconz or homebridge. deCONZ supports button/keypad declarations; Homebridge supports button/switch declarations. Button trigger values are integers (deCONZ 0..65535, Homebridge 0..2); switch triggers are on/off/either; keypad trigger is native-outcome. Actions are open/close/toggle or keypad for a keypad source. busyBehavior is drop/interrupt; interruption declarations require a toggle input on a path declaring stop-opening-reverse-closing. rearmSeconds is 0..10. Optional timing keys are openRetractSettleSeconds/closeRetractSettleSeconds (0..120) and openingSeconds/closingSeconds (1..300). Input motorPath must reference a declared path.
-
-No resource IDs, bridge/gateway URLs, alarm IDs, credential references or secrets are returned. Device connection declarations remain private. Loading this metadata has no hardware side effects. The administrator validates the response before displaying assignments and labels them as configured, inactive routes. Editable profiles and source device enrollment remain future operations.
+Maintenance pause is durable and disables every input. The same transaction ID must verify, resume and complete; pause/complete are idempotent for that transaction. Resume does not release the pause: only complete does. A registered Homebridge maintenance participant requires preparation while closed/locked, then bolt-test and unchanged-door confirmations after its service restarts. Read checks never perform those physical tests. Restart preserves maintenance. Missing/unavailable participants cannot acknowledge completion. Generic admin transaction recovery never repeats an uncertain deCONZ write.

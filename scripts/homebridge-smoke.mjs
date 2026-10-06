@@ -30,6 +30,8 @@ async function main() {
   let child; let logs = ''; let identity;
   try {
     platform.controllers[0] = hardware.config;
+    Object.assign(hardware.config.feedback,{openingSeconds:1,closedStableSeconds:0,boltSettleSeconds:0});
+    hardware.config.timing={openRetractSettleSeconds:0,closeRetractSettleSeconds:0,operationPollSeconds:.1,idlePollSeconds:.5};
     platform.managementPort = await freePort();
     platform._bridge = { username: '0E:11:22:33:44:66', port: await freePort() };
     await writeFile(path.join(directory, 'config.json'), JSON.stringify({
@@ -37,7 +39,7 @@ async function main() {
         pin: '031-45-154', port: await freePort(), bind: ['127.0.0.1'] },
       platforms: [platform], accessories: [],
     }), { mode: 0o600 });
-    child = spawn(process.execPath, [process.env.HOMEBRIDGE_BIN, '-U', directory, '-P', root], { stdio: ['ignore', 'pipe', 'pipe'] });
+    child = spawn(process.execPath, [process.env.HOMEBRIDGE_BIN, '-I', '-U', directory, '-P', root], { stdio: ['ignore', 'pipe', 'pipe'] });
     child.stdout.on('data', data => { logs = (logs + data).slice(-32768); });
     child.stderr.on('data', data => { logs = (logs + data).slice(-32768); });
     const origin = 'http://127.0.0.1:' + platform.managementPort;
@@ -57,11 +59,27 @@ async function main() {
     assert.equal(response.status, 200);
     assert.equal((await response.json()).probe.compatible, true);
     assert.deepEqual(hardware.state.writes, []);
+    const management = async (endpoint, body) => {
+      const response = await fetch(origin + endpoint, { method: body ? 'POST' : 'GET', headers: { Authorization: 'Bearer '+identity.token, ...(body?{'Content-Type':'application/json'}:{}) }, ...(body?{body:JSON.stringify({instanceId:identity.instanceId,...body})}:{}), signal:AbortSignal.timeout(10000) });
+      assert.ok(response.ok); return response.json();
+    };
+    const id=platform.controllers[0].id;const endpoint='/v1/controllers/'+id;
+    const enabled=await management(endpoint+'/commission',{revision:1,previousControllerStopped:true,physicalSetupReviewed:true,recover:false});assert.equal(enabled.status.actuationEnabled,true);
+    const hapOrigin='http://127.0.0.1:'+platform._bridge.port;let accessories;
+    await until(async()=>{try{const r=await fetch(hapOrigin+'/accessories',{headers:{Authorization:'031-45-154'},signal:AbortSignal.timeout(1000)});accessories=await r.json();return accessories.accessories?.length===3;}catch{return false;}});
+    const serviceType=(s,type)=>s.type.toUpperCase().replace(/^0+/,'').startsWith(type+'-')||s.type.toUpperCase()===type;
+    const garage=accessories.accessories.find(a=>a.services.some(s=>serviceType(s,'41')));
+    const garageService=garage.services.find(s=>serviceType(s,'41'));const target=garageService.characteristics.find(c=>serviceType(c,'32'));
+    for(const [value,phase]of [[0,'open'],[1,'closed']]){
+      const write=await fetch(hapOrigin+'/characteristics',{method:'PUT',headers:{Authorization:'031-45-154','Content-Type':'application/hap+json'},body:JSON.stringify({characteristics:[{aid:garage.aid,iid:target.iid,value}]}),signal:AbortSignal.timeout(5000)});assert.equal(write.status,204);
+      await until(async()=>{const s=(await management(endpoint+'/state')).status.state;return s.phase===phase&&!s.busy;});
+    }
+    assert.deepEqual(hardware.state.writes,[['bolt',false],['door','open'],['bolt',false],['door','close'],['bolt',true]]);
     assert.equal(logs.includes(identity.token), false);
     child.kill('SIGTERM');
     await until(async () => child.exitCode !== null || child.signalCode !== null, 10000);
     await assert.rejects(fetch(origin + '/v1/identity', { signal: AbortSignal.timeout(1000) }));
-    console.log('Actual Homebridge 2 child-bridge startup, explicit device probe, storage isolation and shutdown passed.');
+    console.log('Actual Homebridge 2 child-bridge startup, private storage, explicit commissioning, actual HAP open/close handlers, ordered bolt coordination and shutdown passed.');
   } catch (error) {
     // Synthetic logs only, with the generated management token still redacted.
     const safeLogs = logs.replaceAll(identity?.token || 'never-match-placeholder', '[redacted]');

@@ -64,8 +64,8 @@ export class InputRouter {
   }
   context(inputId) {
     const profile = this.profiles.get(inputId); const state = this.engine.snapshot();
-    const healthy = this.engine.initialized && !state.fault && !this.engine.stopped;
-    const idle = healthy && !state.busy && this.activeInput === null && ['open', 'closed'].includes(state.phase);
+    const healthy = !this.inhibited?.() && this.engine.initialized && !state.fault && !this.engine.stopped;
+    const idle = healthy && !state.busy && this.activeInput === null && (['open', 'closed'].includes(state.phase) || state.phase === 'stopped-estimated' && this.engine.partialOwner === inputId);
     const interrupt = healthy && state.busy && this.activeInput === inputId && profile?.busyBehavior === 'interrupt' &&
       this.engine.interruptionAllowed === true && typeof this.engine.requestInterruption === 'function';
     return { epoch: this.epoch, eligible: Boolean(profile?.enabled && (idle || interrupt)), mode: interrupt ? 'interrupt' : 'idle' };
@@ -99,7 +99,7 @@ export class InputRouter {
     }
     if (command === 'toggle') command = this.engine.snapshot().phase === 'closed' ? 'open' : 'close';
     const timing = Object.fromEntries(Object.entries(profile.timing).map(([key, seconds]) => [timingMap[key], seconds * 1000]));
-    return this.run(command, { motorPath: profile.motorPath, timing }, inputId);
+    return this.run(command, { motorPath: profile.motorPath, timing, interruption: profile.busyBehavior === 'interrupt', owner: inputId }, inputId);
   }
   async builtin(source, command) {
     requireValue(['homekit', 'virtual-keypad'].includes(source) && ['open', 'close'].includes(command), 'builtin_input_invalid');
@@ -108,7 +108,7 @@ export class InputRouter {
   async run(command, options, inputId) {
     if (this.activeInput !== null || this.engine.busy) return { accepted: false, reason: 'controller_busy' };
     this.epoch++; this.activeInput = inputId;
-    try { return { accepted: true, result: await this.engine.execute(command, options) }; }
-    finally { this.activeInput = null; this.epoch++; }
+    try { this.operation = this.engine.execute(command, options); return { accepted: true, result: await this.operation }; }
+    finally { this.operation = null; this.activeInput = null; this.epoch++; }
   }
 }

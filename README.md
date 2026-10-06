@@ -2,13 +2,13 @@
 
 A Homebridge platform for coordinating **one garage door and a separate bolt/lock per configured controller**. Multiple doors are supported by separate controller definitions. Multiple input profiles for the same physical door must share its coordinator.
 
-**Status: observation and engine development. Not ready for physical operation or migration.** Authenticated inventory and explicit Tailwind/deCONZ connection checks are implemented. The movement engine and durable journal are tested with simulated hardware but are not connected to the running plugin. The platform publishes no HomeKit accessories and accepts no movement commands.
+**Status: operational test build; release checks in progress.** The runtime, combined Garage Door and optional Lock accessories, generalized physical inputs, standalone-admin API and modern custom Homebridge settings UI are connected. New garages stay disabled until explicitly checked and enabled. See [current validation](docs/status.md) before installation.
 
 ## Agreed product scope
 
 - Opener: a garage accessory supplied by another Homebridge plugin, or Tailwind's local API.
 - Bolt: a Lock, Switch, or Light accessory supplied by another Homebridge plugin, or direct deCONZ relay access.
-- Always publish a combined Garage Door accessory once the operational runtime is implemented.
+- Always publish a combined Garage Door accessory.
 - Optionally publish a separate Lock accessory for either bolt backend.
 - Configure sensor-based or explicitly estimated travel feedback, independent opening/closing times, settling delays, and per-input behavior.
 - Assign supported deCONZ or Homebridge buttons/switches to the primary opener or a named motor relay through the same coordinator. HomeKit and virtual keypad retain the primary opener route. See [input assignments](docs/input-routing.md) for implementation boundaries.
@@ -19,13 +19,13 @@ The separately installed [administration application](https://github.com/pponce/
 
 ## Development
 
-Node.js 22 or 24; no development dependencies are needed for this milestone:
+Node.js 22 or 24 and Homebridge 2. Unit tests use Node built-ins; the custom UI server depends on @homebridge/plugin-ui-utils.
 
 ```sh
 npm test
 npm pack --dry-run --ignore-scripts
 ```
 
-The package is private to prevent accidental npm publication during development. Do not copy example settings into a live installation yet. Device reads happen only through an explicit authenticated connection check. Startup and inventory never touch hardware. See [device checks](docs/device-checks.md) and the [behavior parity inventory](docs/behavior-parity.md).
+The package is private to prevent accidental npm publication during development. Examples contain synthetic devices and require real discovery/configuration. Uncommissioned startup and inventory make no hardware requests; commissioned operation reads devices. No startup, probe or discovery sends actuator commands. See [device checks](docs/device-checks.md) and the [behavior parity inventory](docs/behavior-parity.md).
 
 Read the [implementation plan](docs/implementation-plan.md), [migration plan](docs/migration.md), [API contract](docs/api-v1.md), and [current status](docs/status.md).

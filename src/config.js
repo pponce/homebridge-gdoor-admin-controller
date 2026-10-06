@@ -31,9 +31,11 @@ function secretRef(value) {
   return value;
 }
 function homebridge(value, bolt) {
-  fields(value, ['type', 'bridgeId', 'serviceId', 'credentialRef', ...(bolt ? ['serviceType', 'lockedValue'] : [])], 'invalid_homebridge_connection');
+  fields(value, ['type', 'baseUrl', 'bridgeId', 'serviceId', 'accessoryIdentity', 'credentialRef', ...(bolt ? ['serviceType', 'lockedValue'] : [])], 'invalid_homebridge_connection');
   const result = {
     type: 'homebridge',
+    ...(value.baseUrl !== undefined ? { baseUrl: baseUrl(value.baseUrl) } : {}),
+    ...(value.accessoryIdentity !== undefined ? { accessoryIdentity: string(value.accessoryIdentity, 'invalid_accessory_identity', 64) } : {}),
     bridgeId: string(value.bridgeId, 'invalid_bridge_id'),
     serviceId: string(value.serviceId, 'invalid_service_id'),
     credentialRef: secretRef(value.credentialRef),
@@ -97,7 +99,7 @@ function resourceKeys(value) {
 
 function pulseConnection(value) {
   fields(value, ['type', 'baseUrl', 'gatewayId', 'resourceId', 'uniqueId', 'resourceType', 'modelId', 'manufacturer',
-    'bridgeId', 'serviceId', 'credentialRef', 'activeValue'], 'invalid_pulse_connection');
+    'bridgeId', 'serviceId', 'accessoryIdentity', 'credentialRef', 'activeValue'], 'invalid_pulse_connection');
   if (typeof value.activeValue !== 'boolean') fail('invalid_pulse_mapping');
   const { activeValue, ...connection } = value;
   if (value.type === 'deconz') {
@@ -107,7 +109,7 @@ function pulseConnection(value) {
     delete checked.lockedValue;
     return { ...checked, activeValue };
   }
-  fields(value, ['type', 'bridgeId', 'serviceId', 'credentialRef', 'activeValue'], 'invalid_pulse_connection');
+  fields(value, ['type', 'baseUrl', 'bridgeId', 'serviceId', 'accessoryIdentity', 'credentialRef', 'activeValue'], 'invalid_pulse_connection');
   if (value.type !== 'homebridge') fail('unsupported_pulse_backend');
   return { ...homebridge(connection, false), activeValue };
 }
@@ -131,7 +133,7 @@ function motorPaths(value = []) {
 function source(value) {
   if (!object(value)) fail('invalid_input_source');
   if (value.type === 'homebridge') {
-    fields(value, ['type', 'kind', 'bridgeId', 'serviceId', 'credentialRef'], 'invalid_input_source');
+    fields(value, ['type', 'kind', 'baseUrl', 'bridgeId', 'serviceId', 'accessoryIdentity', 'credentialRef'], 'invalid_input_source');
     const { kind, ...connection } = value;
     return { ...homebridge(connection, false), kind: choice(kind, ['button', 'switch'], 'unsupported_input_kind') };
   }
@@ -189,18 +191,33 @@ function inputKeys(value) {
   ].map(key => JSON.stringify(key));
 }
 
-export function validateConfiguration(input) {
+export function validateConfiguration(input, { allowEmpty = false } = {}) {
   if (!object(input)) fail('invalid_configuration');
-  if (!Array.isArray(input.controllers) || input.controllers.length === 0 || input.controllers.length > 32) fail('controllers_required');
+  if (!Array.isArray(input.controllers) || (!allowEmpty && input.controllers.length === 0) || input.controllers.length > 32) fail('controllers_required');
   const port = input.managementPort ?? 27773;
   if (!Number.isInteger(port) || port < 1024 || port > 65535) fail('invalid_management_port');
   const ids = new Set(); const resources = new Set();
   const controllers = input.controllers.map(value => {
-    fields(value, ['id', 'name', 'door', 'bolt', 'feedback', 'exposeBoltLock', 'motorPaths', 'inputs'], 'invalid_controller');
+    fields(value, ['id', 'name', 'door', 'bolt', 'feedback', 'exposeBoltLock', 'motorPaths', 'inputs', 'timing', 'autoBolt', 'keypad'], 'invalid_controller');
     if (!identifier(value.id) || ids.has(value.id)) fail('invalid_or_duplicate_controller_id');
     ids.add(value.id);
     if (typeof value.exposeBoltLock !== 'boolean') fail('bolt_tile_choice_required');
     const result = { id: value.id, name: string(value.name, 'invalid_controller_name', 64), door: door(value.door), bolt: bolt(value.bolt), feedback: feedback(value.feedback), exposeBoltLock: value.exposeBoltLock };
+    const timing = value.timing ?? {};
+    const bounds = { operationPollSeconds: [0.1, 5, 0.5], idlePollSeconds: [0.5, 30, 2],
+      openRetractSettleSeconds: [0, 120, 2], closeRetractSettleSeconds: [0, 120, 2],
+      boltTimeoutSeconds: [1, 120, 10], motionTimeoutSeconds: [5, 300, 45], interruptedOpenMarginSeconds: [0, 30, 1] };
+    fields(timing, Object.keys(bounds), 'invalid_controller_timing');
+    result.timing = Object.fromEntries(Object.entries(bounds).map(([k, [min, max, fallback]]) => [k, number(timing[k] ?? fallback, min, max, 'invalid_controller_timing')]));
+    if (value.autoBolt !== undefined && typeof value.autoBolt !== 'boolean') fail('invalid_auto_bolt');
+    result.autoBolt = value.autoBolt ?? true;
+    result.keypad = null;
+    if (value.keypad !== undefined && value.keypad !== null) {
+      fields(value.keypad, ['baseUrl', 'gatewayId', 'alarmId', 'credentialRef'], 'invalid_keypad_scope');
+      if (!Number.isInteger(value.keypad.alarmId) || value.keypad.alarmId < 1 || value.keypad.alarmId > 255) fail('invalid_keypad_scope');
+      result.keypad = { baseUrl: baseUrl(value.keypad.baseUrl), gatewayId: string(value.keypad.gatewayId, 'invalid_gateway_id'),
+        alarmId: value.keypad.alarmId, credentialRef: secretRef(value.keypad.credentialRef) };
+    }
     result.motorPaths = motorPaths(value.motorPaths);
     result.inputs = inputs(value.inputs, result.motorPaths);
     for (const item of [result.door, result.bolt, ...result.motorPaths.map(path => path.connection)]) {

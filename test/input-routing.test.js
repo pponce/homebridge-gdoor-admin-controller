@@ -113,7 +113,7 @@ function routerFixture() {
   for (const profile of cfg.inputs) { profile.rearmSeconds = 0; profile.timing = {}; }
   const state = { door: 'closed', locked: true, now: 0, commands: [], journal: null };
   const clock = { now: () => state.now, wall: () => 100000 + state.now, sleep: async ms => { state.now += ms; } };
-  const writer = route => ({ write: async command => { state.commands.push([route, command]); state.door = command === 'open' ? 'not-closed' : 'closed'; } });
+  const writer = route => ({ capabilities: { interruption: true }, write: async command => { state.commands.push([route, command]); state.door = command === 'open' ? 'not-closed' : 'closed'; } });
   const primary = { ...writer('primary'), read: async () => ({ door: state.door, blocked: false, obstruction: false, evidence: 'closed-sensor' }) };
   const engine = new MovementEngine({ door: primary, bolt: { read: async () => ({ locked: state.locked, evidence: 'relay' }),
     write: async value => { state.locked = value; } },

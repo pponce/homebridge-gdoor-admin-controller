@@ -1,4 +1,5 @@
 import { TailwindDoor, DeconzBolt } from './drivers.js';
+import { HomebridgeDoor, HomebridgeBolt } from './homebridge-devices.js';
 import { Fault, requireValue } from './fault.js';
 
 export const PROBE_ERRORS = Object.freeze([
@@ -26,12 +27,11 @@ export class Diagnostics {
       catch { credentialError = new Fault('credentials_unavailable'); }
       const run = async (configuration, kind) => {
         try {
-          requireValue(configuration.type === (kind === 'door' ? 'tailwind' : 'deconz'), 'backend_not_implemented');
           if (credentialError) throw credentialError;
           const secret = credentials[configuration.credentialRef];
           requireValue(typeof secret === 'string', 'credential_reference_missing');
-          const driver = kind === 'door' ? new TailwindDoor(configuration, secret, { request: this.request }) :
-            new DeconzBolt(configuration, secret, { request: this.request });
+          const driver = kind === 'door' ? new (configuration.type === 'tailwind' ? TailwindDoor : HomebridgeDoor)(configuration, secret, { request: this.request, feedback: controller.feedback }) :
+            new (configuration.type === 'deconz' ? DeconzBolt : HomebridgeBolt)(configuration, secret, { request: this.request, feedback: controller.feedback.bolt });
           const value = await driver.read();
           return kind === 'door' ? { state: value.door, feedback: value.evidence, blocked: value.blocked, error: null } :
             { state: value.locked ? 'locked' : 'unlocked', feedback: value.evidence, error: null };
@@ -46,7 +46,7 @@ export class Diagnostics {
       if (controller.door.type === 'tailwind' && controller.feedback.closing !== 'sensor') limitations.push('tailwind_closed_sensor_available');
       if (controller.bolt.type === 'deconz' && controller.feedback.bolt !== 'relay') limitations.push('deconz_relay_is_not_position');
       if (door.blocked) limitations.push('door_blocked');
-      if (door.state === 'not-closed' && bolt.state === 'locked') limitations.push('bolt_extended_with_door_not_closed');
+      if (['not-closed','open','opening','closing'].includes(door.state) && bolt.state === 'locked') limitations.push('bolt_extended_with_door_not_closed');
       return { controllerId: id, checkedAt: new Date().toISOString(), door, bolt, limitations,
         compatible: !door.error && !bolt.error && !limitations.length, actuationEnabled: false };
     } finally { this.active.delete(id); }
