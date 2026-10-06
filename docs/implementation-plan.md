@@ -37,7 +37,7 @@ Homebridge's configuration UI and the admin adapter use one plugin-owned profile
 - [x] Implement persistent local API identity/token and authenticated read-only inventory.
 - [x] Add Homebridge platform lifecycle scaffold without accessory or hardware side effects.
 - [x] Create the matching Python admin client and a real Node/Python contract test.
-- [ ] Run the same scaffold inside an actual supported Homebridge 2 installation; local API/lifecycle tests alone do not establish this.
+- [x] Run the observation platform inside actual Homebridge 2.0.0, in a child bridge with temporary storage and loopback device emulators; see status.md. Live owner installation remains untested.
 
 M1 does not publish accessories, operate hardware or replace the admin extension. No migration instructions are enabled by this milestone.
 
