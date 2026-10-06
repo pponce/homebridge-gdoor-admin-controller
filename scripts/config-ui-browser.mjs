@@ -10,6 +10,7 @@ const {chromium,webkit}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
 const root=path.resolve('homebridge-ui/public');
 const example=JSON.parse(await readFile('examples/input-routing-config.json','utf8'));
 const base=example.controllers[0];base.inputs=base.inputs.slice(0,2);base.keypad={baseUrl:base.bolt.baseUrl,gatewayId:base.bolt.gatewayId,credentialRef:base.bolt.credentialRef,alarmId:1};
+Object.assign(base.motorPaths[0].connection,{resourceType:'On/Off switch',modelId:'lumi.switch.acn047',manufacturer:'Aqara'});
 const server=http.createServer(async(req,res)=>{try{const file=path.basename(new URL(req.url,'http://test').pathname)||'index.html';if(!['index.html','app.js','editor.js','style.css'].includes(file))throw Error();res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':'text/html');res.end(await readFile(path.join(root,file)));}catch{res.writeHead(404);res.end();}});
 server.listen(0,'127.0.0.1');await once(server,'listening');
 try{
@@ -24,6 +25,9 @@ try{
     if(name==='/apply'){assert.equal(body.token,'review-test');configuration=reviewed;revision++;saves++;return{settings:{revision,configuration}};}
     if(name==='/probe'){probes++;return{probe:{compatible:true,door:{state:'closed',feedback:'closed-sensor'},bolt:{state:'locked',feedback:'relay'},limitations:[]}};}
     if(name==='/credentials'){assert.equal(body.secret,'private-browser-test-key');return{saved:true};}
+    if(name==='/deconz'){const row=configuration.controllers[0].motorPaths[0].connection;return{gatewayId:row.gatewayId,
+      lights:[{name:'Synthetic Aqara opener',resourceId:row.resourceId,uniqueId:row.uniqueId,resourceType:row.resourceType,
+        modelId:row.modelId,manufacturer:row.manufacturer}],sensors:[],alarms:[]};}
     throw Error('unsupported_browser_request');
    });
    await page.addInitScript(({dark})=>{Object.defineProperty(crypto,'randomUUID',{value:undefined,configurable:true});window.homebridge={hideSchemaForm(){},disableSaveButton(){},fixScrollHeight(){},async userCurrentLightingMode(){return dark?'dark':'light';},async getPluginConfig(){return[];},request:(name,body)=>window.testRequest(name,body)};},{dark});
@@ -32,6 +36,9 @@ try{
    await page.getByRole('button',{name:'Add a garage'}).click();assert.equal(await page.locator('.garage-card').count(),2);await page.getByRole('button',{name:'Remove this garage'}).click();assert.equal(await page.locator('.garage-card').count(),1);
    await page.getByLabel('Garage name',{exact:true}).fill('Test garage');await page.getByLabel('Garage name',{exact:true}).press('Tab');
    await page.getByRole('button',{name:'02 Inputs'}).click();assert.match(await page.locator('.route-note').first().textContent(),/HomeKit.*virtual keypad.*Tailwind/);assert.equal(await page.locator('.input-profile').count(),2);
+   await page.getByRole('button',{name:'Find devices',exact:true}).first().click();
+   await page.getByLabel('Discovered motor',{exact:true}).selectOption('0');
+   await page.getByText('Selected: lumi.switch.acn047 · resource 2',{exact:true}).waitFor();
    await page.getByRole('button',{name:'03 Behavior'}).click();await page.getByLabel('Before opening (seconds)',{exact:true}).fill('3');await page.getByLabel('Before opening (seconds)',{exact:true}).press('Tab');
    await page.getByRole('button',{name:'Review changes',exact:true}).click();await page.getByRole('button',{name:'Save reviewed settings'}).waitFor();assert.equal(saves,0);
    await page.getByRole('button',{name:'Save reviewed settings'}).click();await page.locator('#notice').filter({hasText:'Settings saved'}).waitFor();assert.equal(saves,1);assert.equal(configuration.controllers[0].timing.openRetractSettleSeconds,3);

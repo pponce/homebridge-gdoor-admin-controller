@@ -130,7 +130,8 @@
                   "type": "string",
                   "enum": [
                     "On/Off light",
-                    "On/Off output"
+                    "On/Off output",
+                    "On/Off switch"
                   ]
                 },
                 "modelId": {

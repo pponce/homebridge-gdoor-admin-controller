@@ -67,7 +67,7 @@ function bolt(value) {
   return {
     type: 'deconz', baseUrl: baseUrl(value.baseUrl), gatewayId: string(value.gatewayId, 'invalid_gateway_id'),
     resourceId: value.resourceId, uniqueId: string(value.uniqueId, 'invalid_resource_identity'),
-    ...(value.resourceType !== undefined ? { resourceType: choice(value.resourceType, ['On/Off light', 'On/Off output'], 'invalid_resource_type') } : {}),
+    ...(value.resourceType !== undefined ? { resourceType: choice(value.resourceType, ['On/Off light', 'On/Off output', 'On/Off switch'], 'invalid_resource_type') } : {}),
     ...(value.modelId !== undefined ? { modelId: string(value.modelId, 'invalid_resource_model') } : {}),
     ...(value.manufacturer !== undefined ? { manufacturer: string(value.manufacturer, 'invalid_resource_manufacturer') } : {}),
     credentialRef: secretRef(value.credentialRef), lockedValue: value.lockedValue,

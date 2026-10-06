@@ -76,7 +76,7 @@ export class UiServer extends HomebridgePluginUiServer {
     if (typeof config.bridgeid !== 'string' || !/^[0-9a-fA-F:]{16,23}$/.test(config.bridgeid)) throw Error('gateway_invalid');
     const rows = value => Object.entries(value).filter(([id,row]) => /^[1-9][0-9]{0,5}$/.test(id) && row && typeof row === 'object').slice(0,512).map(([id,row]) => ({
       resourceId: id, name: String(row.name ?? id).slice(0,64), uniqueId: row.uniqueid, resourceType: row.type, modelId: row.modelid, manufacturer: row.manufacturername }));
-    return { gatewayId: config.bridgeid, lights: rows(lights).filter(x => ['On/Off light','On/Off output'].includes(x.resourceType)),
+    return { gatewayId: config.bridgeid, lights: rows(lights).filter(x => ['On/Off light','On/Off output','On/Off switch'].includes(x.resourceType)),
       sensors: rows(sensors).filter(x => ['ZHASwitch','ZHAAncillaryControl'].includes(x.resourceType)),
       alarms: Object.entries(alarms).filter(([id]) => /^[1-9][0-9]{0,2}$/.test(id)).map(([id,v]) => ({ id: Number(id), name: String(v.name ?? id).slice(0,64) })) };
   }

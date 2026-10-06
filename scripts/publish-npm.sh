@@ -32,7 +32,7 @@ release_archive="$release_directory/$release_name-$release_version.tgz"
 # 3 = unavailable lookup, 4 = a different artifact already owns this version.
 release_lookup() {
   local release_view_status=0
-  npm view "$release_spec" dist --json --registry "$release_registry" --fetch-timeout=15000 --fetch-retries=0 > "$release_directory/registry.json" 2> "$release_directory/registry-error.txt" || release_view_status=$?
+  npm view "$release_spec" dist --json --registry "$release_registry" --prefer-online --fetch-timeout="${1:-15000}" --fetch-retries=0 > "$release_directory/registry.json" 2> "$release_directory/registry-error.txt" || release_view_status=$?
   node --input-type=module - "$release_directory" "$release_view_status" <<'NODE'
 import { readFileSync } from 'node:fs';
 const [directory, status] = process.argv.slice(2);
@@ -50,11 +50,11 @@ case "$release_state" in
   0) echo 'This exact artifact is already published; no publish repeated.' ;;
   2)
     if ! npm whoami --registry "$release_registry" --fetch-timeout=15000 --fetch-retries=0; then
-      npm login --auth-type=web --registry "$release_registry"
+      npm login --auth-type=web --browser=false --registry "$release_registry"
     fi
     echo "Publishing $release_spec to the public npm registry. Complete npm authentication if prompted."
     # One publication attempt only. A lost response is resolved by reading npm.
-    if ! npm publish "$release_archive" --ignore-scripts --access public --tag latest --registry "$release_registry" --fetch-timeout=60000 --fetch-retries=0; then
+    if ! npm publish "$release_archive" --ignore-scripts --access public --tag latest --registry "$release_registry" --auth-type=web --browser=false --fetch-timeout=60000 --fetch-retries=0; then
       echo 'Publication did not return success; checking the registry before drawing a conclusion.' >&2
     fi
     ;;
@@ -62,9 +62,13 @@ case "$release_state" in
   *) echo 'This npm version already contains a different artifact. No publication attempted.' >&2; exit 1 ;;
 esac
 
-for release_attempt in 1 2 3 4 5 6; do
+echo 'Allowing up to 10 minutes for npm processing; no further publish requests will be sent during verification.'
+release_deadline=$((SECONDS + 600))
+while (( SECONDS < release_deadline )); do
+  release_remaining=$((release_deadline - SECONDS))
+  release_timeout=$((release_remaining < 15 ? release_remaining * 1000 : 15000))
   release_state=0
-  release_lookup || release_state=$?
+  release_lookup "$release_timeout" || release_state=$?
   if [[ "$release_state" == 0 ]]; then
     printf 'package=%s\nsource=%s\nverified_at=%s\n' "$release_spec" "$release_commit" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$release_directory/publication-receipt.txt"
     echo "RESULT: npm publication verified: $release_spec"
@@ -73,7 +77,11 @@ for release_attempt in 1 2 3 4 5 6; do
     exit 0
   fi
   [[ "$release_state" != 4 ]] || { echo 'Registry artifact differs from the saved release. Stop and review.' >&2; exit 1; }
-  [[ "$release_attempt" == 6 ]] || sleep 5
+  release_remaining=$((release_deadline - SECONDS))
+  if (( release_remaining > 0 )); then
+    echo "Waiting for npm availability: up to $release_remaining seconds remaining."
+    sleep "$((release_remaining < 10 ? release_remaining : 10))"
+  fi
 done
-echo 'Publication could not be verified. The exact artifact is saved under .release; rerun this script to check again.' >&2
+echo 'npm availability could not be verified within 10 minutes. This does not establish publication failure. The exact artifact is saved under .release.' >&2
 exit 1

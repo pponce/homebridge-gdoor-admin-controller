@@ -5,6 +5,7 @@ import { MovementEngine } from '../src/engine.js';
 import { Fault } from '../src/fault.js';
 import { readFile } from 'node:fs/promises';
 import { hardwareFixture } from './support/hardware.mjs';
+import { validateConfiguration } from '../src/config.js';
 
 function fixture(options = {}) {
   const state = { active: false, writes: [], now: 0, ...options.state };
@@ -101,4 +102,31 @@ test('shutdown interrupts the pulse wait and completes OFF cleanup before settli
   const motor=new PulseMotor({relay,openPulseMs:2000,closePulseMs:2000,readOnly:false,clock:{now:()=>0,sleep:()=>new Promise(()=>{})}});
   const result=motor.write('open',{beforeWrite:async()=>{}});await on;motor.stop();await assert.rejects(result,/operation_interrupted/);
   assert.deepEqual(writes,[true,false]);assert.equal(active,false);
+});
+
+test('Aqara T2 On/Off switch config accepts a motor path and pulses once with identity checks', async t => {
+  const declaration = JSON.parse(await readFile(new URL('../examples/input-routing-config.json', import.meta.url), 'utf8'));
+  declaration.controllers[0].inputs = declaration.controllers[0].inputs.slice(0, 2);
+  Object.assign(declaration.controllers[0].motorPaths[0].connection, {
+    resourceType: 'On/Off switch', modelId: 'lumi.switch.acn047', manufacturer: 'Aqara',
+  });
+  const config = validateConfiguration(declaration).controllers[0];
+  const hardware = await hardwareFixture(config); t.after(hardware.close);
+  const connection = hardware.config.motorPaths[0].connection;
+  const readOnly = new DeconzMotorRelay(connection, 'synthetic-deconz-key');
+  assert.deepEqual(await readOnly.read(), { active: false });
+  await assert.rejects(readOnly.write(true), /actuation_disabled/);
+  assert.deepEqual(hardware.state.writes, []);
+  const relay = new DeconzMotorRelay(connection, 'synthetic-deconz-key', { readOnly: false });
+  let now = 0;
+  const motor = new PulseMotor({ relay, openPulseMs: 100, closePulseMs: 200, readOnly: false,
+    clock: { now: () => now, sleep: async ms => { now += ms; } } });
+  await motor.write('open', { beforeWrite: async () => {} });
+  assert.deepEqual(hardware.state.writes, [['motor', true], ['motor', false]]);
+  assert.deepEqual(await relay.read(), { active: false });
+  const wrong = new DeconzMotorRelay({ ...connection, uniqueId: 'different-output' }, 'synthetic-deconz-key', { readOnly: false });
+  await assert.rejects(wrong.write(true), /motor_resource_identity_mismatch/);
+  assert.equal(hardware.state.writes.length, 2);
+  declaration.controllers[0].motorPaths[0].connection.resourceType = 'Dimmable light';
+  assert.throws(() => validateConfiguration(declaration), /invalid_resource_type/);
 });

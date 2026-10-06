@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import os from 'node:os';
 
-test('npm publication reconciles a lost response, verifies repeat runs and rejects unknown/different artifacts', async () => {
+test('npm publication waits through delayed availability, reconciles a lost response and rejects unknown/different artifacts', async () => {
   const temp = await mkdtemp(path.join(os.tmpdir(), 'coordinator-release-test-'));
   try {
     const root = path.join(temp, 'repo');
@@ -20,16 +20,19 @@ test('npm publication reconciles a lost response, verifies repeat runs and rejec
     const realNpm = process.env.npm_execpath ?? execFileSync('which', ['npm'], { encoding: 'utf8' }).trim();
     const state = path.join(temp, 'registry-state');
     const calls = path.join(temp, 'publish-calls');
-    await writeFile(state, 'absent'); await writeFile(calls, '');
+    const waits = path.join(temp, 'registry-waits');
+    await writeFile(state, 'absent'); await writeFile(calls, ''); await writeFile(waits, '');
+    await writeFile(path.join(bin, 'sleep'), '#!/usr/bin/env node\nrequire("node:fs").appendFileSync(process.env.RELEASE_TEST_WAITS, "wait\\n");\n', { mode: 0o755 });
     await writeFile(path.join(bin, 'npm'), `#!/usr/bin/env node
 const fs = require('node:fs'), cp = require('node:child_process'), path = require('node:path');
 const args = process.argv.slice(2), command = args[0];
 if (command === 'test') process.exit(0);
 if (command === 'pack') { const r = cp.spawnSync(process.execPath, [process.env.RELEASE_TEST_NPM, ...args], {stdio:'inherit'}); process.exit(r.status ?? 1); }
 if (command === 'whoami') { console.log('synthetic-publisher'); process.exit(0); }
-if (command === 'publish') { fs.appendFileSync(process.env.RELEASE_TEST_CALLS, 'publish\\n'); fs.writeFileSync(process.env.RELEASE_TEST_STATE, 'published'); process.exit(1); }
+if (command === 'publish') { fs.appendFileSync(process.env.RELEASE_TEST_CALLS, 'publish\\n'); fs.writeFileSync(process.env.RELEASE_TEST_STATE, 'pending:8'); process.exit(1); }
 if (command === 'view') {
  const state = fs.readFileSync(process.env.RELEASE_TEST_STATE, 'utf8');
+ if (state.startsWith('pending:')) { const left=Number(state.split(':')[1])-1; fs.writeFileSync(process.env.RELEASE_TEST_STATE,left?'pending:'+left:'published'); console.log(JSON.stringify({error:{code:'E404'}})); process.exit(1); }
  if (state === 'absent' || state === 'offline') { console.log(JSON.stringify({error:{code:state === 'absent'?'E404':'ETIMEDOUT'}})); process.exit(1); }
  const pkg = JSON.parse(fs.readFileSync('package.json'));
  const [pack] = JSON.parse(fs.readFileSync(path.join('.release',pkg.version,'pack.json')));
@@ -38,10 +41,12 @@ if (command === 'view') {
 process.exit(99);
 `, { mode: 0o755 });
     const env = { ...process.env, PATH: bin + path.delimiter + process.env.PATH,
-      RELEASE_TEST_NPM: realNpm, RELEASE_TEST_STATE: state, RELEASE_TEST_CALLS: calls };
+      RELEASE_TEST_NPM: realNpm, RELEASE_TEST_STATE: state, RELEASE_TEST_CALLS: calls, RELEASE_TEST_WAITS: waits };
     const publish = () => spawnSync('bash', ['scripts/publish-npm.sh', commit], { cwd: root, env, encoding: 'utf8', timeout: 30000 });
     let result = publish(); assert.equal(result.status, 0, result.stdout + result.stderr);
     assert.match(result.stdout, /RESULT: npm publication verified/);
+    assert.match(result.stdout, /up to 10 minutes/);
+    assert.equal((await readFile(waits, 'utf8')).trim().split('\n').length, 8);
     assert.equal(await readFile(calls, 'utf8'), 'publish\n');
     result = publish(); assert.equal(result.status, 0, result.stdout + result.stderr);
     assert.match(result.stdout, /already published/);

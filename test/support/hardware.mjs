@@ -30,6 +30,17 @@ export async function hardwareFixture(configuration) {
       }
     }
     if (request.url === '/api/synthetic-deconz-key/config' && request.method === 'GET') return send({ bridgeid: state.gatewayId, websocketport: server.address().port });
+    if (request.url === '/api/synthetic-deconz-key/lights' && request.method === 'GET') return send({
+      [config.bolt.resourceId]: { name: 'Synthetic bolt', uniqueid: state.uniqueId, type: state.resourceType,
+        modelid: state.modelId, manufacturername: state.manufacturer },
+      ...Object.fromEntries([...motors].map(([id, row]) => [id, { name: 'Synthetic opener relay', uniqueid: row.uniqueId,
+        type: row.resourceType, modelid: row.modelId, manufacturername: row.manufacturer }])),
+      '99': { name: 'Unsupported dimmer', type: 'Dimmable light' },
+    });
+    if (request.url === '/api/synthetic-deconz-key/sensors' && request.method === 'GET') return send(Object.fromEntries(
+      [...sensors].map(([id, row]) => [id, { name: 'Synthetic ' + row.kind, uniqueid: row.uniqueId, type: row.resourceType,
+        modelid: row.modelId, manufacturername: row.manufacturer }])));
+    if (request.url === '/api/synthetic-deconz-key/alarmsystems' && request.method === 'GET') return send({ '1': { name: 'Synthetic alarm' } });
     const sensor = /^\/api\/synthetic-deconz-key\/sensors\/([0-9]+)$/.exec(request.url);
     if (sensor && request.method === 'GET' && sensors.has(sensor[1])) {
       const row=sensors.get(sensor[1]);return send({uniqueid:row.uniqueId,type:row.resourceType,modelid:row.modelId,manufacturername:row.manufacturer,

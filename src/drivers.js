@@ -47,7 +47,7 @@ export class DeconzBolt {
   constructor(configuration, key, { request = requestJson, readOnly = true } = {}) {
     requireValue(typeof key === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(key), 'bolt_credential_invalid');
     requireValue(/^[0-9A-F]{16}$/.test(gatewayId(configuration.gatewayId)) &&
-      ['On/Off light', 'On/Off output'].includes(configuration.resourceType) &&
+      ['On/Off light', 'On/Off output', 'On/Off switch'].includes(configuration.resourceType) &&
       typeof configuration.modelId === 'string' && configuration.modelId.length > 0 &&
       typeof configuration.manufacturer === 'string' && configuration.manufacturer.length > 0,
     'bolt_identity_configuration_required');
