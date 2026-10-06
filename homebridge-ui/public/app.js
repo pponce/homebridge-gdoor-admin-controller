@@ -25,7 +25,10 @@ async function load(){
     const result=document.createElement('p');result.className='commission-result';result.setAttribute('role','status');
     const active=row.status.actuationEnabled;result.textContent=active?'Control is enabled.':row.status.held==='maintenance'?'Paused for maintenance.':'Control is disabled until you check and enable this garage.';
     const check=document.createElement('button');check.textContent='Check connections';check.type='button';check.onclick=()=>action(async()=>{const value=await hb.request('/probe',{controller:row.id});const p=value.probe;
-      result.textContent=p.compatible?'Connections verified. Door: '+p.door.state+' ('+p.door.feedback+'). Bolt: '+p.bolt.state+' ('+p.bolt.feedback+').': 'Connection needs attention: '+[p.door.error,p.bolt.error,...p.limitations].filter(Boolean).join(', ');});panel.append(check,result);
+      const controls=p.controls??[];const issues=[p.door.error,p.bolt.error,...p.limitations,
+        ...controls.filter(row=>row.error).map(row=>row.name+': '+row.error)].filter(Boolean);
+      result.textContent=p.compatible?'Connections verified. Door: '+p.door.state+' ('+p.door.feedback+'). Bolt: '+p.bolt.state+' ('+p.bolt.feedback+').'+(controls.length?' Motor relays and physical controls checked: '+controls.length+'.':''):
+        'Connection needs attention: '+issues.join(', ');});panel.append(check,result);
     if(!active){const checks=[];for(const text of ['The previous controller and its automatic inputs are stopped.','The door is physically closed, the bolt wiring is checked and the motor relay is released.']){
       const label=document.createElement('label');label.className='check';const input=document.createElement('input');input.type='checkbox';label.append(input,document.createTextNode(text));panel.append(label);checks.push(input);}
       const enable=document.createElement('button');enable.type='button';enable.className='primary';enable.textContent='Enable this garage';enable.disabled=true;

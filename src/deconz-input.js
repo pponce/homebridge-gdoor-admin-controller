@@ -30,8 +30,10 @@ export class DeconzInput {
     requireValue(Number.isFinite(stamp), 'input_state_invalid');
     let alarmDisarmed = false;
     if (s.kind === 'keypad') {
-      requireValue(sensor.type === 'ZHAAncillaryControl' && Number.isInteger(sensor.config.enrolled) && sensor.config.enrolled > 0,
-        'input_keypad_not_enrolled');
+      // config/enrolled is an internal IAS process field (public: false in
+      // deCONZ), not a REST enrollment contract for an ancillary keypad.
+      // Verify the public alarm membership below, as the standalone driver did.
+      requireValue(sensor.type === 'ZHAAncillaryControl', 'input_keypad_type_invalid');
       const alarm = await this.get('/alarmsystems/' + s.alarmId);
       requireValue(alarm?.config?.configured === true && Object.hasOwn(alarm?.devices ?? {}, s.uniqueId), 'input_alarm_mapping_changed');
       requireValue(typeof sensor.state.action === 'string', 'input_state_invalid');

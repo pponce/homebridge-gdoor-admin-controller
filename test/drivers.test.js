@@ -79,6 +79,31 @@ test('probe reports identity mismatch without private device data', async t => {
   assert.equal(JSON.stringify(value).includes('private-replacement'), false); assert.deepEqual(f.state.writes, []);
 });
 
+test('additional connection checks verify released motors and public keypad membership without writes or secret disclosure', async t => {
+  const inputExample=JSON.parse(await readFile(new URL('../examples/input-routing-config.json',import.meta.url),'utf8'));
+  inputExample.controllers[0].inputs=inputExample.controllers[0].inputs.slice(0,2);
+  const f=await hardwareFixture(inputExample.controllers[0]);t.after(f.close);
+  const diagnostics=new Diagnostics({controllers:[f.config]},async()=>f.credentials);
+  let checks=await diagnostics.probeControls(f.config.id);
+  assert.deepEqual(checks.map(row=>[row.kind,row.error]),[['motor',null],['input',null],['input',null]]);
+  f.state.alarmMembership=false;
+  checks=await diagnostics.probeControls(f.config.id);
+  assert.equal(checks.find(row=>row.id==='physical-keypad').error,'input_alarm_mapping_changed');
+  assert.equal(checks.find(row=>row.id==='indoor-button').error,null);
+  f.state.alarmMembership=true;f.motors.values().next().value.active=true;
+  checks=await diagnostics.probeControls(f.config.id);
+  assert.equal(checks.find(row=>row.kind==='motor').error,'motor_relay_active_requires_review');
+  f.motors.values().next().value.active=false;
+  f.config.inputs[1].enabled=false;f.state.alarmMembership=false;
+  assert.equal((await diagnostics.probeControls(f.config.id)).length,2);
+  diagnostics.credentials=async()=>{throw Error('private-key-and-path');};
+  checks=await diagnostics.probeControls(f.config.id);
+  assert.ok(checks.every(row=>row.error==='credentials_unavailable'));
+  assert.equal(JSON.stringify(checks).includes('private-key-and-path'),false);
+  for(const secret of Object.values(f.credentials))assert.equal(JSON.stringify(checks).includes(secret),false);
+  assert.deepEqual(f.state.writes,[]);assert.ok(f.state.requests.every(row=>row.method==='GET'));
+});
+
 test('misstated feedback modes and physically conflicting states are explicit limitations', async t => {
   const f = await fixture(t); f.config.feedback.opening = 'sensor'; f.config.feedback.bolt = 'position';
   f.state.closed = false;

@@ -23,7 +23,8 @@ try{
     if(name==='/review'){assert.equal(body.revision,revision);reviewed=validateConfiguration(body.configuration);return{review:{token:'review-test',configuration:reviewed,requiresCommissioning:[base.id]}};}
     if(name==='/cancel'){reviewed=null;return{};}
     if(name==='/apply'){assert.equal(body.token,'review-test');configuration=reviewed;revision++;saves++;return{settings:{revision,configuration}};}
-    if(name==='/probe'){probes++;return{probe:{compatible:true,door:{state:'closed',feedback:'closed-sensor'},bolt:{state:'locked',feedback:'relay'},limitations:[]}};}
+    if(name==='/probe'){probes++;return{probe:{compatible:probes>1,door:{state:'closed',feedback:'closed-sensor'},bolt:{state:'locked',feedback:'relay'},limitations:[],
+      controls:[{id:'physical-keypad',name:'Physical keypad',kind:'input',error:probes===1?'input_alarm_mapping_changed':null}]}};}
     if(name==='/credentials'){assert.equal(body.secret,'private-browser-test-key');return{saved:true};}
     if(name==='/deconz'){const row=configuration.controllers[0].motorPaths[0].connection;return{gatewayId:row.gatewayId,
       lights:[{name:'Synthetic Aqara opener',resourceId:row.resourceId,uniqueId:row.uniqueId,resourceType:row.resourceType,
@@ -43,7 +44,10 @@ try{
    await page.getByRole('button',{name:'Review changes',exact:true}).click();await page.getByRole('button',{name:'Save reviewed settings'}).waitFor();assert.equal(saves,0);
    await page.getByRole('button',{name:'Save reviewed settings'}).click();await page.locator('#notice').filter({hasText:'Settings saved'}).waitFor();assert.equal(saves,1);assert.equal(configuration.controllers[0].timing.openRetractSettleSeconds,3);
    assert.equal(await page.getByRole('button',{name:'Enable this garage'}).isDisabled(),true);
-   await page.getByRole('button',{name:'Check connections'}).click();await page.locator('.commission-result').filter({hasText:'Connections verified'}).waitFor();assert.equal(probes,1);
+   await page.getByRole('button',{name:'Check connections'}).click();await page.locator('.commission-result').filter({hasText:'Physical keypad: input_alarm_mapping_changed'}).waitFor();assert.equal(probes,1);
+   assert.equal(await page.locator('.commission-result').filter({hasText:'Connections verified'}).count(),0);
+   await page.getByRole('button',{name:'Check connections'}).click();await page.locator('.commission-result').filter({hasText:'Connections verified'}).waitFor();assert.equal(probes,2);
+   assert.match(await page.locator('.commission-result').textContent(),/Motor relays and physical controls checked: 1/);
    await page.locator('#credential-reference').fill('private-key');await page.locator('#credential-secret').fill('private-browser-test-key');await page.getByRole('button',{name:'Save connection key'}).click();await page.locator('#notice').filter({hasText:'saved privately'}).waitFor();assert.equal(await page.locator('#credential-secret').inputValue(),'');
    assert.equal(await page.locator('body').evaluate(b=>b.scrollWidth<=innerWidth+1),true);assert.deepEqual(errors,[]);
    if(process.env.PREVIEW_OUTPUT){await mkdir(process.env.PREVIEW_OUTPUT,{recursive:true});await page.screenshot({path:path.join(process.env.PREVIEW_OUTPUT,mobile?'coordinator-mobile.png':'coordinator-desktop.png'),fullPage:true});}

@@ -2,7 +2,7 @@
 
 The operational test build keeps checks separate from enabling a garage. An uncommissioned profile makes no startup hardware requests. Discovery and explicit probes read identities/current values without actuator writes. A commissioned profile also observes devices during operation. Use [owner-test.md](owner-test.md) and the validated revisions in [status.md](status.md) for installation.
 
-Homebridge settings provides device discovery, private connection-key entry and **Check connections**. The separate administrator also provides explicit connection checks. A successful check establishes the reported evidence and identity at that time; it does not prove wiring, physical bolt position or permission to take over from the old controller. Enabling is a separate, explicit step after ownership and physical review.
+Homebridge settings provides device discovery, private connection-key entry and **Check connections**. From 0.4.2, the Homebridge settings check also verifies each motor relay is released and each enabled physical input passes its identity, availability and keypad alarm-membership checks. Failures identify the affected control. The separate administrator retains the v1 door/bolt connection check; its API response is unchanged. A successful check establishes the reported evidence and identity at that time; it does not prove wiring, physical bolt position or permission to take over from the old controller. Enabling is a separate, explicit step after ownership and physical review.
 
 ## Private credentials
 

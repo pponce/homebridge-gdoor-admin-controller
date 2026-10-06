@@ -9,12 +9,13 @@ import {loadIdentity} from '../src/storage.js';
 import {CoordinatorRuntime} from '../src/runtime.js';
 import {createManagementServer,listenLocal,closeServer} from '../src/api.js';
 import {hardwareFixture} from '../test/support/hardware.mjs';
+import {Diagnostics} from '../src/diagnostics.js';
 const storagePath=await mkdtemp(path.join(os.tmpdir(),'coordinator-ui-ipc-'));const identity=await loadIdentity(storagePath);
 const example=JSON.parse(await readFile('examples/input-routing-config.json','utf8'));
 example.controllers[0].inputs=example.controllers[0].inputs.slice(0,2);
 Object.assign(example.controllers[0].motorPaths[0].connection,{resourceType:'On/Off switch',modelId:'lumi.switch.acn047',manufacturer:'Aqara'});
 const hardware=await hardwareFixture(example.controllers[0]);example.controllers=[hardware.config];
-const runtime=new CoordinatorRuntime({storagePath,configuration:example});await runtime.start();const server=createManagementServer({identity,configuration:example,runtime});const port=await listenLocal(server,0);
+const runtime=new CoordinatorRuntime({storagePath,configuration:example});await runtime.start();const diagnostics=new Diagnostics(runtime.configuration,()=>runtime.credentials());const server=createManagementServer({identity,configuration:example,runtime,diagnostics});const port=await listenLocal(server,0);
 const configPath=path.join(storagePath,'config.json');await writeFile(configPath,JSON.stringify({platforms:[{...example,managementPort:port}]}),{mode:0o600});let logs='';let child;
 try{
  child=fork(path.resolve('homebridge-ui/server.js'),[],{env:{...process.env,HOMEBRIDGE_STORAGE_PATH:storagePath,HOMEBRIDGE_CONFIG_PATH:configPath},stdio:['ignore','pipe','pipe','ipc']});
@@ -30,11 +31,16 @@ try{
    resourceId:motor.resourceId,uniqueId:motor.uniqueId,resourceType:'On/Off switch',modelId:'lumi.switch.acn047',manufacturer:'Aqara'});
  assert.equal(discovered.lights.some(row=>row.resourceId==='99'),false);
  assert.equal(discovered.sensors.length,2);assert.deepEqual(hardware.state.writes,[]);
+ let probe=await request('/probe',{controller:hardware.config.id});assert.equal(probe.probe.compatible,true);
+ assert.deepEqual(probe.probe.controls.map(row=>row.error),[null,null,null]);
+ hardware.state.alarmMembership=false;probe=await request('/probe',{controller:hardware.config.id});
+ assert.equal(probe.probe.compatible,false);assert.equal(probe.probe.controls.find(row=>row.id==='physical-keypad').error,'input_alarm_mapping_changed');
+ hardware.state.alarmMembership=true;assert.deepEqual(hardware.state.writes,[]);
  const configuration=await request('/validate',{configuration:loaded.settings.configuration});configuration.controllers[0].name='IPC edited garage';
  const review=await request('/review',{configuration,revision:loaded.settings.revision});await request('/apply',{token:review.review.token});
  loaded=await request('/load');assert.equal(loaded.settings.configuration.controllers[0].name,'IPC edited garage');assert.equal(loaded.settings.revision,2);
  const result=await request('/commission',{controller:hardware.config.id,revision:2,previousControllerStopped:true,physicalSetupReviewed:true,recover:false});assert.equal(result.status.actuationEnabled,true);assert.deepEqual(hardware.state.writes,[]);
  const [reference,secret]=Object.entries(hardware.credentials)[0];await request('/credentials',{reference,secret});assert.equal(runtime.status(hardware.config.id).actuationEnabled,false);assert.deepEqual(hardware.state.writes,[]);
  for(const secret of [identity.token,...Object.values(hardware.credentials)])assert.equal(logs.includes(secret),false);
- console.log('Real custom UI server IPC passed: initial load, private credentials, Aqara T2 discovery, review/apply, commissioning and credential-change pause with no hardware writes.');
+ console.log('Real custom UI server IPC passed: discovery, complete control checks, public keypad membership, review/apply, commissioning and credential-change pause with no hardware writes.');
 }finally{if(child){const exited=once(child,'exit');child.kill('SIGTERM');await exited;}await runtime.stop();await closeServer(server);await hardware.close();await rm(storagePath,{recursive:true,force:true});}

@@ -87,6 +87,45 @@ The T2 relay was also absent from the picker because 0.4.0 excluded its **On/Off
 
 Observed: the owner asked what **Rearm delay** means. Explain it as the ignore interval after an input becomes eligible again (for example after startup, reconnect or an operation), with presses during that interval discarded. It is not a per-press execution delay or the alarm's arm delay. Keep existing input policies and values unchanged when improving the wording.
 
+### Make virtual keypad setup an explicit optional choice
+
+Observed: the owner could not tell whether virtual keypad configuration must wait for the standalone web administrator, or how **Link virtual keypad to physical keypad**, **Set an alarm directly**, and the resulting fields relate. The two buttons look like sequential actions. The owner suggested a dropdown.
+
+Requested improvement: replace those competing setup buttons with a **Virtual keypad setup** dropdown:
+- **Not using it yet** (default for an unconfigured virtual keypad): no alarm fields or required values; explain that it can be configured when connecting the web administrator.
+- **Use a physical keypad's alarm**: reuse the selected configured keypad's deCONZ connection and alarm. Select the sole physical keypad automatically; offer a clearly labeled keypad picker when there are several. Show a concise summary of the chosen alarm rather than requiring duplicate connection entry.
+- **Choose an alarm manually**: show the deCONZ connection and alarm selection fields for installations without a physical keypad or needing a different alarm.
+
+Explain that these choices configure the optional on-screen keypad in the separate web administrator. They do not install that application or create a HomeKit tile. The virtual keypad uses the primary opener; physical controls retain their own selected motor paths. Skipping or removing the virtual keypad configuration must leave physical controls intact and allow Review/Save. The current link action copies settings; any revised interface must describe its actual copy/reuse behavior accurately and preserve already configured alarm scopes on load.
+
+Status: recorded for the next UI update; not included in 0.4.1 or the focused 0.4.2 keypad fix.
+
+### Identify the exact reason Review or Save failed
+
+Observed: after completing the 0.4.0 editor, the owner received **Could not complete the request. Check the selected devices, required fields and coordinator connection.** The same generic message covers validation, coordinator review/apply, and other request failures, leaving no useful next action. The custom settings server also discards the validation error code.
+
+Requested improvement: distinguish configuration validation from coordinator availability and saving failures. For configuration problems, identify the relevant garage, section and field with a safe, actionable explanation. Preserve the unsaved draft after failures. Explain incomplete optional motor paths/inputs and duplicate output selections directly, without exposing credentials or raw backend error text. Do not recommend restarting, refreshing or upgrading as a first diagnostic step while the only copy of the user's configuration is the unsaved editor draft.
+
+Resolution: the owner found a second address missing its http:// prefix after fixing the first. This blocked Review before the Save button appeared. Apply address normalization and field-specific validation consistently across every connection, including opener, bolt, additional motor paths, physical inputs and the optional virtual keypad. Highlight each affected field; fixing one address must not leave the owner guessing about another. The generic message alone was insufficient to diagnose this.
+
+Status: captured for the next UI update; not included in the reviewed 0.4.1 release.
+
+### Finish configuration with Save and close
+
+Observed: after **Save reviewed settings** reported **Setup saved. Restart the coordinator child bridge, then reopen these settings.**, the owner saw Homebridge's disabled footer **Save** and could not tell whether another save was required. The custom editor intentionally disables that standard save button, while using its own save action.
+
+Owner request: allow the final save to close the configuration window.
+
+Requested improvement: provide a clear final **Save and close** action after review. Complete the appropriate save (initial Homebridge configuration or coordinator settings apply) before closing through the supported Homebridge UI lifecycle. Keep the editor open and preserve the draft if saving fails. Avoid a competing disabled footer Save that implies unfinished work; make the custom flow and Homebridge footer consistent using supported UI APIs. Present any restart requirement in a visible success confirmation that remains useful after closing. Saving and closing must not enable actuation or implicitly commission a garage.
+
+Status: recorded for the next UI update; not included in 0.4.1 or the focused 0.4.2 keypad fix.
+
+### Check all configured controls before reporting success
+
+Observed: **Check connections** reported the door and bolt verified, but enabling then failed with the generic request error. Read-only inspection isolated the failure to the keypad's non-public enrollment field, while the motor relay and indoor button passed.
+
+The focused 0.4.2 fix removes the invalid private-field requirement and extends the Homebridge settings check to motor relays and enabled physical inputs. It reports the affected control and a fixed error code instead of reporting success based only on the door/bolt checks. The broader field-specific save errors, address normalization, dropdown and save/close UX work remain pending.
+
 ### Scope of the next change
 
 Apply the agreed terminology and entry-flow improvements to the shared editor in both repositories when implemented. Verify the first-use path with an empty configuration. Preserve existing coordination and commissioning behavior.

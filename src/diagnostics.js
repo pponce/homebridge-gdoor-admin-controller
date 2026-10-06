@@ -1,5 +1,7 @@
 import { TailwindDoor, DeconzBolt } from './drivers.js';
-import { HomebridgeDoor, HomebridgeBolt } from './homebridge-devices.js';
+import { HomebridgeDoor, HomebridgeBolt, HomebridgeMotorRelay, HomebridgeInput } from './homebridge-devices.js';
+import { DeconzMotorRelay, PulseMotor } from './pulse-motor.js';
+import { DeconzInput } from './deconz-input.js';
 import { Fault, requireValue } from './fault.js';
 
 export const PROBE_ERRORS = Object.freeze([
@@ -10,10 +12,54 @@ export const PROBE_ERRORS = Object.freeze([
   'device_probe_failed',
 ]);
 
+// These additional checks are used by the Homebridge settings UI. Keep the
+// existing v1 door/bolt probe response compatible with the standalone admin.
+export const CONTROL_PROBE_ERRORS = Object.freeze([
+  ...PROBE_ERRORS, 'motor_gateway_identity_mismatch', 'motor_resource_identity_mismatch',
+  'motor_unreachable', 'motor_response_invalid', 'motor_read_failed',
+  'motor_relay_active_requires_review', 'motor_relay_mapping_invalid',
+  'motor_pulse_duration_invalid', 'motor_relay_release_not_supported',
+  'pulse_release_confirmation_required', 'input_credential_invalid', 'input_read_failed',
+  'input_gateway_identity_mismatch', 'input_resource_identity_mismatch', 'input_unreachable',
+  'input_state_invalid', 'input_keypad_type_invalid', 'input_alarm_mapping_changed',
+  'input_stream_unavailable',
+]);
+
 export class Diagnostics {
   constructor(configuration, credentials, { request } = {}) {
     this.configuration = configuration; this.credentials = credentials;
     this.request = request; this.active = new Set();
+  }
+
+  async probeControls(id) {
+    const controller = this.configuration.controllers.find(row => row.id === id);
+    requireValue(controller, 'controller_not_found');
+    let credentials; let credentialError;
+    try { credentials = await this.credentials(); }
+    catch { credentialError = new Fault('credentials_unavailable'); }
+    const rows = [
+      ...(controller.motorPaths ?? []).map(row => ({ row, kind: 'motor', connection: row.connection })),
+      ...(controller.inputs ?? []).filter(row => row.enabled).map(row => ({ row, kind: 'input', connection: row.source })),
+    ];
+    return Promise.all(rows.map(async ({ row, kind, connection }) => {
+      let error = null;
+      try {
+        if (credentialError) throw credentialError;
+        const secret = credentials?.[connection.credentialRef];
+        requireValue(typeof secret === 'string', 'credential_reference_missing');
+        const options = { readOnly: true, request: this.request };
+        if (kind === 'motor') {
+          const relay = new (connection.type === 'deconz' ? DeconzMotorRelay : HomebridgeMotorRelay)(connection, secret, options);
+          await new PulseMotor({ relay, readOnly: true, openPulseMs: row.openPulseSeconds * 1000,
+            closePulseMs: row.closePulseSeconds * 1000 }).verifyIdle();
+        } else {
+          await new (connection.type === 'deconz' ? DeconzInput : HomebridgeInput)(connection, secret, options).inspect();
+        }
+      } catch (failure) {
+        error = failure instanceof Fault && CONTROL_PROBE_ERRORS.includes(failure.message) ? failure.message : 'device_probe_failed';
+      }
+      return { id: row.id, name: row.name, kind, error };
+    }));
   }
 
   async probe(id) {

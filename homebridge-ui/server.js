@@ -7,6 +7,7 @@ import { PrivateStore } from '../src/private-store.js';
 import { requestJson } from '../src/transport.js';
 import { discoverHomebridge } from '../src/homebridge-devices.js';
 import { validateConfiguration } from '../src/config.js';
+import { Diagnostics } from '../src/diagnostics.js';
 
 export class UiServer extends HomebridgePluginUiServer {
   constructor() {
@@ -20,7 +21,16 @@ export class UiServer extends HomebridgePluginUiServer {
       const data = await discoverHomebridge(baseUrl, keys[credentialRef]); return { bridgeId: data.bridgeId, services: data.services.map(({service,aid,...row}) => row) }; });
     route('/apply', body => this.api('/v1/settings/apply', body));
     route('/commission', ({ controller, ...body }) => { this.id(controller); return this.api('/v1/controllers/' + controller + '/commission', body); });
-    route('/probe', ({ controller }) => { this.id(controller); return this.api('/v1/controllers/' + controller + '/probe', {}); });
+    route('/probe', async ({ controller }) => {
+      this.id(controller);
+      const [value, settings] = await Promise.all([
+        this.api('/v1/controllers/' + controller + '/probe', {}), this.api('/v1/settings'),
+      ]);
+      const diagnostics = new Diagnostics(settings.settings.configuration, () => readCredentials(this.homebridgeStoragePath));
+      const controls = await diagnostics.probeControls(controller);
+      return { ...value, probe: { ...value.probe, controls,
+        compatible: value.probe.compatible && controls.every(row => row.error === null) } };
+    });
     route('/credentials', body => this.saveCredential(body));
     route('/deconz', body => this.deconzDevices(body));
     this.ready();
