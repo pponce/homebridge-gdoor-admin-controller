@@ -69,6 +69,14 @@ Preferred first-use flow: choose the connection type, then enter its clearly lab
 
 This refines the earlier picker proposal: separate connection-specific credential entry is the obvious first-use path; saved-key selection remains an available reuse path. These are recorded requirements for a future UI update, not changes to the installed 0.4.0 build.
 
+### Device discovery appears unresponsive
+
+Owner report: **Find devices** does not seem to do anything during deCONZ bolt setup. The host/browser failure is not yet diagnosed.
+
+Source inspection: the current editor changes a small help paragraph below the button to **Finding devices…**, followed by a device selector, an empty-result message, or a generic address/key error. It does not change/disable the button while discovery is pending. Discovery uses the entered address and saved key reference immediately; reviewing or saving the garage configuration is not a prerequisite. The server requires an origin URL including http:// or https:// and the correct deCONZ port, and reads config, lights, sensors and alarmsystems together.
+
+Follow-up: collect the exact visible status or a credential-free screenshot before attributing the report to a connection failure. Improve the button's pending state and make results/errors prominent beside it. Explain missing address/key fields locally and distinguish connection/key failures from no compatible devices using sanitized messages. Preserve pending settings and avoid exposing raw backend errors or credentials. This remains an observed setup problem to investigate, not a confirmed discovery defect or a shipped fix.
+
 ### Scope of the next change
 
 Apply the agreed terminology and entry-flow improvements to the shared editor in both repositories when implemented. Verify the first-use path with an empty configuration. Preserve existing coordination and commissioning behavior.
