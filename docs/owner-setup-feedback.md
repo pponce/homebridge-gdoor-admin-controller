@@ -71,11 +71,21 @@ This refines the earlier picker proposal: separate connection-specific credentia
 
 ### Device discovery appears unresponsive
 
-Owner report: **Find devices** does not seem to do anything during deCONZ bolt setup. The host/browser failure is not yet diagnosed.
+Owner report: **Find devices** does not seem to do anything during deCONZ bolt setup. The owner subsequently confirmed the address was missing its http:// prefix; the generic error hid that cause.
 
 Source inspection: the current editor changes a small help paragraph below the button to **Finding devices…**, followed by a device selector, an empty-result message, or a generic address/key error. It does not change/disable the button while discovery is pending. Discovery uses the entered address and saved key reference immediately; reviewing or saving the garage configuration is not a prerequisite. The server requires an origin URL including http:// or https:// and the correct deCONZ port, and reads config, lights, sensors and alarmsystems together.
 
-Follow-up: collect the exact visible status or a credential-free screenshot before attributing the report to a connection failure. Improve the button's pending state and make results/errors prominent beside it. Explain missing address/key fields locally and distinguish connection/key failures from no compatible devices using sanitized messages. Preserve pending settings and avoid exposing raw backend errors or credentials. This remains an observed setup problem to investigate, not a confirmed discovery defect or a shipped fix.
+Follow-up: collect the exact visible status or a credential-free screenshot before attributing the report to a connection failure. Improve the button's pending state and make results/errors prominent beside it. Explain missing address/key fields locally and distinguish connection/key failures from no compatible devices using sanitized messages. Preserve pending settings and avoid exposing raw backend errors or credentials. Accept a plain host/IP plus optional port by normalizing it to an HTTP origin, while preserving an explicitly entered HTTPS scheme. Explain malformed addresses beside the field. This UI improvement is still pending.
+
+### Distinguish relay outputs from physical inputs
+
+Observed: a two-channel relay module exposes relay outputs and wired-button inputs as separate deCONZ resources/HomeKit tiles, making **Additional motor path** and **Physical controls** unclear. Explain that an opener relay is an output and its wired-button sensor is an input, even when both belong to one physical module. Show clear names, resource numbers and roles in discovery. Multiple physical controls, such as a keypad and wired button, can select the same opener relay path.
+
+The T2 relay was also absent from the picker because 0.4.0 excluded its **On/Off switch** type. The 0.4.1 source fix accepts that type consistently through discovery, validation and runtime; see status.md for verification/publication status. This does not implement the other UX changes in this document.
+
+### Explain input rearming
+
+Observed: the owner asked what **Rearm delay** means. Explain it as the ignore interval after an input becomes eligible again (for example after startup, reconnect or an operation), with presses during that interval discarded. It is not a per-press execution delay or the alarm's arm delay. Keep existing input policies and values unchanged when improving the wording.
 
 ### Scope of the next change
 
