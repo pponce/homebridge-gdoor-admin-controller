@@ -1,3 +1,7 @@
+# Release 0.4.18
+
+Compact input selection with one detail panel, preserving draft edits and selecting newly added controls. Motor route labels now identify Garage opener (Tailwind/Homebridge) or Relay: name. Runtime behavior is unchanged. Validation pending.
+
 # Release 0.4.17
 
 Reversal opening estimates now start after the relay interruption command completes, preserving downward travel until that boundary and adding the configured positive allowance afterward. Includes 0.4.16 Debug controls/downloads and 0.4.15 configured connections. Local tests pass; All five CI jobs passed in run 37695822293 on 0df8d0fbe8f98621274500c9b17580fc30a2b60e: 165 unit tests on Node 22/24, actual Homebridge 2.0.0/2.4.0, UI IPC and desktop/mobile browser flows. Physical timing still requires owner acceptance.

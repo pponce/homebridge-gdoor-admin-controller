@@ -150,3 +150,8 @@ body{margin:0;background:var(--canvas);color:var(--ink);font:14px/1.55 -apple-sy
 #coordinator-ui .debug-toggle input{width:18px;height:18px;flex:0 0 auto}
 #coordinator-ui .debug-summary{display:grid;gap:8px}
 #debug-page pre{max-height:360px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;background:var(--soft);padding:14px;border-radius:8px;font-size:12px}
+
+.input-selector{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px;margin-bottom:16px}
+#coordinator-ui .input-choice{display:flex;flex-direction:column;align-items:flex-start;gap:5px;text-align:left;white-space:normal;overflow-wrap:anywhere;min-width:0}
+#coordinator-ui .input-choice[aria-pressed=true]{border:2px solid var(--accent);background:var(--soft)}
+.input-choice:focus-visible{outline:2px solid currentColor;outline-offset:3px}
