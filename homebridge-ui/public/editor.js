@@ -13,7 +13,7 @@ export class ProfileEditor {
   constructor(root, { configuration, credentials = [], discover, discoverHomebridge, changed = () => {}, error = () => {}, renderCheckEnable, viewChanged = () => {}, getStatus, cardAction }) {
     this.root=root; this.configuration=structuredClone(configuration); this.credentials=credentials; this.discover=discover; this.discoverHomebridge=discoverHomebridge; this.changed=changed; this.error=error;
     this.renderCheckEnable=renderCheckEnable;this.viewChanged=viewChanged;this.getStatus=getStatus;this.cardAction=cardAction;
-    this.manualKeypad=new Set();
+    this.manualKeypad=new Set();this.expandedGarage=null;
     this.selected=0; this.step=0; this.render();
   }
   change() { this.changed(this.configuration); }
@@ -85,14 +85,17 @@ export class ProfileEditor {
   garageList(){
     const list=el('div',undefined,'garage-list');
     this.configuration.controllers.forEach((p,index)=>{
-      const card=el('div',undefined,'garage-card');card.dataset.selected=String(index===this.selected);
+      const card=el('div',undefined,'garage-card');card.dataset.selected=String(index===this.selected);card.dataset.controller=p.id;card.dataset.expanded=String(this.expandedGarage===p.id);
       const select=this.button('',()=>{this.selected=index;this.render();},'garage-select');select.setAttribute('aria-pressed',String(index===this.selected));
       select.append(el('strong',p.name),el('span',(p.inputs?.length??0)+' physical controls · '+(p.exposeBoltLock?'Garage + lock tiles':'Garage tile')));card.append(select);
       const state=this.getStatus?.(p);
       if(state){card.dataset.state=state.tone;const footer=el('div',undefined,'garage-card-footer');
         footer.append(el('span',state.label,'garage-status'));
         const action=this.button(state.action,()=>this.cardAction(p,state),'card-action');action.disabled=state.disabled;action.setAttribute('aria-label',state.action+' '+p.name);
-        footer.append(action);card.append(footer);if(state.detail)card.append(el('p',state.detail,'help card-help'));
+        footer.append(action);
+        if(state.action==='Disable'){const checks=this.button('Check connections',()=>this.cardAction(p,{...state,action:'Checks'}),'card-action');checks.setAttribute('aria-label','Check connections '+p.name);footer.append(checks);}
+        card.append(footer);if(state.detail)card.append(el('p',state.detail,'help card-help'));
+        if(this.expandedGarage===p.id&&this.renderCheckEnable){this.renderCheckEnable(card,p);const hide=this.button('Hide checks',()=>{this.expandedGarage=null;this.refreshCards();},'card-hide');card.append(hide);}
       }list.append(card);
     });
     list.append(this.button('Add a garage door',()=>{this.configuration.controllers.push(newGarage());this.selected=this.configuration.controllers.length-1;this.step=0;this.change();this.render();},'add-garage'));
@@ -103,10 +106,10 @@ export class ProfileEditor {
     this.root.replaceChildren();this.root.append(this.garageList());
     const p=this.configuration.controllers[this.selected];if(!p){const empty=el('section',undefined,'panel empty');empty.append(el('h2','No garage doors yet'),el('p','Use Add a garage door to connect an opener and its separate bolt.','subtle'));this.root.append(empty);this.viewChanged();return;}
     p.motorPaths??=[];p.inputs??=[];p.timing??={};
-    const names=['Devices','Inputs','Behavior'];if(this.renderCheckEnable)names.push('Check & Enable');
+    const names=['Devices','Inputs','Behavior'];
     const steps=el('nav',undefined,'steps');steps.setAttribute('aria-label','Garage setup');names.forEach((name,index)=>{const b=this.button(String(index+1).padStart(2,'0')+'  '+name,()=>{this.step=index;this.render();});if(index===this.step)b.setAttribute('aria-current','step');steps.append(b);});this.root.append(steps);
     const content=el('div',undefined,'step-content');this.root.append(content);
-    if(this.step===0)this.devices(content,p);else if(this.step===1)this.inputs(content,p);else if(this.step===3&&this.renderCheckEnable)this.renderCheckEnable(content,p);else this.behavior(content,p);
+    if(this.step===0)this.devices(content,p);else if(this.step===1)this.inputs(content,p);else this.behavior(content,p);
     this.viewChanged();
   }
   devices(root,p){
@@ -119,7 +122,13 @@ export class ProfileEditor {
       const link=el('a','How to get a Tailwind local control key');link.href='https://gotailwind.zendesk.com/hc/en-us/articles/42573968819725-How-do-I-get-my-local-control-key-for-my-Tailwind-garage-door-controller';link.target='_blank';link.rel='noreferrer';opener.append(link);
     }
     const bolt=this.panel(root,'Separate bolt / lock','This is the output that retracts and extends the bolt.');this.connection(bolt,p,'bolt','bolt');this.device(bolt,p.bolt,'bolt');if(p.bolt.serviceType!=='lock')this.input(this.grid(bolt),'Relay ON means bolt extended',p.bolt,'lockedValue',{type:'checkbox',help:'Choose the mapping that matches your wiring. A relay report does not prove physical bolt position.'});
-    root.append(this.button('Remove this garage',()=>{if(!confirm('Remove '+p.name+' from the pending configuration?'))return;this.configuration.controllers.splice(this.selected,1);this.selected=Math.max(0,this.selected-1);this.change();this.render();},'danger'));
+    root.append(this.button('Remove this garage door',()=>{
+      const index=this.configuration.controllers.findIndex(profile=>profile.id===p.id);if(index<0)return;
+      this.configuration.controllers.splice(index,1);this.selected=Math.max(0,index-1);
+      if(this.expandedGarage===p.id)this.expandedGarage=null;
+      this.change();this.render();
+    },'danger'));
+    root.append(el('p','Removes this garage door from your draft. Saved garage doors keep running until you review and save the removal. Discard changes restores saved garage doors.','help'));
   }
   inputs(root,p){
     root.append(el('div','HomeKit + virtual keypad → '+(p.door.type==='tailwind'?'Tailwind API':'primary Homebridge opener'),'route-note'));

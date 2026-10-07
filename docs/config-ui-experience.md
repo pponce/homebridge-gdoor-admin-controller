@@ -1,6 +1,6 @@
 # Configuration save experience
 
-Version 0.4.11 builds on the tested 0.4.10 save experience with General, garage status/actions, named key replacement and clearer optional keypad setup. It preserves the 0.4.9 reporting experiments, notification behavior and diagnostic defaults. The standalone administrator runtime is unchanged. See [release instructions](npm-release.md) and [validation status](status.md).
+Version 0.4.12 corrects the garage-card and key-management behavior reported after 0.4.11. Checks and enablement are inline inside the garage card, with no fourth setup tab. New-key fields precede saved names and explicit Replace/Delete actions.
 
 ## Reference and framework
 
@@ -14,11 +14,21 @@ This implementation uses those supported APIs and a local stylesheet with the re
 
 General is the landing page for garage readiness, saved connection-key names/replacement and optional web admin setup. Masks are placeholders, not secret values or secret lengths. Replacement starts with an empty password field, keeps the same name, clears the entered value after saving and preserves configuration drafts. Existing credential replacement policy still pauses controls until re-enabled.
 
-Garage doors retains Devices, Inputs and Behavior and adds Check & Enable for the selected garage. Garage cards show enabled (light green), disabled (light red), or needs-attention/setup (amber), with descriptive text. Enable takes the user to explicit checks; Disable persists immediately without movement and is refused during an operation. These immediate actions do not require another configuration save. The General overview links to the same selected-garage checks.
+Garage doors retains Devices, Inputs and Behavior. Checks and enablement expand inside the selected garage card. Garage cards show enabled (light green), disabled (light red), or needs-attention/setup (amber), with descriptive text. Enable takes the user to explicit checks; Disable persists immediately without movement and is refused during an operation. These immediate actions do not require another configuration save. The General overview has Configure links; live controls are in the garage cards.
 
 Virtual keypad setup belongs to the optional standalone web admin's on-screen keypad. Physical keypads, buttons and HomeKit do not require it. A dropdown replaces the two ambiguous buttons and hides alarm details when Not used is selected. It offers configured physical keypad alarms by name and a manual option when there is no physical keypad. Existing settings are never hidden or cleared based on connection availability. Selecting a physical keypad copies its alarm scope; it does not create a live reference or send an alarm command. The current API has no admin-presence handshake; a displayed coordinator API address does not claim the administrator is installed.
 
 Reviewed name-only changes preserve current valid garage enablement and the stable controller/accessory IDs. Disabled garages are not enabled by renaming; all other control-setting changes retain the existing re-check policy. This does not migrate or weaken the stored commissioning hash.
+
+Adding a garage draft no longer paints unchanged enabled garages amber: card status compares each profile with its own saved configuration. Actual faults and failed connection checks still show attention. Edited profiles identify their pending changes and explain when the saved profile remains enabled. Enablement mutations and probes wait until pending configuration is saved or discarded.
+
+Remove this garage door uses no native browser confirmation, which can be unavailable inside an embedded settings frame. A new draft disappears immediately; removing a saved garage is staged until Review/Save and named in the review summary. Removing a new garage does not discard edits to other garages. Returning exactly to the saved configuration restores bottom Save without another apply. Discard changes still restores the full saved snapshot.
+
+New-key creation cannot silently replace an existing name. Creating or deleting an unused key preserves enablement. Delete asks inline and checks both durable private profiles and the Homebridge platform configuration, including disabled garages and optional inputs; an in-use key is retained with an explanation. No saved secret is returned to the browser. Key replacement retains the existing commissioning-reset policy.
+
+## Shared connection design — follow-up
+
+The owner proposed reusable device connections in General. Recommended scope: named deCONZ gateway URL/key, named Tailwind device URL/token, and optionally named Homebridge bridge URL/PIN. Each garage would select those connections while retaining its Tailwind door index, bolt output, relay mapping, input routing and timings. Tailwind device door count could assist door-index validation, but should not create coordinated garages automatically. This is a design recommendation, not a schema migration in 0.4.12. Existing per-garage addresses and references remain valid.
 
 ## User flow
 

@@ -22,10 +22,10 @@ async function fixture(browser,{mobile,dark,mode='managed'}){
   let configuration=validateConfiguration(example),revision=1,reviewed,enabled=false;
   if(mode==='no-keypad')configuration.controllers[0].keypad=null;
   if(mode==='multiple'){const other=structuredClone(configuration.controllers[0]);other.id='second-garage';other.name='Second garage';other.door.doorIndex=1;other.bolt.resourceId='3';other.bolt.uniqueId='example-second-bolt';other.inputs=[];other.motorPaths=[];other.keypad=null;configuration.controllers.push(other);configuration=validateConfiguration(configuration);}
-  if(mode==='fault'||mode==='moving')enabled=true;
+  if(['fault','moving','enabled'].includes(mode))enabled=true;
   let applies=0,nativeSaves=0,probes=0,commissions=0,disables=0,releaseNative;const probedIds=[],savedKeys=['example-tailwind-key','example-deconz-key'];
   let blocks=mode==='initial'?[]:[{platform:'GDoorAndBoltCoordinator',name:'Custom name',_bridge:{username:'synthetic-bridge',port:12345},controllers:configuration.controllers}];
-  const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.accept());
+  const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>{errors.push('Unexpected native dialog');void d.dismiss();});
   await page.exposeFunction('testRequest',async(name,body)=>{
     if(name==='/load')return{connected:mode!=='initial',settings:{revision,configuration},credentials:savedKeys,adminConnection:mode==='initial'?null:{baseUrl:'http://127.0.0.1:27773',identityFile:'/synthetic/homebridge/gdoorandbolt-coordinator/identity.json'},
       controllers:mode==='initial'?[]:configuration.controllers.map(profile=>({id:profile.id,name:profile.name,status:{bootId:'synthetic-boot',actuationEnabled:enabled,held:enabled?null:'not-commissioned',state:{busy:mode==='moving',fault:mode==='fault'?'synthetic-fault':null}}}))};
@@ -37,7 +37,8 @@ async function fixture(browser,{mobile,dark,mode='managed'}){
       controls:[{id:'physical-keypad',name:'Physical keypad',kind:'input',error:probes===1?'input_alarm_mapping_changed':null}]}};}
     if(name==='/commission'){assert.equal(body.previousControllerStopped,true);assert.equal(body.physicalSetupReviewed,true);enabled=true;commissions++;return{};}
     if(name==='/disable'){assert.equal(body.revision,revision);assert.equal(body.bootId,'synthetic-boot');enabled=false;disables++;return{};}
-    if(name==='/credentials'){assert.equal(body.secret,'private-browser-test-key');if(!savedKeys.includes(body.reference))savedKeys.push(body.reference);enabled=false;return{saved:true};}
+    if(name==='/credentials'){assert.equal(body.secret,'private-browser-test-key');const exists=savedKeys.includes(body.reference);if(body.mode==='create'&&exists)return{saved:false,reason:'exists'};if(!exists)savedKeys.push(body.reference);else enabled=false;return{saved:true};}
+    if(name==='/credentials/delete'){if(body.reference.startsWith('example-'))return{deleted:false,reason:'in-use'};savedKeys.splice(savedKeys.indexOf(body.reference),1);return{deleted:true};}
     if(name==='/deconz'){const row=configuration.controllers[0].motorPaths[0].connection;return{gatewayId:row.gatewayId,
       lights:[{name:'Synthetic Aqara opener',resourceId:row.resourceId,uniqueId:row.uniqueId,resourceType:row.resourceType,modelId:row.modelId,manufacturer:row.manufacturer}],sensors:[],alarms:[]};}
     throw Error('unsupported_browser_request');
@@ -52,6 +53,7 @@ async function fixture(browser,{mobile,dark,mode='managed'}){
   });
   await page.addInitScript(({dark})=>{
     Object.defineProperty(crypto,'randomUUID',{value:undefined,configurable:true});
+    window.confirm=()=>{throw Error('Native confirmation is unavailable in the settings frame');};
     window.nativeSaveDisabled=true;window.nativeClosed=false;window.nativeToasts=[];
     const footer=()=>{
       const button=document.getElementById('native-save');if(button)button.disabled=window.nativeSaveDisabled;
@@ -96,16 +98,16 @@ try{
    assert.equal(f.probes(),0);assert.equal(f.nativeSaves(),0);
    assert.equal(await page.locator('#native-save').isEnabled(),true);
    assert.equal(await page.locator('html').getAttribute('data-theme'),dark?'dark':'light');
-   assert.equal(await page.locator('#commissioning').count(),0);
+   assert.equal(await page.getByRole('button',{name:'04 Check & Enable'}).count(),0);
    assert.equal(await page.locator('.garage-card').getAttribute('data-state'),'disabled');
    await page.getByRole('button',{name:'Add a garage door',exact:true}).click();
    assert.equal(await page.locator('.garage-card').count(),2);
    assert.equal(await page.locator('.garage-card').last().getAttribute('data-state'),'attention');
-   await page.getByRole('button',{name:'04 Check & Enable'}).click();
+   await page.getByRole('button',{name:'Review setup My garage',exact:true}).click();
    await page.getByText('Save this garage door before checking its connections.',{exact:true}).waitFor();
    assert.equal(await page.getByRole('button',{name:'Check connections',exact:true}).count(),0);
    await page.getByRole('button',{name:'01 Devices'}).click();
-   await page.getByRole('button',{name:'Remove this garage',exact:true}).click();
+   await page.getByRole('button',{name:'Remove this garage door',exact:true}).click();
    assert.equal(await page.locator('.garage-card').count(),1);
    await page.getByLabel('Garage name',{exact:true}).fill('Test garage');
    assert.equal(await page.locator('#native-save').isDisabled(),true,'Typing must disable native Save before blur');
@@ -113,7 +115,7 @@ try{
    await page.getByRole('button',{name:'02 Inputs'}).click();
    assert.match(await page.locator('.route-note').first().textContent(),/HomeKit.*virtual keypad.*Tailwind/);
    assert.equal(await page.locator('.input-profile').count(),2);
-   assert.equal(await page.locator('#commissioning').count(),0);
+   assert.equal(await page.getByRole('button',{name:'04 Check & Enable'}).count(),0);
    const virtual=page.locator('[data-section=virtual-keypad]');
    assert.equal(await virtual.getByLabel('Virtual keypad alarm',{exact:true}).inputValue(),'physical:physical-keypad');
    await virtual.getByLabel('Virtual keypad alarm',{exact:true}).selectOption('manual');
@@ -140,15 +142,16 @@ try{
    assert.equal(await page.locator('#native-check').isVisible(),true);
    assert.equal(await page.evaluate(()=>nativeClosed),false,'Plugin save must keep the modal open');
    assert.equal(await page.evaluate(()=>nativeToasts.some(t=>t.type==='success'&&t.message==='Configuration saved.')),true);
-   assert.equal(await page.locator('#commissioning').count(),0);
+   assert.equal(await page.getByRole('button',{name:'04 Check & Enable'}).count(),0);
    await page.getByRole('button',{name:'Enable Test garage',exact:true}).click();
-   assert.equal(await page.getByRole('button',{name:'04 Check & Enable'}).getAttribute('aria-current'),'step');
+   assert.equal(await page.getByRole('button',{name:'04 Check & Enable'}).count(),0);
+   assert.equal(await page.locator('.garage-card .card-checks').count(),1);
    assert.equal(await page.getByRole('button',{name:'Enable this garage door',exact:true}).isDisabled(),true);
-   await page.getByRole('button',{name:'Check connections'}).click();
+   await page.getByRole('button',{name:'Check connections',exact:true}).click();
    await page.locator('.commission-result').filter({hasText:'Physical keypad: input_alarm_mapping_changed'}).waitFor();
    assert.equal(await page.locator('.garage-card').getAttribute('data-state'),'attention');
    assert.equal(f.probes(),1);assert.equal(await page.locator('.commission-result').filter({hasText:'Connections verified'}).count(),0);
-   await page.getByRole('button',{name:'Check connections'}).click();
+   await page.getByRole('button',{name:'Check connections',exact:true}).click();
    await page.locator('.commission-result').filter({hasText:'Connections verified'}).waitFor();
    assert.equal(f.probes(),2);
    for(const input of await page.locator('.commission-row input[type=checkbox]').all())await input.check();
@@ -168,10 +171,26 @@ try{
    assert.equal(await page.locator('#garage-overview .overview-row').getAttribute('data-state'),'attention');
    await page.locator('#credential-reference').fill('private-key');
    await page.locator('#credential-secret').fill('private-browser-test-key');
-   await page.getByRole('button',{name:'Save connection key'}).click();
+   await page.getByRole('button',{name:'Create connection key'}).click();
    await page.locator('#notice').filter({hasText:'saved privately'}).waitFor();
    assert.equal(await page.locator('#credential-secret').inputValue(),'');
    assert.equal(await page.locator('#saved-keys .saved-key').count(),3);
+   assert.equal(await page.locator('#credential-form').evaluate(form=>!!(form.compareDocumentPosition(document.getElementById('saved-keys'))&Node.DOCUMENT_POSITION_FOLLOWING)),true);
+   await page.locator('#credential-reference').fill('private-key');await page.locator('#credential-secret').fill('private-browser-test-key');
+   await page.getByRole('button',{name:'Create connection key',exact:true}).click();
+   await page.locator('#notice').filter({hasText:'That name is already saved'}).waitFor();
+   assert.equal(await page.locator('#credential-secret').inputValue(),'');
+   await page.getByRole('button',{name:'Delete key private-key',exact:true}).click();
+   await page.getByRole('button',{name:'Cancel deletion',exact:true}).click();
+   assert.equal(await page.locator('#saved-keys .saved-key').count(),3);
+   await page.getByRole('button',{name:'Delete key private-key',exact:true}).click();
+   await page.getByRole('button',{name:'Delete saved key',exact:true}).click();
+   await page.locator('#notice').filter({hasText:'Connection key deleted'}).waitFor();
+   assert.equal(await page.locator('#saved-keys .saved-key').count(),2);
+   await page.getByRole('button',{name:'Delete key example-tailwind-key',exact:true}).click();
+   await page.locator('.key-delete').filter({hasText:'Used by Unsaved garage name'}).waitFor();
+   assert.equal(await page.getByRole('button',{name:'Delete saved key',exact:true}).count(),0);
+   await page.getByRole('button',{name:'Cancel deletion',exact:true}).click();
    await page.getByRole('button',{name:'Replace key example-tailwind-key',exact:true}).click();
    assert.equal(await page.locator('#credential-reference').inputValue(),'example-tailwind-key');
    assert.equal(await page.locator('#credential-reference').getAttribute('readonly'),'');
@@ -179,7 +198,7 @@ try{
    await page.locator('#credential-secret').fill('private-browser-test-key');
    await page.getByRole('button',{name:'Replace connection key',exact:true}).click();
    await page.waitForFunction(()=>document.getElementById('credential-reference').value===''&&!document.getElementById('workspace').disabled);
-   assert.equal(await page.locator('#saved-keys .saved-key').count(),3,'Replacing a key keeps its name');
+   assert.equal(await page.locator('#saved-keys .saved-key').count(),2,'Replacing a key keeps its name');
    assert.equal(await page.locator('#credential-secret').inputValue(),'');
    await page.getByRole('button',{name:'Replace key example-tailwind-key',exact:true}).click();
    await page.getByRole('button',{name:'Cancel replacement',exact:true}).click();
@@ -190,10 +209,12 @@ try{
    await page.getByRole('button',{name:'Discard changes',exact:true}).click();await saved(page);
    assert.equal(await page.getByLabel('Garage name',{exact:true}).inputValue(),'Test garage');
    await page.locator('#general-tab').click();
-   await page.getByRole('button',{name:'Check & Enable Test garage',exact:true}).click();
+   await page.getByRole('button',{name:'Configure Test garage',exact:true}).click();
+   await page.getByRole('button',{name:'Enable Test garage',exact:true}).click();
    assert.equal(await page.locator('#garages-page').isVisible(),true);
    assert.equal(await page.locator('.commission-row').count(),1);
-   assert.equal(await page.getByRole('button',{name:'04 Check & Enable'}).getAttribute('aria-current'),'step');
+   assert.equal(await page.getByRole('button',{name:'04 Check & Enable'}).count(),0);
+   assert.equal(await page.locator('.garage-card .card-checks').count(),1);
    assert.equal(await page.getByRole('button',{name:'Check connections',exact:true}).isEnabled(),true);
    await page.locator('#general-tab').click();
    // Live Homebridge theme changes override the OS/default theme.
@@ -212,18 +233,43 @@ try{
    assert.equal(f.nativeSaves(),2);assert.equal(f.applies(),1,'Native bottom Save must not reapply managed settings');
    await page.close();
 
+   {
+     const x=await fixture(browser,{mobile,dark,mode:'enabled'}),p=x.page;
+     await p.getByRole('button',{name:'Add a garage door',exact:true}).click();
+     assert.equal(await p.locator('.garage-card').first().getAttribute('data-state'),'enabled');
+     assert.equal(await p.locator('.garage-card').last().getAttribute('data-state'),'attention');
+     assert.equal(await p.locator('.garage-card').first().locator('.garage-status').textContent(),'Enabled');
+     await p.getByRole('button',{name:'Remove this garage door',exact:true}).click();
+     assert.equal(await p.locator('.garage-card').count(),1);
+     assert.equal(await p.locator('.garage-card').getAttribute('data-state'),'enabled');
+     assert.equal(await p.locator('#native-save').isEnabled(),true,'Removing the only new draft restores a clean configuration');
+     assert.equal(x.applies(),0);assert.equal(x.disables(),0);assert.equal(x.commissions(),0);
+     await p.getByRole('button',{name:'01 Devices'}).click();
+     await p.getByLabel('Garage name',{exact:true}).fill('Pending name');
+     await p.getByRole('button',{name:'Add a garage door',exact:true}).click();
+     await p.getByRole('button',{name:'Remove this garage door',exact:true}).click();
+     assert.equal(await p.getByLabel('Garage name',{exact:true}).inputValue(),'Pending name');
+     assert.equal(await p.locator('#native-save').isDisabled(),true,'Removing a draft preserves other edits');
+     await p.getByRole('button',{name:'Discard changes',exact:true}).click();await saved(p);
+     await p.getByRole('button',{name:'Remove this garage door',exact:true}).click();
+     assert.equal(await p.locator('.garage-card').count(),0);assert.equal(x.configuration().controllers.length,1,'Saved garage removal remains pending');
+     await p.getByRole('button',{name:'Discard changes',exact:true}).click();await saved(p);
+     assert.equal(await p.locator('.garage-card').getAttribute('data-state'),'enabled');
+     assert.deepEqual(x.errors,[]);await p.close();
+   }
    for(const mode of ['multiple','no-keypad','fault','moving','probe-unavailable']){
      const x=await fixture(browser,{mobile,dark,mode}),p=x.page;
      if(mode==='multiple'){
        await p.locator('#general-tab').click();
-       await p.getByRole('button',{name:'Check & Enable Second garage',exact:true}).click();
-       assert.equal(await p.locator('.commission-row h3').textContent(),'Second garage');
+       await p.getByRole('button',{name:'Configure Second garage',exact:true}).click();
+       await p.getByRole('button',{name:'Enable Second garage',exact:true}).click();
+       assert.equal(await p.locator('.card-checks').getAttribute('aria-label'),'Checks for Second garage');
        assert.equal(await p.locator('.commission-row').count(),1);
        await p.getByRole('button',{name:'Check connections',exact:true}).click();
        await p.waitForFunction(()=>!document.getElementById('workspace').disabled);
        assert.deepEqual(x.probedIds,['second-garage']);
        await p.getByRole('button',{name:'02 Inputs'}).click();
-       assert.equal(await p.locator('#commissioning').count(),0);
+       assert.equal(await p.locator('.garage-card .card-checks').count(),1);
        const select=p.getByLabel('Virtual keypad alarm',{exact:true});
        assert.equal(await select.locator('option').count(),2,'No physical-keypad choice without a configured keypad');
      }else if(mode==='no-keypad'){
@@ -238,7 +284,7 @@ try{
        assert.equal(x.configuration().controllers[0].inputs.length,2);
        assert.equal(x.probes(),0);assert.equal(x.commissions(),0);
      }else if(mode==='probe-unavailable'){
-       await p.getByRole('button',{name:'04 Check & Enable'}).click();
+       await p.getByRole('button',{name:'Enable '+base.name,exact:true}).click();
        await p.getByRole('button',{name:'Check connections',exact:true}).click();
        await p.locator('.commission-result').filter({hasText:'Connection check could not complete'}).waitFor();
        assert.equal(await p.locator('.garage-card').getAttribute('data-state'),'attention');
@@ -289,6 +335,6 @@ try{
    }
   }finally{await browser.close();}
  }
- console.log('Desktop Chromium/mobile WebKit passed guided editing, modeled native Save/check/toasts, setup and managed saves, delayed/failed native save, uncertain apply reload, metadata preservation, commissioning, General overview, selected-garage checks, colored enable/disable cards, masked key names/replacement, optional virtual keypad setup, draft-safe keys, theme switching and overflow.');
+ console.log('Desktop Chromium/mobile WebKit passed guided editing, modeled native Save/check/toasts, setup and managed saves, delayed/failed native save, uncertain apply reload, metadata preservation, commissioning, General overview, inline garage checks, per-garage draft status, dialog-free draft removal, masked key creation/replacement/deletion, optional virtual keypad setup, draft-safe keys, theme switching and overflow.');
 }catch(e){if(process.env.GITHUB_OUTPUT)await appendFile(process.env.GITHUB_OUTPUT,'result='+String(e).replaceAll('\n',' ').slice(0,1500)+'\n');throw e;}
 finally{server.closeAllConnections();await new Promise(r=>server.close(r));}

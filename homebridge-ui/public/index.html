@@ -24,19 +24,21 @@
     </nav>
     <div id="general-page">
       <section class="panel">
-        <div class="section-heading"><div><h2>Garage doors</h2><p class="subtle">Check connections and enable each garage door when you are ready.</p></div><button id="configure-garages" type="button" class="secondary">Configure garage doors</button></div>
+        <div class="section-heading"><div><h2>Garage doors</h2><p class="subtle">View garage status. Configure each garage door and its controls under Garage doors.</p></div><button id="configure-garages" type="button" class="secondary">Configure garage doors</button></div>
         <p id="no-garages" class="subtle small">No garage doors configured yet. Save your connection keys, then add a garage door.</p>
         <div id="garage-overview"></div>
       </section>
     <section class="panel connection-panel">
       <div class="section-heading"><div><h2>Connection keys</h2><p class="subtle">Give each key a name, then select it when connecting a device.</p></div><span class="badge neutral">Private</span></div>
-      <div id="saved-keys" aria-label="Saved connection keys"></div>
-      <p id="no-keys" class="subtle small">No connection keys saved yet.</p>
+      <h3 id="credential-form-title">Create a new connection key</h3>
       <form id="credential-form" class="field-grid">
         <label>Connection name<input id="credential-reference" required pattern="[a-z][a-z0-9-]{0,47}" placeholder="garage-tailwind" autocomplete="off"><span class="help">A short name such as garage-tailwind or garage-deconz.</span></label>
         <label>API key or local control key<input id="credential-secret" type="password" required autocomplete="new-password"><span class="help">Stored privately in Homebridge. Saved keys are never displayed.</span></label>
-        <div class="wide actions"><button id="credential-save" type="submit" class="secondary">Save connection key</button><button id="credential-cancel" type="button" class="secondary" hidden>Cancel replacement</button></div>
+        <div class="wide actions"><button id="credential-save" type="submit" class="primary">Create connection key</button><button id="credential-cancel" type="button" class="secondary" hidden>Cancel replacement</button></div>
       </form>
+      <h3>Saved connection keys</h3>
+      <div id="saved-keys" aria-label="Saved connection keys"></div>
+      <p id="no-keys" class="subtle small">No connection keys saved yet.</p>
       <p class="help">Replacing a key pauses configured controls until you check and enable them again.</p>
     </section>
       <section id="admin-setup" class="panel">

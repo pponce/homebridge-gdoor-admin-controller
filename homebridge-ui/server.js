@@ -32,7 +32,10 @@ export class UiServer extends HomebridgePluginUiServer {
       return { ...value, probe: { ...value.probe, controls,
         compatible: value.probe.compatible && controls.every(row => row.error === null) } };
     });
-    route('/credentials', body => this.saveCredential(body));
+    this.credentialWork=Promise.resolve();
+    const credentialTask=fn=>{const next=this.credentialWork.then(fn);this.credentialWork=next.catch(()=>{});return next;};
+    route('/credentials', body => credentialTask(()=>this.saveCredential(body)));
+    route('/credentials/delete', body => credentialTask(()=>this.deleteCredential(body)));
     route('/deconz', body => this.deconzDevices(body));
     this.ready();
   }
@@ -62,7 +65,8 @@ export class UiServer extends HomebridgePluginUiServer {
       return { connected: false, settings: { revision: null, configuration: { managementPort: block.managementPort ?? 27773, controllers: block.controllers ?? [] } }, controllers: [], credentials };
     }
   }
-  async saveCredential({ reference, secret }) {
+  async saveCredential({ reference, secret, mode }) {
+    if(mode!==undefined&&!['create','replace'].includes(mode))throw Error('credential_mode_invalid');
     this.id(reference); if (typeof secret !== 'string' || !/^[\x21-\x7e]{1,256}$/.test(secret)) throw Error('credential_invalid');
     await loadIdentity(this.homebridgeStoragePath);
     let existing = {}; try { existing = await readCredentials(this.homebridgeStoragePath); } catch {
@@ -72,10 +76,26 @@ export class UiServer extends HomebridgePluginUiServer {
     const store = new PrivateStore(this.homebridgeStoragePath, 'credentials.json', value => value && typeof value === 'object' && !Array.isArray(value) &&
       Object.keys(value).length <= 64 && Object.entries(value).every(([k,v]) => /^[a-z][a-z0-9-]{0,47}$/.test(k) && typeof v === 'string' && /^[\x21-\x7e]{1,256}$/.test(v)));
     const fromDisk = await store.read(); if (fromDisk) existing = fromDisk;
+    if(mode==='create'&&Object.hasOwn(existing,reference))return {saved:false,reason:'exists'};
+    if(mode==='replace'&&!Object.hasOwn(existing,reference))throw Error('credential_missing');
     const stateStore = new PrivateStore(this.homebridgeStoragePath, 'profiles.json', s => s?.schema === 1 && s.commissioned && typeof s.commissioned === 'object');
     const state = await stateStore.read();
-    if (state && Object.keys(state.commissioned).length) await this.api('/v1/commissioning/reset', {});
+    if (Object.hasOwn(existing,reference) && state && Object.keys(state.commissioned).length) await this.api('/v1/commissioning/reset', {});
     await store.write({ ...existing, [reference]: secret }); return { saved: true, reference };
+  }
+  async deleteCredential({reference}) {
+    this.id(reference);await loadIdentity(this.homebridgeStoragePath);
+    const existing=await readCredentials(this.homebridgeStoragePath);
+    const {block}=await this.bootstrap();
+    const state=await new PrivateStore(this.homebridgeStoragePath,'profiles.json',s=>s?.schema===1&&s.configuration&&Array.isArray(s.configuration.controllers)).read();
+    const usesKey=value=>!!value&&typeof value==='object'&&(value.credentialRef===reference||Object.values(value).some(usesKey));
+    // Check both durable sources, including disabled garages and optional inputs.
+    // A key cannot disappear while either saved configuration still needs it.
+    if(usesKey(state?.configuration)||usesKey(block))return {deleted:false,reason:'in-use'};
+    delete existing[reference];
+    const store=new PrivateStore(this.homebridgeStoragePath,'credentials.json',value=>value&&typeof value==='object'&&!Array.isArray(value)&&
+      Object.keys(value).length<=64&&Object.entries(value).every(([k,v])=>/^[a-z][a-z0-9-]{0,47}$/.test(k)&&typeof v==='string'&&/^[\x21-\x7e]{1,256}$/.test(v)));
+    await store.write(existing);return {deleted:true,reference};
   }
   async deconzDevices({ baseUrl, credentialRef }) {
     this.id(credentialRef); const endpoint = new URL(baseUrl);

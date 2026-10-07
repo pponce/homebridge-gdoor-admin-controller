@@ -64,3 +64,15 @@ test('staging is memory-only and preserves the newest native bridge settings',as
   await f.flow.stage(configuration);assert.equal(f.blocks()[0]._bridge.port,43210);
   assert.equal(f.blocks()[0].name,'Latest bridge name');assert.deepEqual(f.calls,[['update']]);
 });
+test('removing an unsaved garage restores clean state without applying, while retaining other edits',()=>{
+  const f=fixture();const draft=structuredClone(configuration);draft.controllers.push({id:'new-garage',name:'New'});
+  f.flow.changed(draft);assert.equal(f.flow.canClose,false);
+  draft.controllers.pop();f.flow.changed(draft);assert.equal(f.flow.canClose,true);assert.deepEqual(f.calls,[]);
+  draft.controllers[0].name='Edited';draft.controllers.push({id:'new-garage',name:'New'});f.flow.changed(draft);
+  draft.controllers.pop();f.flow.changed(draft);assert.equal(f.flow.canClose,false);
+  assert.equal(draft.controllers[0].name,'Edited');assert.deepEqual(f.calls,[]);
+});
+test('undo comparison ignores object-key ordering and never marks incomplete initial setup saved',()=>{
+  const f=fixture();f.flow.changed({controllers:[{name:'Example',id:'synthetic'}],managementPort:27773});assert.equal(f.flow.canClose,true);
+  const initial=fixture(false);initial.flow.changed(structuredClone(configuration));assert.equal(initial.flow.canClose,false);
+});

@@ -122,3 +122,14 @@ body{margin:0;background:var(--canvas);color:var(--ink);font:14px/1.55 -apple-sy
   #configure-garages{margin-top:12px}
 }
 @media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+
+.garage-card-footer{flex-wrap:wrap}
+.card-checks{padding:16px;border-top:1px solid var(--line);background:var(--surface)}
+.card-checks .commission-row{margin-top:12px;padding-top:12px}
+#coordinator-ui .card-hide{margin:0 16px 16px}
+.saved-key{flex-wrap:wrap}
+.key-delete{flex-basis:100%;padding:12px;background:var(--soft);border-radius:8px}
+#coordinator-ui .key-delete button{margin:10px 10px 0 0}
+#coordinator-ui #credential-form-title{margin-top:20px}
+
+.garage-card[data-expanded=true]{grid-column:1/-1}

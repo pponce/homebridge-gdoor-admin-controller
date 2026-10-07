@@ -1,16 +1,20 @@
+export function sameConfiguration(a,b) {
+  const canonical=value=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonical(value[key])])):value;
+  return JSON.stringify(canonical(a))===JSON.stringify(canonical(b));
+}
 // A managed save commits to the coordinator, then mirrors that reviewed
 // snapshot into Homebridge. Retrying the latter never reapplies the former.
 export class ConfigurationSave {
   constructor(homebridge) { this.hb=homebridge; this.phase='loading'; this.review=null; this.pending=null; }
   load({configuration,revision,connected,saved}) {
     this.configuration=structuredClone(configuration); this.revision=revision; this.connected=connected;
-    this.review=null; this.pending=null; this.phase=saved?'saved':'setup';
+    this.review=null; this.pending=null; this.savedAtLoad=saved; this.phase=saved?'saved':'setup';
   }
   get canClose() { return this.phase==='saved'; }
   get canEdit() { return !['sync-pending','save-uncertain'].includes(this.phase); }
-  changed() {
+  changed(configuration) {
     if(!this.canEdit)throw Error('finish_save_first');
-    this.review=null; this.phase='dirty';
+    this.review=null; this.phase=this.savedAtLoad&&sameConfiguration(configuration,this.configuration)?'saved':'dirty';
   }
   async prepare(configuration) {
     if(!this.canEdit)throw Error('finish_save_first');

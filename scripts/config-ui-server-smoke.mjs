@@ -45,6 +45,17 @@ try{
  const renameReview=await request('/review',{configuration:renamed,revision:loaded.settings.revision});
  assert.deepEqual(renameReview.review.requiresCommissioning,[]);await request('/apply',{token:renameReview.review.token});
  assert.equal(runtime.status(hardware.config.id).actuationEnabled,true);
+ // Creating and deleting an unused key must leave an enabled garage enabled.
+ await request('/credentials',{reference:'unused-key',secret:'synthetic-unused-key',mode:'create'});
+ assert.equal(runtime.status(hardware.config.id).actuationEnabled,true);
+ assert.deepEqual(await request('/credentials',{reference:'unused-key',secret:'synthetic-replacement',mode:'create'}),{saved:false,reason:'exists'});
+ assert.equal(runtime.status(hardware.config.id).actuationEnabled,true);
+ assert.deepEqual(await request('/credentials/delete',{reference:hardware.config.bolt.credentialRef}),{deleted:false,reason:'in-use'});
+ assert.equal(runtime.status(hardware.config.id).actuationEnabled,true);
+ assert.deepEqual(await request('/credentials/delete',{reference:'unused-key'}),{deleted:true,reference:'unused-key'});
+ assert.equal(runtime.status(hardware.config.id).actuationEnabled,true);
+ assert.equal((await request('/load')).credentials.includes('unused-key'),false);
+ assert.deepEqual(hardware.state.writes,[]);
  const disabled=await request('/disable',{controller:hardware.config.id,revision:3,bootId:runtime.bootId});
  assert.equal(disabled.status.actuationEnabled,false);assert.deepEqual(hardware.state.writes,[]);
  await request('/commission',{controller:hardware.config.id,revision:3,previousControllerStopped:true,physicalSetupReviewed:true,recover:false});
