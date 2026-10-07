@@ -160,7 +160,7 @@ def watch_reporting(port, authorization, controllers, seconds):
             sequence = event["sequence"]
             if event.get("controllerId") not in labels:
                 continue
-            row = {key: event.get(key) for key in ("kind", "field", "value", "explicit", "client", "subscribers") if key in event}
+            row = {key: event.get(key) for key in ("at", "monotonicMs", "kind", "field", "value", "explicit", "client", "subscribers") if key in event}
             row["garage"] = labels[event["controllerId"]]
             print("%7.2fs TRACE  %s" % (time.monotonic() - started, json.dumps(row)), flush=True)
         time.sleep(min(1, max(0, seconds - (time.monotonic() - started))))

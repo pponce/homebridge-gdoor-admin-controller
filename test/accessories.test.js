@@ -38,6 +38,22 @@ const open = { phase: 'open', door: 'not-closed', bolt: 'unlocked', target: 'ope
 const doorEvents = f => f.events.filter(([field]) => field.includes('Door'));
 const boltEvents = f => f.events.filter(([field]) => field.startsWith('Lock'));
 
+test('diagnostic on/off preserves notification sequence, final reads and repeats without invoking recording when off', () => {
+  function run(recording) {
+    const f=fixture(); f.accessories.reporting.setRecording(recording);
+    if(!recording)f.accessories.reporting.record=()=>{throw Error('recording must be bypassed');};
+    for(const state of [closed,{...open,phase:'opening',busy:true},open,{...open,phase:'closing',target:'closed',busy:true},closed]) {
+      f.publish(state); f.tick(); f.tick();
+    }
+    assert.equal(f.read('CurrentDoorState'),1); assert.equal(f.read('TargetDoorState'),1);
+    assert.equal(f.read('LockCurrentState'),1); assert.equal(f.pending.size,0);
+    const before=f.events.length; f.accessories.reporting.setRecording(!recording);
+    assert.equal(f.events.length,before,'switch must not replay any report');
+    return {events:f.events,values:[...f.values]};
+  }
+  assert.deepEqual(run(false),run(true));
+});
+
 test('physical close publishes preparation and completion as coherent pairs committed for both tiles', () => {
   const f = fixture(); f.publish(open);
   f.publish({ ...open, target: 'closed', busy: true });

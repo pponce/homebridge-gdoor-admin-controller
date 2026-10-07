@@ -9,6 +9,12 @@ export class HomekitReporting {
   constructor(publisher) {
     this.publisher = publisher; this.events = []; this.sequence = 0;
     this.clients = new WeakMap(); this.nextClient = 0;
+    this.recording = true; this.recordingRevision = 0;
+  }
+  setRecording(enabled) {
+    if (typeof enabled !== 'boolean') throw new TypeError('invalid_recording');
+    if (this.recording !== enabled) { this.recording = enabled; this.recordingRevision++; }
+    return { recording: this.recording, recordingRevision: this.recordingRevision };
   }
   client(connection) {
     if (!connection || typeof connection !== 'object') return null;
@@ -31,9 +37,10 @@ export class HomekitReporting {
     } catch { return null; }
   }
   record(kind, tile, field, value, connection, explicit = false) {
+    if (!this.recording) return;
     // Diagnostic failures must never change a HAP callback/publication result.
     try {
-      this.events.push({ sequence: ++this.sequence, at: Date.now(), kind,
+      this.events.push({ sequence: ++this.sequence, at: Date.now(), monotonicMs: performance.now(), kind,
         controllerId: tile.id, field: fieldName(tile.kind, field), value: scalar(value),
         ...(kind === 'publish' ? { explicit, subscribers: this.subscribers(tile, field) } : { client: this.client(connection) }) });
       if (this.events.length > 200) this.events.shift();
@@ -96,7 +103,9 @@ export class HomekitReporting {
     }
     let hapVersion = null;
     try { hapVersion = version(this.publisher.api.hap.HAPLibraryVersion?.()); } catch { /* Optional metadata. */ }
-    return { schema: 1, homebridgeVersion: version(this.publisher.api.serverVersion), hapVersion,
+    return { schema: 1, bootId: this.publisher.runtime?.bootId ?? null,
+      recording: this.recording, recordingRevision: this.recordingRevision,
+      homebridgeVersion: version(this.publisher.api.serverVersion), hapVersion,
       connectionInspection, truncated, tiles, clients: [...inspected.values()], events: this.events.map(e => ({ ...e })) };
   }
 }

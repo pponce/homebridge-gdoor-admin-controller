@@ -32,13 +32,16 @@ jobs:
   homebridge:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    strategy:
+      matrix:
+        homebridge: ['2.0.0', '2.4.0']
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: Install minimum supported Homebridge for isolated smoke test
-        run: npm install --prefix "$RUNNER_TEMP/coordinator-hb" --no-save --package-lock=false --ignore-scripts --no-audit --no-fund homebridge@2.0.0
+      - name: Install Homebridge for isolated smoke test
+        run: npm install --prefix "$RUNNER_TEMP/coordinator-hb" --no-save --package-lock=false --ignore-scripts --no-audit --no-fund homebridge@${{ matrix.homebridge }}
       - name: Actual Homebridge child bridge with synthetic hardware
         id: smoke
         env:

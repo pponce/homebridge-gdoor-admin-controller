@@ -51,10 +51,11 @@ export class CoordinatorAccessories {
       c.removeOnGet(); c.removeAllListeners('get');
       c.on('get', (callback, _context, connection) => {
         try {
+          if (!this.reporting.recording) { callback(null, this.read(v, field)); return; }
           const value = this.read(v, field);
           this.reporting.record('get', v, field, value, connection);
           callback(null, value);
-        } catch (error) { this.reporting.record('get-error', v, field, null, connection); callback(error); }
+        } catch (error) { if (this.reporting.recording) this.reporting.record('get-error', v, field, null, connection); callback(error); }
       });
       if (field === 'target') {
         c.removeOnSet(); c.removeAllListeners('set');
@@ -133,11 +134,14 @@ export class CoordinatorAccessories {
     if (explicit && v.kind === 'garage') [fields[0], fields[1]] = [fields[1], fields[0]];
     for (const [field, type] of fields) {
       const c = v.service.getCharacteristic(type);
-      const previous = c.value; const forced = explicit && field !== 'obstruction';
+      // Off bypasses the 0.4.7 observation work, including the extra cache read.
+      // Both modes keep identical HAP methods, order and terminal repeats.
+      const recording = this.reporting.recording;
+      const previous = recording ? c.value : undefined; const forced = explicit && field !== 'obstruction';
       if (!report.available) c.updateValue(this.failure());
       else if (forced) c.sendEventNotification(report[field]);
       else c.updateValue(report[field]);
-      if (report.available && (forced || previous !== report[field])) this.reporting.record('publish', v, field, report[field], null, forced);
+      if (recording && report.available && (forced || previous !== report[field])) this.reporting.record('publish', v, field, report[field], null, forced);
     }
   }
   publish(v) {

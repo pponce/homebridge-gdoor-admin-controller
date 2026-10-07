@@ -27,6 +27,7 @@ POST bodies are JSON, include the pinned `instanceId`, and contain exactly the f
 | POST /v1/controllers/{id}/commands | command, requestId, issuedAt, bootId | operation |
 | GET /v1/activity | — | events |
 | GET /v1/homekit-reporting (optional, 0.4.7+) | — | reporting |
+| POST /v1/homekit-reporting/recording (optional, 0.4.8+) | recording (boolean) | recording, recordingRevision |
 | GET /v1/guard | — | ready |
 | GET /v1/maintenance | — | maintenance (null or transaction) |
 | POST /v1/maintenance/preflight,pause,verify,resume,complete | transactionId, physicalCheck, gateway | acknowledged |
@@ -66,3 +67,12 @@ Maintenance pause is durable and disables every input. The same transaction ID m
 `reporting` has schema 1, optional runtime version strings, connectionInspection (available/unavailable), truncated, tiles, clients and events. Tiles contain controllerId, kind, availability and fields with reported/cached scalar values, HAP status, event support, AID/IID and anonymous subscriber labels. Clients contain anonymous process-local labels, paired booleans, subscriptions and queued events limited to coordinator characteristics, request-in-progress state and socket byte counters. Events hold at most 200 recent GET/error/publication summaries; publication rows include the subscribers present when reporting. Inspection limits client/queue output and reports truncation. Null indicates unavailable information.
 
 No hardware read, HAP GET/SET, event subscription, state refresh, or configuration write occurs on this endpoint. No credentials, pairing identities, addresses or unrelated accessory data are exposed. Guarded HAP internal reads are diagnostic only; unavailable fields must not be interpreted as zero subscribers or successful delivery. A paired subscriber/empty queue/byte-count increase does not establish that Apple Home rendered a value.
+
+
+### Internal recording comparison (0.4.8+)
+
+The optional reporting snapshot adds bootId, recording (default true) and recordingRevision (incremented on a mode change). Trace events add monotonicMs, a process-relative high-resolution timestamp sampled at recording, alongside the existing epoch-millisecond at. These are publication/read observations, not socket-delivery or Apple rendering timestamps. Events remain bounded and existing events remain available when recording is off.
+
+POST /v1/homekit-reporting/recording accepts exactly {instanceId,recording}, with a boolean recording value and the ordinary local authentication/Host/Origin restrictions. Only POST is supported (405 otherwise). Invalid identity/shape is 409, malformed/oversized JSON is 400. A controller with state.busy rejects the change with 409 reporting_controller_busy. Successful responses contain recording and recordingRevision in the ordinary envelope. The check and switch are synchronous after body parsing.
+
+This is a process-local diagnostic switch, not saved configuration. It neither rebuilds accessories nor changes subscriptions, notification order/repeats, hardware state, commissioning or timers. It sends no HAP read/write/notification and replays no buffered events. Restart resets recording to true. Ordinary reporting inspection remains read-only even when recording is disabled. Unsupported older or fixture servers need not provide the switch; the administrator does not depend on it.

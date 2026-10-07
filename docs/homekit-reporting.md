@@ -109,3 +109,25 @@ This requires 0.4.7 installed and running. Keep Home open, use the indoor button
 `TRACE` identifies publication, successful reads and read errors. Each publication records anonymous subscribers present at that moment; `paired:true` distinguishes paired HomeKit connections from local unpaired diagnostics. It does not identify which device or application owns the connection. `REPORT` compares reported values to the HAP cache and shows event permissions, subscriptions, queued coordinator events, pending-request flags and socket byte counters. No pairing identity, address, PIN, token or unrelated accessory data is printed. Values retain HAP numbers: garage 0=Open, 1=Closed, 2=Opening, 3=Closing, 4=Stopped; lock 0=Unlocked, 1=Locked.
 
 A missing paired subscription, a cached/reported mismatch, a read returning Closing after a Closed report, and a persistent queue are different failure boundaries. The trace is intended to distinguish them. An empty queue or growing byte counter is not proof of delivery/rendering at Home. Existing HAP internals are inspected behind compatibility guards; no transport methods or subscriptions are overridden. This release changes observation only, preserving 0.4.6's reporting and movement behavior.
+
+
+## Controlled comparison after successful 0.4.7 trials
+
+The owner reported one successful close with the reporting capture and one with the script stopped, keeping Home visible. Internal recording was still enabled in both. The first capture reports Homebridge 2.4.0 / HAP 2.2.2, one paired subscriber to both garage fields, Closed publications around capture seconds 41/43/45, and a queued Closed pair cleared by the following snapshot with increased socket bytes. There were no recorded characteristic GETs during that cycle. This is owner-reported display success, not a proven cause or a transport acknowledgement from Apple.
+
+The old controller used sequential HTTP feedback requests and observation-driven repeats. Plus 0.5.0 synchronously persisted state before publishing; the legacy patch stored both values before its target/current pair. Controller changed-status logging followed the HTTP response. Homebridge's ordinary batching delay is 250 ms in inspected HAP 0.12.3, 0.14.1 and 2.2.2; neither plugin changes it. These scheduling differences are candidates, not evidence that the diagnostic inserted a needed delay or split a target/current pair. The old exact runtime version was not recovered. Web administration is not an intermediary in the notification path.
+
+Version 0.4.8 preserves reporting behavior and adds a process-local recording switch. With recording off, accessory publication bypasses the additional cached-value read, event creation, timestamps and subscriber inspection; GETs use the original synchronous callback path. Recording on still adds observer work, including new monotonic timestamps. The off path retains a boolean branch and binding references, so it is a controlled removal of tracing, not byte-for-byte 0.4.6. Neither mode injects delays, reconnects clients, clears caches or invents states.
+
+Keep the external capture script stopped, leave Home visible and run:
+
+```bash
+{
+  cd "$HOME/devProjects/homebridge-gDoorAndBolt-coordinator" &&
+  sudo python3 -B scripts/compare-homekit-reporting.py
+}
+```
+
+The script sends only local management reads and the recording flag change. It never operates hardware. It verifies an enabled, idle Closed/Locked controller, then asks for a manual indoor-button cycle with recording ON (A). Report c if Home showed Closed or s if it remained Closing ten seconds after physical closure/locking. A failed baseline stops. A successful baseline proceeds to recording OFF (B). Two successes stop. Only an OFF failure asks for a final ON (A2) cycle. Recording is restored ON in cleanup; if an operation is still busy, the script prints a standalone restoration command for use once idle. A restart also restores ON.
+
+No polling occurs while the script waits for an answer. Boundary snapshots inspect existing connections without HAP reads. Changed process, paired subscribers or recording revision invalidate the comparison. Matching boundary subscribers do not prove which Apple device rendered the tile or reveal transient subscription changes between snapshots. A success/failure/success pattern strengthens a recording-dependence hypothesis but does not identify a particular race or prove a durable fix. A failure trace with recording ON provides publication/read timing; OFF intentionally records no new events. Re-enabling recording does not replay or force-refresh the tile. Share the full output and keep Home visible throughout.

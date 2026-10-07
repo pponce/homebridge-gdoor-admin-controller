@@ -147,6 +147,12 @@ async function main() {
       await assertTerminalEvents(value,since);
     }
     assert.deepEqual(hardware.state.writes,[['bolt',false],['door','open'],['door','close'],['bolt',true]]);
+    const beforeOff=(await management('/v1/homekit-reporting')).reporting;
+    const subscriberIds=beforeOff.clients.filter(c=>c.subscriptions.length>=4).map(c=>c.id);
+    const recordedSequence=beforeOff.events.at(-1).sequence;
+    const writesBeforeSwitch=structuredClone(hardware.state.writes);
+    assert.equal((await management('/v1/homekit-reporting/recording',{recording:false})).recording,false);
+    assert.deepEqual(hardware.state.writes,writesBeforeSwitch);
     for(const [value,phase]of [[0,'open'],[1,'closed']]){
       await until(async()=>(await management(endpoint+'/state')).status.inputStates[button.id]==='ready');
       // Allow the live-source context to settle after the previous worker ends.
@@ -156,6 +162,11 @@ async function main() {
       await assertTerminalEvents(value,since);
     }
     assert.deepEqual(hardware.state.writes.slice(4),[['bolt',false],['motor',true],['motor',false],['motor',true],['motor',false],['bolt',true]]);
+    const afterOff=(await management('/v1/homekit-reporting')).reporting;
+    assert.equal(afterOff.recording,false);assert.equal(afterOff.bootId,beforeOff.bootId);
+    assert.equal(afterOff.events.at(-1).sequence,recordedSequence,'Off must bypass all internal event recording');
+    assert.ok(subscriberIds.every(id=>afterOff.clients.some(c=>c.id===id&&c.subscriptions.length>=4)),'Existing subscribers survive recording switch');
+    assert.equal((await management('/v1/homekit-reporting/recording',{recording:true})).recording,true);
     const finalTrace=(await management('/v1/homekit-reporting')).reporting;
     assert.ok(finalTrace.events.some(e=>e.kind==='publish'&&e.field==='doorCurrent'&&e.value===1));
     assert.ok(finalTrace.events.some(e=>e.kind==='get'&&e.field==='doorCurrent'&&e.client?.paired===false));

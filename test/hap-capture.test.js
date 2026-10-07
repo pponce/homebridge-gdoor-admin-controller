@@ -7,3 +7,8 @@ test('read-only HAP capture parses fragmented multi-characteristic events and se
   const result = spawnSync('python3', ['-B', fileURLToPath(new URL('./watch-homekit-events.py', import.meta.url))], { encoding: 'utf8', timeout: 10000 });
   assert.equal(result.status, 0, result.stdout + result.stderr);
 });
+
+test('interactive recording comparison restores diagnostics and detects confounded trials', () => {
+  const result = spawnSync('python3', ['-B', fileURLToPath(new URL('./compare-homekit-reporting.py', import.meta.url))], { encoding: 'utf8', timeout: 10000 });
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+});

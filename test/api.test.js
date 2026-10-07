@@ -14,13 +14,13 @@ async function fixture(t) {
   t.after(() => closeServer(server));
   return { server, port };
 }
-function request(port, path, { method = 'GET', headers = {} } = {}) {
+function request(port, path, { method = 'GET', headers = {}, body } = {}) {
   return new Promise((resolve, reject) => {
     const req = http.request({ host: '127.0.0.1', port, path, method, headers: { Authorization: `Bearer ${token}`, ...headers } }, response => {
       let body = ''; response.setEncoding('utf8'); response.on('data', chunk => body += chunk);
       response.on('end', () => resolve({ status: response.statusCode, headers: response.headers, body: JSON.parse(body) }));
     });
-    req.on('error', reject); req.end();
+    req.on('error', reject); req.end(body === undefined ? undefined : JSON.stringify(body));
   });
 }
 test('real socket identity and inventory explicitly report no operational capabilities', async t => {
@@ -83,4 +83,24 @@ test('HomeKit reporting inspection is authenticated, read-only and isolates diag
   const ok=await request(port,path); assert.equal(ok.status,200); assert.equal(ok.body.reporting.schema,1);
   fail=true; const unavailable=await request(port,path); assert.equal(unavailable.status,503);
   assert.deepEqual(unavailable.body,{error:'reporting_inspection_unavailable'});
+});
+
+test('recording switch requires identity, exact boolean payload and idle controllers; never saves settings', async t => {
+  let busy=false; const changes=[];
+  const runtime={configuration,status:()=>({state:{busy}})};
+  const server=createManagementServer({identity:{token,instanceId},configuration,runtime,
+    setReporting:recording=>{changes.push(recording);return {recording};}});
+  const port=await listenLocal(server,0); t.after(()=>closeServer(server));
+  const path='/v1/homekit-reporting/recording';
+  const options={method:'POST',headers:{'Content-Type':'application/json'},body:{instanceId,recording:false}};
+  assert.equal((await request(port,path,{...options,headers:{...options.headers,Authorization:'wrong'}})).status,401);
+  assert.equal((await request(port,path,{...options,headers:{...options.headers,Origin:'https://example.invalid'}})).status,403);
+  assert.equal((await request(port,path)).status,405);
+  for(const body of [{instanceId,recording:'false'},{instanceId,recording:false,command:'close'},{instanceId:'wrong',recording:false}])
+    assert.equal((await request(port,path,{...options,body})).status,409);
+  busy=true; assert.equal((await request(port,path,options)).body.error,'reporting_controller_busy');
+  assert.deepEqual(changes,[]);
+  busy=false; assert.equal((await request(port,path,options)).body.recording,false);
+  assert.equal((await request(port,path,{...options,body:{instanceId,recording:true}})).body.recording,true);
+  assert.deepEqual(changes,[false,true]);
 });

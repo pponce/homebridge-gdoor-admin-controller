@@ -67,3 +67,22 @@ test('unsupported HAP connection internals affect only diagnostic availability',
   // Missing characteristics are skipped, never recreated by reading diagnostics.
   f.tile.characteristics.clear(); assert.deepEqual(f.trace.snapshot().tiles[0].fields,[]);
 });
+
+test('recording can be disabled without inspecting subscribers or altering the connection; timestamps are monotonic', () => {
+  const f=fixture(); f.trace.record('publish',f.tile,'current',1,null,true);
+  const first=f.trace.events.at(-1);
+  assert.ok(Number.isFinite(first.monotonicMs));
+  const subscribers=f.trace.subscribers;
+  f.trace.subscribers=()=>{throw Error('must not inspect');};
+  assert.deepEqual(f.trace.setRecording(false),{recording:false,recordingRevision:1});
+  f.trace.record('publish',f.tile,'current',0,null,true);
+  f.trace.record('get',f.tile,'current',0,f.paired);
+  assert.equal(f.trace.events.length,1); assert.equal(f.trace.sequence,1);
+  assert.deepEqual(f.trace.setRecording(false),{recording:false,recordingRevision:1});
+  f.trace.subscribers=subscribers;
+  f.trace.setRecording(true);f.trace.record('publish',f.tile,'current',1,null,true);
+  const last=f.trace.events.at(-1);assert.ok(last.monotonicMs>=first.monotonicMs);
+  assert.deepEqual(last.subscribers,first.subscribers);
+  assert.equal(f.trace.snapshot().recording,true); assert.equal(f.paired.queuedEvents.length,2);
+  assert.throws(()=>f.trace.setRecording('false'));
+});
