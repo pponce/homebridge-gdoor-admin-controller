@@ -1,6 +1,6 @@
-# Release 0.4.15 preparation
+# Release 0.4.15
 
-Adds configured local Homebridge bridge selection with private PIN import, plus deCONZ addresses from documented hosts. No patches, private cache reads, movement/reporting changes or changes to the 0.4.14 diagnostic OFF startup default. Browser/runtime release checks are pending.
+Adds configured local Homebridge bridge selection with private PIN import, plus deCONZ addresses from documented hosts. No patches, private cache reads, movement/reporting changes or changes to the 0.4.14 diagnostic OFF startup default. All five browser/runtime CI jobs passed in run 37693768601. Source is ready for maintainer publication; owner installation remains separate.
 
 # Maintainer npm publication
 
