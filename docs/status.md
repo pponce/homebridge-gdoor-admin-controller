@@ -10,7 +10,7 @@ The web admin virtual keypad is independent of physical inputs. Its old two butt
 
 The owner also asks whether renaming is safe. 0.4.10 uses the full profile hash, so any rename previously removed commissioning. The preview preserves an already-valid enablement record through a reviewed name-only edit and restart, without changing the stored hash format or accessory IDs. Disabled profiles remain disabled, and device/behavior edits still require checks. HomeKit publication/timing/diagnostic defaults and the standalone-admin runtime are unchanged.
 
-Focused runtime tests pass for name-only persistence, disabled/behavior-change exceptions, and durable disabling with stale/busy rejection, no hardware writes and preservation of another controller. All 145 unit tests and 16 cross-repository checks pass locally. Browser/custom-server CI validation is in progress. This is source preparation, not npm publication, owner installation or physical acceptance.
+Focused runtime tests pass for name-only persistence, disabled/behavior-change exceptions, and durable disabling with stale/busy rejection, no hardware writes and preservation of another controller. All 145 unit tests and 16 cross-repository checks pass locally. The initial CI run passed Node 22/24, Homebridge 2.0.0/2.4.0 and actual custom UI server IPC, but the ten-minute browser dependency installation timed out before running browser tests. The browser job now uses the matching official Playwright 1.58.2 Noble image with preinstalled browsers/system libraries; its desktop/mobile gate is being rerun. This is source preparation, not npm publication, owner installation or physical acceptance.
 
 ## Configuration UI release — 0.4.10
 
