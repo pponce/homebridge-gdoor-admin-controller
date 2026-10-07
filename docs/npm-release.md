@@ -1,6 +1,8 @@
 # Maintainer npm publication
 
-Release 0.4.13 adds reusable device connections under General: deCONZ URL/API key, Tailwind address/local token/optional door count, and existing Homebridge accessory bridge address/pairing PIN. Context explains how each is used. New connections can reuse saved keys or create a private key inline, and garage setup selects connections by name. Existing addresses/key references import automatically without changing hardware profiles or enablement. Tailwind doors display one-based names. Catalog edits use Review/Save; actual connection changes require checks only for affected garages.
+Release 0.4.14 fixes the garage-card review route. After editing an existing garage, its Review changes action opens the configuration summary and Save configuration inside that card. The bottom review button accesses the same transaction. Name-only edits preserve the enabled/disabled color with a pending-changes label, while faults and control-setting changes retain attention styling. The review names the old and new garage names and states that all pending configuration changes will be saved. Native success toast and final Homebridge Save are retained. No reporting, diagnostics, movement, runtime settings or administrator protocol changes are included.
+
+Version 0.4.13 adds reusable device connections under General: deCONZ URL/API key, Tailwind address/local token/optional door count, and existing Homebridge accessory bridge address/pairing PIN. Context explains how each is used. New connections can reuse saved keys or create a private key inline, and garage setup selects connections by name. Existing addresses/key references import automatically without changing hardware profiles or enablement. Tailwind doors display one-based names. Catalog edits use Review/Save; actual connection changes require checks only for affected garages.
 
 The 0.4.12 card, draft-removal and key-management fixes remain. The standalone administrator's settings client is updated to preserve the optional catalog; pull that administrator update before editing settings there if it is installed. Its UI stays standalone at its own URL. See [configuration UI](config-ui-experience.md).
 
@@ -18,13 +20,13 @@ The script requires that exact commit and a clean working tree, runs the unit su
 
 The script uses your normal npm account. If needed, npm prints a browser authentication URL to copy into a browser; it does not launch a browser. Publication may also request browser authentication. Run it as your normal user, not with sudo. Keep tokens out of commands and source files.
 
-The exact archive and a publication receipt are retained in `.release/0.4.13/`, excluded from Git and the npm package. Publication is attempted once; registry reads wait up to ten minutes for metadata availability and confirm that the published integrity matches the saved artifact. A verification timeout does not establish publication failure. Metadata success does not guarantee that npm's archive download has propagated; an installation failure must leave Homebridge stopped for a later retry. If the connection drops, rerun the same command: an identical existing release is verified without publishing again. A different artifact at that version stops the script. An incomplete local pack also stops for inspection rather than replacing an existing release archive.
+The exact archive and a publication receipt are retained in `.release/0.4.14/`, excluded from Git and the npm package. Publication is attempted once; registry reads wait up to ten minutes for metadata availability and confirm that the published integrity matches the saved artifact. A verification timeout does not establish publication failure. Metadata success does not guarantee that npm's archive download has propagated; an installation failure must leave Homebridge stopped for a later retry. If the connection drops, rerun the same command: an identical existing release is verified without publishing again. A different artifact at that version stops the script. An incomplete local pack also stops for inspection rather than replacing an existing release archive.
 
 The publication script does not install a plugin, restart a service or move hardware. After it prints `RESULT: npm publication verified`, install on the Homebridge host:
 
 ```sh
 sudo hb-service stop
-sudo hb-service add homebridge-gdoorandbolt-coordinator@0.4.13
+sudo hb-service add homebridge-gdoorandbolt-coordinator@0.4.14
 sudo hb-service start
 ```
 

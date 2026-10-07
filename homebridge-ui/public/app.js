@@ -5,6 +5,9 @@ import { ConfigurationSave, sameConfiguration } from './config-save.js';
 const hb=window.homebridge;
 const $=id=>document.getElementById(id);
 const save=new ConfigurationSave(hb);
+// Keep one review and one save transaction when its panel moves into a card.
+const reviewPanel=$('review');
+let reviewControllerId=null;
 let editor, connectionEditor, loaded, blocks=[], busy=false, themeChoice, currentPage='general';
 const connectionChecks=new Map();
 const checkForms=new Map();let deletingKey=null;
@@ -26,13 +29,13 @@ function refresh(){
   $('save-state').textContent=busy?'Working…':title;$('save-state').dataset.state=save.phase;
   $('save-hint').textContent=formDirty?'Click Add connection or Update connection, or cancel the connection edit.':hint;
   if(formDirty&&!busy)$('save-state').textContent='Finish the connection form';
-  $('review-button').hidden=['review','sync-pending','save-uncertain'].includes(save.phase);
-  if(save.phase!=='review')$('review').hidden=true;
+  $('review-button').hidden=['sync-pending','save-uncertain'].includes(save.phase);
+  if(save.phase!=='review')reviewPanel.hidden=true;
   $('review-button').disabled=save.phase==='saved'||!editor||formDirty;
   $('retry-save').hidden=save.phase!=='sync-pending';
   $('reload').textContent=save.canEdit?'Discard changes':'Reload saved settings';
   $('reload').disabled=['loading','sync-pending'].includes(save.phase)||save.phase==='saved'&&!formDirty;
-  editor?.refreshCards();garageOverview();
+  editor?.refreshCards();garageOverview();placeReview();
 }
 async function action(fn,errorMessage='Could not complete the request. Check the coordinator connection and try again.'){
   if(busy)return;busy=true;refresh();
@@ -50,7 +53,7 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener('change',applyTheme)
 new ResizeObserver(()=>hb?.fixScrollHeight?.()).observe(document.body);
 
 function changed(configuration){
-  save.changed(configuration);$('review').hidden=true;notice('');
+  save.changed(configuration);reviewPanel.hidden=true;notice('');
   for(const [id,form] of checkForms){const profile=configuration.controllers.find(p=>p.id===id);if(!sameConfiguration(profile,form.profile)){checkForms.delete(id);connectionChecks.delete(id);}}
   refresh();
 }
@@ -70,6 +73,7 @@ function commissioning(root,profile){
   const hint=document.createElement('p');hint.className='help';
   const fields=document.createElement('fieldset');fields.disabled=save.phase!=='saved'||!!connectionEditor?.dirty||!loaded?.connected;
   section.append(hint,fields);root.append(section);
+  if(save.canEdit&&save.phase!=='saved'){const review=document.createElement('button');review.type='button';review.className='primary';review.textContent='Review changes';review.disabled=!!connectionEditor?.dirty;review.onclick=()=>reviewChanges(profile.id);section.append(review);}
   const row=loaded.controllers.find(row=>row.id===profile.id);
   hint.textContent=save.phase==='saved'&&!connectionEditor?.dirty?'Check connections here. Enabling takes effect immediately.':'Save or discard configuration changes before checking or changing enablement.';
   if(!loaded.connected||!row){const message=document.createElement('p');message.className='help';
@@ -124,25 +128,47 @@ async function load(){
   if(loaded.adminConnection){$('admin-address').value=loaded.adminConnection.baseUrl;$('admin-identity-file').value=loaded.adminConnection.identityFile;}
   $('connection').textContent=loaded.connected?'Coordinator connected':'Initial setup';
   $('connection').dataset.state=loaded.connected?'connected':'setup';
-  buildEditor(loaded.settings.configuration,position);$('review').hidden=true;connectionKeys();showPage(currentPage);
+  buildEditor(loaded.settings.configuration,position);reviewPanel.hidden=true;connectionKeys();showPage(currentPage);
 }
 $('reload').onclick=()=>action(async()=>{await load();notice('Saved settings restored.');});
-$('review-button').onclick=()=>action(async()=>{
-  const invalid=$('editor').querySelector('input:invalid,select:invalid');if(invalid){showPage('garages');invalid.reportValidity();return;}
-  const review=await save.prepare(editor.configuration);
-  const box=$('review');box.replaceChildren();box.hidden=false;
-  const heading=document.createElement('h2');heading.textContent='Review configuration';const summary=document.createElement('p');
-  const count=review.requiresCommissioning.length;
-  summary.textContent=count?count+' garage door'+(count===1?'':'s')+' will need connection checks and enabling after saving.':'Existing enabled garage doors will stay enabled.';summary.className='subtle';box.append(heading,summary);
-  const list=document.createElement('ul');list.className='review-list';for(const p of review.configuration.controllers){const li=document.createElement('li');li.textContent=p.name+' · '+p.door.type+' opener · '+p.bolt.type+' bolt · '+p.inputs.length+' physical controls';list.append(li);}for(const old of loaded.settings.configuration.controllers){if(!review.configuration.controllers.some(p=>p.id===old.id)){const li=document.createElement('li');li.textContent='Remove saved garage door: '+old.name;list.append(li);}}box.append(list);
-  const buttons=document.createElement('div');buttons.className='actions';const commit=document.createElement('button');commit.type='button';commit.className='primary';commit.textContent='Save configuration';commit.onclick=persist;
-  const cancel=document.createElement('button');cancel.type='button';cancel.className='secondary';cancel.textContent='Keep editing';cancel.onclick=()=>action(async()=>{await save.cancel();box.hidden=true;});buttons.append(commit,cancel);box.append(buttons);box.scrollIntoView({behavior:'smooth',block:'nearest'});
-},'Could not review configuration. Check device addresses (including http://), selected devices and required fields.');
+function placeReview(){
+  const card=currentPage==='garages'&&save.phase==='review'&&reviewControllerId?
+    [...$('editor').querySelectorAll('.garage-card')].find(card=>card.dataset.controller===reviewControllerId):null;
+  for(const row of $('editor').querySelectorAll('.garage-card'))row.removeAttribute('data-review');
+  if(card)card.dataset.review='true';
+  const parent=card??$('review-slot');if(reviewPanel.parentElement!==parent)parent.append(reviewPanel);
+}
+async function reviewChanges(controllerId=null){
+  await action(async()=>{
+    if(connectionEditor?.dirty){showPage('general');notice('Finish or cancel the connection form before reviewing changes.',true);return;}
+    reviewControllerId=controllerId;
+    if(controllerId){editor.selected=editor.configuration.controllers.findIndex(p=>p.id===controllerId);editor.expandedGarage=null;editor.render();showPage('garages');}
+    const invalid=$('editor').querySelector('input:invalid,select:invalid');if(invalid){showPage('garages');invalid.reportValidity();return;}
+    // Both entry points reuse the same reviewed snapshot; moving the panel
+    // must not issue another review token or apply anything automatically.
+    const review=save.phase==='review'?save.review:await save.prepare(editor.configuration);
+    const box=reviewPanel;box.replaceChildren();box.hidden=false;
+    const heading=document.createElement('h2');heading.textContent='Review configuration';heading.tabIndex=-1;const summary=document.createElement('p');
+    const count=review.requiresCommissioning.length;
+    summary.textContent=count?count+' garage door'+(count===1?'':'s')+' will need connection checks and enabling after saving.':'Existing enabled garage doors will stay enabled.';summary.className='subtle';box.append(heading,summary);
+    const scope=document.createElement('p');scope.className='help';scope.textContent='This saves all pending configuration changes, including edits in General and other garage doors.';box.append(scope);
+    const list=document.createElement('ul');list.className='review-list';
+    for(const p of review.configuration.controllers){
+      const old=loaded.settings.configuration.controllers.find(saved=>saved.id===p.id),li=document.createElement('li');
+      li.textContent=old&&old.name!==p.name?'Rename garage door: '+old.name+' → '+p.name:p.name+' · '+p.door.type+' opener · '+p.bolt.type+' bolt · '+p.inputs.length+' physical controls';list.append(li);
+    }
+    for(const old of loaded.settings.configuration.controllers){if(!review.configuration.controllers.some(p=>p.id===old.id)){const li=document.createElement('li');li.textContent='Remove saved garage door: '+old.name;list.append(li);}}box.append(list);
+    const buttons=document.createElement('div');buttons.className='actions';const commit=document.createElement('button');commit.type='button';commit.className='primary';commit.textContent='Save configuration';commit.onclick=persist;
+    const cancel=document.createElement('button');cancel.type='button';cancel.className='secondary';cancel.textContent='Keep editing';cancel.onclick=()=>action(async()=>{await save.cancel();box.hidden=true;});buttons.append(commit,cancel);box.append(buttons);
+  },'Could not review configuration. Check device addresses (including http://), selected devices and required fields.');
+  if(save.phase==='review'&&!reviewPanel.hidden){reviewPanel.querySelector('h2').focus({preventScroll:true});reviewPanel.scrollIntoView({behavior:'smooth',block:'nearest'});}
+}
+$('review-button').onclick=()=>reviewChanges();
 async function persist(){
   return action(async()=>{
     await save.save();
     // Confirm success before refreshing. Failed refresh is not a failed write.
-    $('review').hidden=true;
+    reviewPanel.hidden=true;
     const connected=save.connected;
     const message=connected?'Configuration saved. Use Homebridge’s Save button below to close these settings.':'Setup saved. Click Homebridge’s Save button below, then restart the coordinator child bridge.';
     notice(message);toast('Configuration saved.');
@@ -167,6 +193,7 @@ function showPage(page){
     if(page===name)$(name+'-tab').setAttribute('aria-current','page');else $(name+'-tab').removeAttribute('aria-current');
   }
   if(page==='general'){connectionEditor?.renderList();connectionEditor?.refreshKeys();connectionKeys();}
+  placeReview();
   hb?.fixScrollHeight?.();
 }
 function garageStatus(profile){
@@ -174,7 +201,15 @@ function garageStatus(profile){
   const savedProfile=loaded?.settings.configuration.controllers.find(p=>p.id===profile.id);
   const warning=(label,detail='')=>({tone:'attention',label,detail,action:'Review setup',disabled:!save.canEdit});
   if(!savedProfile)return warning('Setup needed','New garage door — not saved or enabled.');
-  if(!sameConfiguration(profile,savedProfile))return warning('Unsaved changes',status?.actuationEnabled?'Your saved garage door remains enabled. Review and save to apply these edits.':'Review and save this garage door’s changes.');
+  if(!sameConfiguration(profile,savedProfile)){
+    const nameOnly=sameConfiguration({...savedProfile,name:profile.name},profile);
+    const attention=status?.held==='maintenance'||status?.state?.fault||status?.state?.unavailable||status?.state?.obstruction||connectionChecks.get(profile.id)===false||status?.held&&!['not-commissioned'].includes(status.held);
+    const retainStatus=nameOnly&&loaded.connected&&status&&!attention;
+    return {tone:retainStatus?(status.actuationEnabled?'enabled':'disabled'):'attention',
+      label:retainStatus?(status.actuationEnabled?'Enabled':'Disabled')+' · Unsaved changes':attention?'Needs attention · Unsaved changes':'Unsaved changes',
+      action:'Review changes',disabled:!save.canEdit||!!connectionEditor?.dirty,
+      detail:retainStatus&&status.actuationEnabled?'Name change pending. Saving the name keeps this garage door enabled.':status?.actuationEnabled?'Your saved garage door remains enabled. Review and save to apply these edits.':'Review and save this garage door’s changes.'};
+  }
   if(!loaded.connected)return warning('Setup needed','Start the coordinator child bridge to check connections.');
   if(!status)return warning('Setup needed');
   if(status.held==='maintenance')return warning('Maintenance paused');
@@ -189,6 +224,7 @@ function openChecks(profile){
   editor.selected=editor.configuration.controllers.findIndex(p=>p.id===profile.id);editor.expandedGarage=profile.id;editor.render();showPage('garages');
 }
 function garageAction(profile,state){
+  if(state.action==='Review changes'){void reviewChanges(profile.id);return;}
   if(state.action!=='Disable'){openChecks(profile);return;}
   void action(async()=>{
     const row=loaded.controllers.find(row=>row.id===profile.id);

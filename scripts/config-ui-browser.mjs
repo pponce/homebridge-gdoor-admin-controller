@@ -23,14 +23,14 @@ async function fixture(browser,{mobile,dark,mode='managed'}){
   if(mode==='no-keypad')configuration.controllers[0].keypad=null;
   if(mode==='multiple'){const other=structuredClone(configuration.controllers[0]);other.id='second-garage';other.name='Second garage';other.door.doorIndex=1;other.bolt.resourceId='3';other.bolt.uniqueId='example-second-bolt';other.inputs=[];other.motorPaths=[];other.keypad=null;configuration.controllers.push(other);configuration=validateConfiguration(configuration);}
   if(['fault','moving','enabled'].includes(mode))enabled=true;
-  let applies=0,nativeSaves=0,probes=0,commissions=0,disables=0,releaseNative;const probedIds=[],savedKeys=['example-tailwind-key','example-deconz-key'];
+  let reviews=0,applies=0,nativeSaves=0,probes=0,commissions=0,disables=0,releaseNative;const probedIds=[],savedKeys=['example-tailwind-key','example-deconz-key'];
   let blocks=mode==='initial'?[]:[{platform:'GDoorAndBoltCoordinator',name:'Custom name',_bridge:{username:'synthetic-bridge',port:12345},controllers:configuration.controllers}];
   const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>{errors.push('Unexpected native dialog');void d.dismiss();});
   await page.exposeFunction('testRequest',async(name,body)=>{
     if(name==='/load')return{connected:mode!=='initial',settings:{revision,configuration},credentials:savedKeys,adminConnection:mode==='initial'?null:{baseUrl:'http://127.0.0.1:27773',identityFile:'/synthetic/homebridge/gdoorandbolt-coordinator/identity.json'},
       controllers:mode==='initial'?[]:configuration.controllers.map(profile=>({id:profile.id,name:profile.name,status:{bootId:'synthetic-boot',actuationEnabled:enabled,held:enabled?null:'not-commissioned',state:{busy:mode==='moving',fault:mode==='fault'?'synthetic-fault':null}}}))};
     if(name==='/validate')return validateConfiguration(body.configuration,{allowEmpty:true});
-    if(name==='/review'){assert.equal(body.revision,revision);reviewed=validateConfiguration(body.configuration,{allowEmpty:true});return{review:{token:'review-test',configuration:reviewed,requiresCommissioning:[base.id]}};}
+    if(name==='/review'){assert.equal(body.revision,revision);reviews++;reviewed=validateConfiguration(body.configuration,{allowEmpty:true});return{review:{token:'review-test',configuration:reviewed,requiresCommissioning:reviewed.controllers.filter(p=>!enabled||!configuration.controllers.some(old=>old.id===p.id&&JSON.stringify({...old,name:p.name})===JSON.stringify(p))).map(p=>p.id)}};}
     if(name==='/cancel'){reviewed=null;return{};}
     if(name==='/apply'){assert.equal(body.token,'review-test');if(enabled&&!reviewed.controllers.every(p=>configuration.controllers.some(old=>old.id===p.id&&JSON.stringify({...old,name:p.name})===JSON.stringify(p))))enabled=false;configuration=reviewed;revision++;applies++;if(mode==='uncertain')throw Error('response lost');return{settings:{revision,configuration}};}
     if(name==='/probe'){probes++;probedIds.push(body.controller);if(mode==='probe-unavailable')throw Error('synthetic unavailable');return{probe:{compatible:probes>1,door:{state:'closed',feedback:'closed-sensor'},bolt:{state:'locked',feedback:'relay'},limitations:[],
@@ -81,7 +81,7 @@ async function fixture(browser,{mobile,dark,mode='managed'}){
   assert.equal(await page.locator('#saved-keys .saved-key').count(),2);
   assert.equal(await page.locator('#credential-secret').inputValue(),'');
   await page.locator('#garages-tab').click();await page.locator('.garage-card').first().waitFor();
-  return{page,errors,probedIds,disables:()=>disables,configuration:()=>configuration,blocks:()=>blocks,applies:()=>applies,nativeSaves:()=>nativeSaves,probes:()=>probes,commissions:()=>commissions,release:()=>releaseNative?.()};
+  return{page,errors,probedIds,reviews:()=>reviews,disables:()=>disables,configuration:()=>configuration,blocks:()=>blocks,applies:()=>applies,nativeSaves:()=>nativeSaves,probes:()=>probes,commissions:()=>commissions,release:()=>releaseNative?.()};
 }
 async function review(page){
   await page.getByRole('button',{name:'Review changes',exact:true}).click();
@@ -168,7 +168,7 @@ try{
    await page.getByRole('button',{name:'01 Devices'}).click();
    await page.getByLabel('Garage name',{exact:true}).fill('Unsaved garage name');
    await page.locator('#general-tab').click();
-   assert.equal(await page.locator('#garage-overview .overview-row').getAttribute('data-state'),'attention');
+   assert.equal(await page.locator('#garage-overview .overview-row').getAttribute('data-state'),'disabled');
    await page.locator('#credential-reference').fill('private-key');
    await page.locator('#credential-secret').fill('private-browser-test-key');
    await page.getByRole('button',{name:'Create connection key'}).click();
@@ -233,6 +233,63 @@ try{
    assert.equal(f.nativeSaves(),2);assert.equal(f.applies(),1,'Native bottom Save must not reapply managed settings');
    await page.close();
 
+   {
+     const x=await fixture(browser,{mobile,dark,mode:'enabled'}),p=x.page;
+     await p.getByLabel('Garage name',{exact:true}).fill('Renamed garage');
+     assert.equal(await p.locator('.garage-card').getAttribute('data-state'),'enabled','A name draft retains live enabled color');
+     assert.equal(await p.locator('.garage-card .garage-status').textContent(),'Enabled · Unsaved changes');
+     assert.equal(await p.locator('#native-save').isDisabled(),true);
+     // Click the newly shown card button directly after typing, without an
+     // intervening blur: this is the owner's lost-in-the-form route.
+     await p.getByRole('button',{name:'Review changes Renamed garage',exact:true}).click();
+     await p.locator('.garage-card #review').waitFor();
+     assert.match(await p.locator('#review').textContent(),/Existing enabled garage doors will stay enabled/);
+     assert.match(await p.locator('#review').textContent(),/Rename garage door: .* → Renamed garage/);
+     assert.match(await p.locator('#review').textContent(),/all pending configuration changes/);
+     assert.equal(await p.locator('.card-checks').count(),0);
+     assert.equal(await p.locator('#review h2').evaluate(node=>document.activeElement===node),true);
+     assert.equal(x.applies(),0);assert.equal(x.probes(),0);assert.equal(x.reviews(),1);
+     assert.equal(await p.locator('#review-button').isVisible(),true,'The bottom review route stays available');
+     await p.locator('#review-button').click();
+     await p.locator('#review-slot #review').waitFor();
+     assert.equal(x.reviews(),1,'Both routes share the same review token');
+     await p.getByRole('button',{name:'Review changes Renamed garage',exact:true}).click();
+     await p.locator('.garage-card #review').waitFor();
+     assert.equal(x.reviews(),1);
+     await p.getByRole('button',{name:'Keep editing',exact:true}).click();
+     await p.waitForFunction(()=>!document.getElementById('workspace').disabled);
+     assert.equal(await p.locator('#review').isVisible(),false);
+     await p.getByRole('button',{name:'Review changes Renamed garage',exact:true}).click();
+     await p.locator('.garage-card #review').waitFor();
+     // Editing after a card review must invalidate it, not leave a stale Save.
+     await p.getByLabel('Garage name',{exact:true}).fill('Final garage name');
+     assert.equal(await p.getByRole('button',{name:'Save configuration',exact:true}).count(),0);
+     await p.getByRole('button',{name:'Review changes Final garage name',exact:true}).click();
+     await p.locator('.garage-card #review').waitFor();
+     assert.equal(x.reviews(),3);
+     await p.getByRole('button',{name:'Save configuration',exact:true}).click();await saved(p);
+     assert.equal(x.configuration().controllers[0].name,'Final garage name');
+     assert.equal(await p.locator('.garage-card').getAttribute('data-state'),'enabled');
+     assert.equal(await p.locator('.garage-card .garage-status').textContent(),'Enabled');
+     assert.equal(await p.locator('#native-save').isEnabled(),true);
+     assert.equal(await p.locator('#native-check').isVisible(),true);
+     assert.equal(await p.evaluate(()=>nativeToasts.some(t=>t.type==='success'&&t.message==='Configuration saved.')),true);
+     assert.equal(x.applies(),1);assert.equal(x.nativeSaves(),1);
+     assert.equal(x.probes(),0);assert.equal(x.commissions(),0);assert.equal(x.disables(),0);
+     // A control-setting edit still warns and reviews from the same card.
+     await p.getByRole('button',{name:'03 Behavior'}).click();
+     await p.getByLabel('Before opening (seconds)',{exact:true}).fill('9');
+     assert.equal(await p.locator('.garage-card').getAttribute('data-state'),'attention');
+     await p.getByRole('button',{name:'Review changes Final garage name',exact:true}).click();
+     await p.locator('.garage-card #review').waitFor();
+     assert.match(await p.locator('#review').textContent(),/1 garage door will need connection checks/);
+     if(process.env.PREVIEW_OUTPUT){await p.screenshot({path:path.join(process.env.PREVIEW_OUTPUT,mobile?'card-review-mobile.png':'card-review-desktop.png'),fullPage:true});}
+     await p.getByRole('button',{name:'Discard changes',exact:true}).click();await saved(p);
+     assert.equal(await p.locator('#review').isVisible(),false);
+     assert.equal(x.applies(),1);
+     assert.equal(await p.locator('body').evaluate(b=>b.scrollWidth<=innerWidth+1),true);
+     assert.deepEqual(x.errors,[]);await p.close();
+   }
    {
      const x=await fixture(browser,{mobile,dark,mode:'enabled'}),p=x.page;
      await p.getByRole('button',{name:'Add a garage door',exact:true}).click();

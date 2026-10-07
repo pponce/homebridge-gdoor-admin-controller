@@ -141,3 +141,6 @@ body{margin:0;background:var(--canvas);color:var(--ink);font:14px/1.55 -apple-sy
 .connection-form{padding:18px;background:var(--soft);border:1px solid var(--line);border-radius:10px}
 .connection-summary{overflow-wrap:anywhere;margin-bottom:12px!important}
 @media(max-width:600px){.shared-connection{align-items:flex-start;flex-direction:column}.connection-form{padding:14px}}
+
+.garage-card[data-review=true]{grid-column:1/-1}
+.garage-card>.review-panel{margin:0;border-width:1px 0 0;border-radius:0}

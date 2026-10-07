@@ -1,5 +1,7 @@
 # Configuration save experience
 
+Version 0.4.14 gives edited garage cards a Review changes action with the same save review available below. Name-only edits retain the live enabled/disabled color with an Unsaved changes label.
+
 Version 0.4.13 adds reusable device connections in General and named selectors during garage setup. Existing addresses and saved-key references import automatically. It retains 0.4.12's inline garage checks, accurate per-garage draft status and explicit key management.
 
 ## Reference and framework
@@ -42,11 +44,17 @@ The separate administrator accepts and preserves the optional catalog. Its exist
 
 1. Open existing saved settings: the native bottom Save is available. It can close the modal without reviewing unchanged settings.
 2. Edit any field: the status becomes Unsaved changes and native Save is disabled immediately, including while typing. This prevents closing with an older parent-modal snapshot.
-3. Review changes: the coordinator validates a complete snapshot and lists any garages requiring checks/re-enablement. No apply or native disk save occurs yet.
+3. Review changes, from the edited garage card or the bottom button: the coordinator validates a complete snapshot and lists any garages requiring checks/re-enablement. No apply or native disk save occurs yet.
 4. Save configuration: apply the reviewed snapshot when connected, synchronize Homebridge's configuration, await its save, then show the native success toast. The custom screen remains open. Native Save and its host-owned validity indicator become available.
 5. Click the bottom Save to finish: Homebridge saves/closes using its own behavior. This does not apply the managed configuration again or alter commissioning.
 
 The validity indicator concerns configuration. It is separate from explicit connection probes and enablement. Check and enable is unavailable while there is an unsaved draft, so it cannot act on devices different from those shown in the editor. Enabling an already saved garage takes effect immediately and tells the user no further review/save is needed.
+
+## Review at the edited garage — 0.4.14
+
+An existing garage with pending edits offers Review changes instead of routing to disabled connection checks. Its review expands inside the card and provides Save configuration and Keep editing. The bottom Review changes button stays available and moves that same review to the bottom; neither route creates a second review token or automatically saves. The panel spans the card grid and receives focus for keyboard navigation. New-garage/connection-check panels also offer the review route when there are pending edits.
+
+The summary explicitly identifies renames and states that saving applies all pending configuration changes, including General and other garages. Name-only edits preserve the current enabled/disabled card color; actual faults remain amber. Native Save remains disabled until the reviewed save finishes. Editing invalidates the review, and Keep editing/Discard retain their existing behavior. Control-setting edits still follow the authoritative server review and re-enablement policy. No runtime behavior or HomeKit reporting changes are involved.
 
 ## Persistence and recovery
 
