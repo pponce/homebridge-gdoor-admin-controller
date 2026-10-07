@@ -44,7 +44,6 @@ export async function followInterruptedTravel(engine, direction, departing = fal
         if (retractPending === null && e.takeInterruption()) {
           e.admitInterruption(false);
           if (direction === 'opening') e.travel.stop(e.clock.now());
-          else { direction = 'opening'; e.travel.interrupted = true; e.travel.start(direction, e.clock.now()); }
           await e.motor.interrupt({ beforeWrite: async () => {
             const fresh = await e.read();
             requireValue(fresh.door === 'not-closed' && !fresh.locked, 'interruption_precondition_lost');
@@ -54,6 +53,11 @@ export async function followInterruptedTravel(engine, direction, departing = fal
             e.update({ phase: 'stopped-estimated', target: null, openEstimated: false, closeEstimated: false });
             return { closed: false };
           }
+          // Retain downward travel through command completion. This conservatively
+          // includes the pulse/release interval; no upward progress is credited
+          // during relay checks, delivery or cleanup. Physical position is unknown.
+          direction = 'opening'; e.travel.interrupted = true;
+          e.travel.start(direction, e.clock.now());
           e.update({ phase: 'opening', target: 'open' }); completion = null;
         } else if (direction === 'opening' && now >= completion) {
           e.admitInterruption(false); e.travel = null; e.partialOwner = null;

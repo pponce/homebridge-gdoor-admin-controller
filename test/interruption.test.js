@@ -27,7 +27,7 @@ function fixture(initial = 'closed') {
     feedback: { opening: 'timed', closing: 'sensor', bolt: 'relay', allowEstimatedBolting: false },
     timing: { openingMs: 500, closingMs: 500, pollMs: 50, motionTimeoutMs: 3000, openRetractSettleMs: 0,
       closeRetractSettleMs: 0, closedStableMs: 100, boltSettleMs: 0, interruptedOpenMarginMs: 100 } });
-  return { state, engine, hook: fn => { afterSleep = fn; }, options: { motorPath: 'relay', interruption: true, owner: 'indoor' } };
+  return { state, engine, motor, hook: fn => { afterSleep = fn; }, options: { motorPath: 'relay', interruption: true, owner: 'indoor' } };
 }
 
 test('indoor opening can stop; only its next press may close from the estimated partial stop', async () => {
@@ -89,4 +89,54 @@ test('new idle closure signals automatic lock work, startup and an external unlo
   assert.equal(f.engine.autoClosePending, true);
   await assert.rejects(f.engine.execute('observed-close'), /manual_unlock_override/);
   assert.equal(f.state.writes.length, 0);
+});
+
+for (const margin of [100, 300]) test(`reopening waits for completed reversal command and adds ${margin}ms margin`, async () => {
+  const f = fixture('not-closed');
+  f.engine.timing.openingMs = 2000;
+  f.engine.timing.interruptedOpenMarginMs = margin;
+  await f.engine.initialize();
+  let requested = false; let completedAt;
+  const readRelay = f.motor.relay.read;
+  f.motor.relay.read = async () => {
+    if (requested && f.state.pulses === 1 && !f.state.active) f.state.now += 180; // Pre-pulse relay check.
+    return readRelay();
+  };
+  const writeRelay = f.motor.relay.write;
+  f.motor.relay.write = async active => {
+    if (active && f.state.pulses === 1) f.state.now += 120; // Reversal delivery.
+    return writeRelay(active);
+  };
+  const interrupt = f.motor.interrupt.bind(f.motor);
+  f.motor.interrupt = async options => {
+    await interrupt(options);
+    f.state.now += 70; // Final command acknowledgement/cleanup.
+    completedAt = f.state.now;
+  };
+  f.hook((e, s) => {
+    if (!requested && e.interruptionAllowed && s.now >= 200) {
+      requested = true; assert.equal(e.requestInterruption(), true);
+    }
+  });
+  const result = await f.engine.execute('close', f.options);
+  assert.equal(result.phase, 'open'); assert.equal(result.openEstimated, true);
+  assert.ok(completedAt >= 570);
+  // Preserve downward time through completion, then allow its full return plus margin.
+  const earliestOpen = completedAt + completedAt + margin;
+  assert.ok(f.state.now >= earliestOpen, `${f.state.now} must be >= ${earliestOpen}`);
+  assert.ok(f.state.now < earliestOpen + f.engine.timing.pollMs);
+  assert.equal(f.state.pulses, 2);
+  assert.equal(f.state.writes.some(([kind, value]) => kind === 'bolt' && value === true), false);
+});
+
+test('failed reversal does not start a successful reopening estimate or lock the bolt', async () => {
+  const f = fixture('not-closed'); await f.engine.initialize(); let requested = false;
+  f.motor.interrupt = async () => { f.state.now += 200; throw new Fault('motor_relay_release_unconfirmed'); };
+  f.hook((e, s) => {
+    if (!requested && e.interruptionAllowed && s.now >= 200) { requested = true; e.requestInterruption(); }
+  });
+  const result = await f.engine.execute('close', f.options);
+  assert.equal(result.fault, 'motor_relay_release_unconfirmed');
+  assert.equal(result.openEstimated, false);
+  assert.equal(f.state.writes.some(([kind, value]) => kind === 'bolt' && value === true), false);
 });

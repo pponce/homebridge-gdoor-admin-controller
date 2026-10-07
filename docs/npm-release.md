@@ -1,3 +1,7 @@
+# Release 0.4.17
+
+Reversal opening estimates now start after the relay interruption command completes, preserving downward travel until that boundary and adding the configured positive allowance afterward. Includes 0.4.16 Debug controls/downloads and 0.4.15 configured connections. Local tests pass; CI validation pending. Physical timing still requires owner acceptance.
+
 # Release 0.4.16
 
 Adds the Debug tab after Garage doors, with temporary recording controls, status snapshots and sanitized downloads. Includes 0.4.15 configured-connection selection. Recording remains OFF at startup; movement and reporting behavior are unchanged. All five browser/runtime CI jobs passed in run 37695140948. Source is ready for maintainer publication; npm publication and owner installation remain separate.
