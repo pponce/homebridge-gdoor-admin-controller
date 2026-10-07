@@ -6,7 +6,7 @@ The owner requests starting the Roborock-inspired configuration UI work while re
 
 The plugin now awaits configuration persistence, shows a native success toast, and enables the host's bottom Save/validity indicator to finish the modal. Drafts disable that action immediately while typing. Managed saves mirror only confirmed settings and preserve child-bridge metadata; partial native-save failure retries without reapplying the controller, while an uncertain apply response requires a reload. The redesigned local stylesheet preserves the three tabs, adds stronger buttons and an Add a garage door label, follows Homebridge theme changes, and clarifies immediate commissioning. No controller movement/reporting code or standalone-admin runtime is changed.
 
-Validation and the draft PR are recorded below after the checks finish. Local browser binaries could not be downloaded under this workspace's network policy; the existing CI browser environment runs the desktop/mobile checks and captures screenshots. No npm publication or owner installation is performed by this work.
+All 142 local tests and package dry-run pass. Local browser binaries could not be downloaded under this workspace's network policy. GitHub PR creation returned internal errors, so the existing CI workflow also accepts this isolated preview branch directly, with the same read-only permissions and checks. Desktop/mobile validation and screenshots remain pending until that run completes. No npm publication or owner installation is performed by this work.
 
 ## Next reporting experiments — 0.4.9 preparation
 
