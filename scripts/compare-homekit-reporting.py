@@ -134,7 +134,7 @@ def compare(client, controller, ask=input):
     print("Runtime versions:", json.dumps({k: baseline.get(k) for k in ("homebridgeVersion", "hapVersion")}), flush=True)
     print("Keep Home visible throughout. Do not restart Homebridge or change configuration.\n"
           "This changes only internal diagnostic recording. It sends no door/bolt command.\n"
-          "Recording will be restored ON when the comparison exits.", flush=True)
+          "The starting recording setting will be restored when the comparison exits.", flush=True)
     try:
         first = run_trial(client, controller, True, baseline, "A", ask)
         if first != "c":
@@ -150,11 +150,11 @@ def compare(client, controller, ask=input):
                             if third == "c" else "The failure persisted after restoring ON; a simple recording dependency is not established."), flush=True)
     finally:
         try:
-            client.recording(True)
-            print("Internal recording restored ON. No state notifications were replayed.", flush=True)
+            client.recording(baseline["recording"])
+            print("Starting recording setting restored. No state notifications were replayed.", flush=True)
         except Exception:
-            print("Could not confirm recording restoration. When all controllers are idle, run:\n"
-                  "sudo python3 -B scripts/compare-homekit-reporting.py --restore-recording\n"
+            print("Could not confirm recording restoration. When all controllers are idle, run:\n" +
+                  ("sudo python3 -B scripts/compare-homekit-reporting.py " + ("--restore-recording" if baseline["recording"] else "--restore-baseline") + "\n") +
                   "This affects diagnostics only; garage control is unchanged.", flush=True)
 
 
@@ -187,7 +187,7 @@ def run_experiment(client, controller, name, ask=input):
         print("Keep Home visible. Use the indoor button to open fully, then close.\n"
               "After physical closure and bolt locking, watch the tile for 10 seconds.\n"
               "No requests or polling occur while this script waits. No movement commands are sent.\n"
-              "Only this one cycle is requested; full diagnostics/inline reporting will be restored.", flush=True)
+              "Only this one cycle is requested; the starting diagnostic/publication modes will be restored.", flush=True)
         answer = ask("Enter c if Home showed Closed, s if still Closing, or q to stop: ").strip().lower()
         if answer not in ("c", "s"):
             raise Error("Trial stopped by owner.")
@@ -202,12 +202,12 @@ def run_experiment(client, controller, name, ask=input):
         print("Trial recorded. Share this output before selecting another experiment; this result alone does not establish a fix.", flush=True)
     finally:
         try:
-            client.experiment("full", "inline")
-            print("Baseline restored: full diagnostics ON, inline publication. No notifications replayed.", flush=True)
+            client.experiment(baseline["traceMode"], baseline["publicationMode"])
+            print("Starting modes restored. No notifications replayed.", flush=True)
         except Exception:
             print("Could not confirm baseline restoration. When all controllers are idle, run:\n"
                   "sudo python3 -B scripts/compare-homekit-reporting.py --restore-baseline\n"
-                  "A coordinator restart also restores the baseline.", flush=True)
+                  "A coordinator restart restores its version-specific startup defaults.", flush=True)
 
 
 def main():
@@ -231,8 +231,8 @@ def main():
         info = client.request("/v1/identity")
         print("Running version:", info.get("pluginVersion", "unknown"), flush=True)
         if args.restore_baseline:
-            client.experiment("full", "inline")
-            print("Baseline restored: full diagnostics ON, inline publication.")
+            client.experiment("off", "inline")
+            print("Baseline restored: diagnostics OFF, inline publication.")
             return 0
         if args.restore_recording:
             client.recording(True)

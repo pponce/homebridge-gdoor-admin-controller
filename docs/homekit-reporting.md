@@ -1,5 +1,12 @@
 # Capture live HomeKit reporting
 
+## 0.4.14 startup-OFF comparison
+
+The owner requested diagnostics OFF from startup, combined with the garage-card UI fix in one install. Normal GET/publication paths bypass event recording, timestamping, subscriber inspection and diagnostic cache reads. This is not a root-cause fix. Diagnostic code and read-only snapshots remain available on demand.
+
+While idle, enable full diagnostics without reinstalling using `sudo python3 -B scripts/compare-homekit-reporting.py --restore-recording`. Return to OFF/inline using `sudo python3 -B scripts/compare-homekit-reporting.py --restore-baseline`. A restart starts OFF/inline. Comparison trials restore their starting settings. Earlier ON-default/restoration instructions below describe prior releases.
+
+
 Use this diagnostic when the controller has completed a movement but Apple Home keeps showing an earlier state. It runs against the installed plugin; no npm publication, plugin update or Homebridge restart is needed.
 
 On the Homebridge host, from a clean checkout on main:

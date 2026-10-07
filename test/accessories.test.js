@@ -251,7 +251,7 @@ test('deferred queue rechecks faults, holds, freshness and live direction before
 test('experiment validation and restoration neither replay notifications nor reset bindings', () => {
   const f=fixture(); f.publish(closed); const before=f.events.length;
   assert.throws(()=>f.accessories.setReportingExperiment('unknown','deferred'),/invalid_reporting_experiment/);
-  assert.equal(f.accessories.reporting.traceMode,'full'); assert.equal(f.accessories.publicationMode,'inline');
+  assert.equal(f.accessories.reporting.traceMode,'off'); assert.equal(f.accessories.publicationMode,'inline');
   f.accessories.setReportingExperiment('events','inline');
   const revision=f.accessories.reporting.recordingRevision;
   f.accessories.setReportingExperiment('events','inline'); assert.equal(f.accessories.reporting.recordingRevision,revision);
@@ -259,4 +259,18 @@ test('experiment validation and restoration neither replay notifications nor res
   f.accessories.setReportingExperiment('full','inline');
   assert.equal(f.accessories.publicationRevision,2); assert.equal(f.events.length,before);
   assert.equal(f.chars.get('TargetDoorState').listenerCount('set'),1);
+});
+
+test('startup bypasses diagnostic hooks through complete garage cycles and reads', () => {
+  const f=fixture();
+  assert.equal(f.accessories.reporting.recording,false);
+  assert.equal(f.accessories.reporting.traceMode,'off');
+  let calls=0;f.accessories.reporting.record=()=>{calls++;};
+  f.accessories.reporting.subscribers=()=>{calls++;};
+  for(const state of [closed,{...closed,phase:'opening',target:'open',busy:true},open,{...open,phase:'closing',target:'closed',busy:true},closed]) {
+    f.publish(state);f.tick();f.tick();f.read('CurrentDoorState');f.read('LockCurrentState');
+  }
+  assert.equal(calls,0);assert.equal(f.read('CurrentDoorState'),1);
+  assert.deepEqual(f.accessories.reporting.events,[]);
+  f.accessories.reporting.setRecording(true);f.read('CurrentDoorState');assert.ok(calls>0);
 });

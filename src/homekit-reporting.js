@@ -10,7 +10,7 @@ export class HomekitReporting {
   constructor(publisher) {
     this.publisher = publisher; this.events = []; this.sequence = 0;
     this.clients = new WeakMap(); this.nextClient = 0;
-    this.recording = true; this.recordingRevision = 0; this.traceMode = 'full';
+    this.recording = false; this.recordingRevision = 0; this.traceMode = 'off';
   }
   setRecording(enabled) {
     if (typeof enabled !== 'boolean') throw new TypeError('invalid_recording');

@@ -18,7 +18,8 @@ function fixture() {
     accessory:{_associatedHAPAccessory:{aid:2,getPrimaryAccessory:()=>({_server:{httpServer:server}})}}};
   const publisher = {api:{serverVersion:'2.0.0',hap:{HAPLibraryVersion:()=> '2.1.4'}},
     fields:()=>[['current'],['target']],active:new Map([['garage',tile]])};
-  return { trace:new HomekitReporting(publisher),tile,current,target,paired,unpaired,server,subscriptions };
+  const trace=new HomekitReporting(publisher); trace.setRecording(true);
+  return { trace,tile,current,target,paired,unpaired,server,subscriptions };
 }
 
 test('diagnostic distinguishes paired subscriptions and queued garage values without exposing connection identities', () => {
@@ -74,11 +75,11 @@ test('recording can be disabled without inspecting subscribers or altering the c
   assert.ok(Number.isFinite(first.monotonicMs));
   const subscribers=f.trace.subscribers;
   f.trace.subscribers=()=>{throw Error('must not inspect');};
-  assert.deepEqual(f.trace.setRecording(false),{recording:false,recordingRevision:1});
+  assert.deepEqual(f.trace.setRecording(false),{recording:false,recordingRevision:2});
   f.trace.record('publish',f.tile,'current',0,null,true);
   f.trace.record('get',f.tile,'current',0,f.paired);
   assert.equal(f.trace.events.length,1); assert.equal(f.trace.sequence,1);
-  assert.deepEqual(f.trace.setRecording(false),{recording:false,recordingRevision:1});
+  assert.deepEqual(f.trace.setRecording(false),{recording:false,recordingRevision:2});
   f.trace.subscribers=subscribers;
   f.trace.setRecording(true);f.trace.record('publish',f.tile,'current',1,null,true);
   const last=f.trace.events.at(-1);assert.ok(last.monotonicMs>=first.monotonicMs);

@@ -101,6 +101,8 @@ async function main() {
       subscriptions.push(listener);listener.on('value',value=>garageEvents.push({name,value,at:Date.now()}));listener.start();await until(async()=>listener.ready);
     }
     const reporting=(await management('/v1/homekit-reporting')).reporting;
+    assert.equal(reporting.recording,false);assert.equal(reporting.traceMode,'off');assert.deepEqual(reporting.events,[]);
+    assert.equal((await management('/v1/homekit-reporting/recording',{recording:true})).recording,true);
     assert.equal(reporting.connectionInspection,'available','Actual Homebridge connection inventory must be inspectable');
     assert.ok(reporting.clients.some(c=>!c.paired&&['doorCurrent','doorTarget','boltCurrent','boltTarget'].every(field=>c.subscriptions.some(s=>s.field===field))), 'Identify the existing four-field diagnostic subscriber');
     assert.ok(reporting.tiles.every(t=>t.fields.every(f=>f.supportsEvents===true)));

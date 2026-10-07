@@ -150,6 +150,17 @@ class ComparisonTests(unittest.TestCase):
         self.assertIn("Could not confirm baseline restoration", output.getvalue())
         self.assertIn("--restore-baseline", output.getvalue())
 
+    def test_off_start_is_restored_after_experiment_and_comparison(self):
+        for experiment in (True, False):
+            client = FakeClient()
+            client.experiment("off", "inline")
+            with contextlib.redirect_stdout(io.StringIO()):
+                if experiment:
+                    comparison.run_experiment(client, "example", "events", lambda _: "c")
+                else:
+                    comparison.compare(client, "example", lambda _: "c")
+            self.assertFalse(client.enabled)
+
     def test_older_runtime_and_missing_subscriptions_do_not_start_experiments(self):
         for missing in ("traceMode", "clients"):
             client = FakeClient()
