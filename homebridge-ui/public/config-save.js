@@ -47,7 +47,7 @@ export class ConfigurationSave {
     await this.stage(this.pending);
     const result=await this.hb.savePluginConfig();
     if(result===false)throw Error('homebridge_save_failed');
-    this.configuration=this.pending; this.pending=null; this.phase='saved';
+    this.configuration=this.pending; this.pending=null; this.savedAtLoad=true; this.phase='saved';
     return structuredClone(this.configuration);
   }
   async stage(configuration) {

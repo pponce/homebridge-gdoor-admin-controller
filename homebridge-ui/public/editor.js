@@ -18,14 +18,20 @@ export class ProfileEditor {
   }
   change() { this.changed(this.configuration); }
   button(text, action, cls='secondary') { const b=el('button',text,cls);b.type='button';b.addEventListener('click',action);return b; }
-  input(grid, label, obj, key, { type='text', help, min, max, step, options, rerender=false }={}) {
+  input(grid, label, obj, key, { type='text', help, min, max, step, options, rerender=false, emptyUnset=false }={}) {
     const wrap=el('label',label); const field=el(options?'select':'input'); field.dataset.field=key;field.setAttribute('aria-label',label);
     if(options) for(const [value,label,disabled] of options){ const o=el('option',label);o.value=String(value);o.disabled=!!disabled;field.append(o); }
     else { field.type=type; if(min!==undefined)field.min=min;if(max!==undefined)field.max=max;if(step!==undefined)field.step=step; }
     if(type==='checkbox'){wrap.className='check';field.checked=!!obj[key];wrap.prepend(field);}
     else {field.value=obj[key]??'';wrap.append(field);}
     if(help){const description=el('span',help,'help');description.id=freshId('help');field.setAttribute('aria-describedby',description.id);wrap.append(description);}
-    const update=()=>{obj[key]=type==='checkbox'?field.checked:type==='number'?Number(field.value):field.value;this.change();};
+    const update=()=>{
+      const value=type==='checkbox'?field.checked:type==='number'?(emptyUnset&&field.value===''?undefined:Number(field.value)):field.value;
+      // Input already committed this edit. Rebuilding cards again on blur can
+      // detach the button between pointer-down and click, losing the action.
+      if(Object.is(obj[key],value))return;
+      if(value===undefined)delete obj[key];else obj[key]=value;this.change();
+    };
     if(!options&&type!=='checkbox')field.addEventListener('input',update);
     field.addEventListener('change',()=>{update();if(rerender)this.render();});
     grid.append(wrap);return field;
@@ -157,7 +163,7 @@ export class ProfileEditor {
       const advanced=el('details');advanced.append(el('summary','Timing for this control'));const tg=this.grid(advanced);input.timing??={};
       for(const [key,label] of [['openRetractSettleSeconds','Retract before opening'],['closeRetractSettleSeconds','Retract before closing'],['openingSeconds','Estimated opening travel'],['closingSeconds','Estimated closing travel']]){
         const help='Leave blank to use the garage default.'+(key==='closeRetractSettleSeconds'?' 0 starts closing after any needed unlock command is acknowledged; retraction is monitored during travel. Above 0 waits for unlocked feedback, then this settling time.':'');
-        const field=this.input(tg,label+' (seconds)',input.timing,key,{type:'number',min:key.includes('Retract')?0:1,max:300,step:.1,help});field.addEventListener('change',()=>{if(field.value===''){delete input.timing[key];this.change();}});
+        this.input(tg,label+' (seconds)',input.timing,key,{type:'number',min:key.includes('Retract')?0:1,max:300,step:.1,help,emptyUnset:true});
       }card.append(advanced);card.append(this.button('Remove control',()=>{p.inputs.splice(index,1);this.change();this.render();},'danger'));
     });
     inputs.append(this.button('Add a button or keypad',()=>{p.inputs.push({id:freshId('input'),name:'Indoor button',enabled:true,source:{type:'deconz',kind:'button',baseUrl:p.bolt.baseUrl,gatewayId:p.bolt.gatewayId,resourceId:'',uniqueId:'',resourceType:'ZHASwitch',modelId:'',manufacturer:'',credentialRef:p.bolt.credentialRef},trigger:1002,action:'toggle',motorPath:p.motorPaths[0]?.id??'primary',busyBehavior:'drop',rearmSeconds:1.5,timing:{}});this.change();this.render();}));

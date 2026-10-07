@@ -336,5 +336,5 @@ try{
   }finally{await browser.close();}
  }
  console.log('Desktop Chromium/mobile WebKit passed guided editing, modeled native Save/check/toasts, setup and managed saves, delayed/failed native save, uncertain apply reload, metadata preservation, commissioning, General overview, inline garage checks, per-garage draft status, dialog-free draft removal, masked key creation/replacement/deletion, optional virtual keypad setup, draft-safe keys, theme switching and overflow.');
-}catch(e){if(process.env.GITHUB_OUTPUT)await appendFile(process.env.GITHUB_OUTPUT,'result='+String(e).replaceAll('\n',' ').slice(0,1500)+'\n');throw e;}
+}catch(e){if(process.env.GITHUB_OUTPUT)await appendFile(process.env.GITHUB_OUTPUT,'result='+String(e.stack||e).replaceAll('\n',' ').slice(0,2000)+'\n');throw e;}
 finally{server.closeAllConnections();await new Promise(r=>server.close(r));}
