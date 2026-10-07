@@ -9,6 +9,7 @@ import { discoverHomebridge } from '../src/homebridge-devices.js';
 import { validateConfiguration } from '../src/config.js';
 import { withConnections } from './public/connections.js';
 import { LocalConnections } from '../src/local-connections.js';
+import { debugReport } from '../src/debug-report.js';
 import { Diagnostics } from '../src/diagnostics.js';
 
 export class UiServer extends HomebridgePluginUiServer {
@@ -16,6 +17,11 @@ export class UiServer extends HomebridgePluginUiServer {
     super();
     const route = (name, fn) => this.onRequest(name, async body => { try { return await fn(body ?? {}); } catch { throw new RequestError('The request could not be completed. Check the connection and saved settings.'); } });
     route('/load', () => this.load());
+    route('/debug',()=>this.debug());
+    route('/debug/recording',body=>{
+      if(Object.keys(body).join()!=='recording'||typeof body.recording!=='boolean')throw Error('invalid_recording');
+      return this.api('/v1/homekit-reporting/recording',{recording:body.recording}).then(result=>{if(result.recording!==body.recording)throw Error('recording_unconfirmed');return {recording:result.recording};});
+    });
     route('/validate', body => validateConfiguration(body.configuration, { allowEmpty: true }));
     route('/review', body => this.api('/v1/settings/review', body));
     route('/cancel', body => this.api('/v1/settings/cancel', body));
@@ -53,6 +59,13 @@ export class UiServer extends HomebridgePluginUiServer {
     this.ready();
   }
   id(v) { if (typeof v !== 'string' || !/^[a-z][a-z0-9-]{0,47}$/.test(v)) throw Error('invalid_id'); }
+  async debug() {
+    const [identity,inventory,trace,activity]=await Promise.all([
+      this.api('/v1/identity'),this.api('/v1/controllers'),this.api('/v1/homekit-reporting'),this.api('/v1/activity')
+    ]);
+    if([inventory,trace,activity].some(result=>result.instanceId!==identity.instanceId))throw Error('diagnostics_restarted');
+    return debugReport({identity,controllers:inventory.controllers,reporting:trace.reporting,activity:activity.events});
+  }
   async bootstrap() {
     const config = JSON.parse(await readFile(this.homebridgeConfigPath, 'utf8'));
     const blocks = (config.platforms ?? []).filter(p => p.platform === 'GDoorAndBoltCoordinator');

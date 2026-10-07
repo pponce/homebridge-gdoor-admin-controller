@@ -1,3 +1,4 @@
+import { DebugPanel } from './debug.js';
 import { ConnectionEditor } from './connection-editor.js';
 import { withConnections } from './connections.js';
 import { ProfileEditor } from './editor.js';
@@ -5,6 +6,7 @@ import { ConfigurationSave, sameConfiguration } from './config-save.js';
 const hb=window.homebridge;
 const $=id=>document.getElementById(id);
 const save=new ConfigurationSave(hb);
+const debug=new DebugPanel($('debug-page'),(path,body)=>hb.request(path,body));
 // Keep one review and one save transaction when its panel moves into a card.
 const reviewPanel=$('review');
 let reviewControllerId=null;
@@ -188,11 +190,13 @@ $('credential-form').onsubmit=event=>{event.preventDefault();void action(async()
 });};
 function showPage(page){
   currentPage=page;
-  for(const name of ['general','garages']){
+  for(const name of ['general','garages','debug']){
     $(name+'-page').hidden=page!==name;
     if(page===name)$(name+'-tab').setAttribute('aria-current','page');else $(name+'-tab').removeAttribute('aria-current');
   }
   if(page==='general'){connectionEditor?.renderList();connectionEditor?.refreshKeys();connectionKeys();}
+  $('review-slot').hidden=page==='debug';
+  if(page==='debug')void debug.load();
   placeReview();
   hb?.fixScrollHeight?.();
 }
@@ -279,6 +283,7 @@ function connectionKeys(){
     list.append(row);
   }
 }
+$('debug-tab').onclick=()=>showPage('debug');
 $('general-tab').onclick=()=>showPage('general');$('garages-tab').onclick=()=>showPage('garages');
 $('configure-garages').onclick=()=>showPage('garages');$('credential-cancel').onclick=resetKeyForm;
 void action(load);

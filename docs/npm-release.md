@@ -1,3 +1,7 @@
+# Release 0.4.16 preparation
+
+Adds the Debug tab after Garage doors, with temporary recording controls, status snapshots and sanitized downloads. Includes 0.4.15 configured-connection selection. Recording remains OFF at startup; movement and reporting behavior are unchanged. Browser/runtime validation pending.
+
 # Release 0.4.15
 
 Adds configured local Homebridge bridge selection with private PIN import, plus deCONZ addresses from documented hosts. No patches, private cache reads, movement/reporting changes or changes to the 0.4.14 diagnostic OFF startup default. All five browser/runtime CI jobs passed in run 37693768601. Source is ready for maintainer publication; owner installation remains separate.

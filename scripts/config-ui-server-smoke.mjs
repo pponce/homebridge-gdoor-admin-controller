@@ -16,7 +16,10 @@ const example=JSON.parse(await readFile('examples/input-routing-config.json','ut
 example.controllers[0].inputs=example.controllers[0].inputs.slice(0,2);
 Object.assign(example.controllers[0].motorPaths[0].connection,{resourceType:'On/Off switch',modelId:'lumi.switch.acn047',manufacturer:'Aqara'});
 const hardware=await hardwareFixture(example.controllers[0]);example.controllers=[hardware.config];
-const runtime=new CoordinatorRuntime({storagePath,configuration:example});await runtime.start();const diagnostics=new Diagnostics(runtime.configuration,()=>runtime.credentials());const server=createManagementServer({identity,configuration:example,runtime,diagnostics});const port=await listenLocal(server,0);
+const runtime=new CoordinatorRuntime({storagePath,configuration:example});await runtime.start();const diagnostics=new Diagnostics(runtime.configuration,()=>runtime.credentials());let debugRecording=false;
+const server=createManagementServer({identity,configuration:example,runtime,diagnostics,
+ reporting:()=>({schema:1,bootId:runtime.bootId,recording:debugRecording,traceMode:debugRecording?'full':'off',publicationMode:'inline',homebridgeVersion:'2.4.0',hapVersion:'2.2.2',tiles:[],clients:[],events:[]}),
+ setReporting:recording=>{debugRecording=recording;return{recording};}});const port=await listenLocal(server,0);
 let localReads=0;const localPin='123-45-678';
 const localBridge=createServer((req,res)=>{
  assert.equal(req.method,'GET');assert.equal(req.url,'/accessories');assert.equal(req.headers.authorization,localPin);localReads++;
@@ -30,6 +33,12 @@ try{
  await wait(m=>m.action==='ready');
  const request=async(path,body={})=>{const requestId=randomUUID();const promise=wait(m=>m.action==='response'&&m.payload.requestId===requestId);child.send({action:'request',requestId,path,body});const m=await promise;assert.equal(m.payload.success,true,JSON.stringify(m.payload.data));return m.payload.data;};
  let loaded=await request('/load');assert.equal(loaded.connected,true);assert.equal(loaded.settings.configuration.connections.length,2);assert.deepEqual(hardware.state.requests,[]);
+ const debugBefore=JSON.stringify(runtime.settings()),writesBefore=structuredClone(hardware.state.writes);
+ let debug=await request('/debug');assert.equal(debug.recording,false);assert.equal(debug.controllers[0].garage,'Garage 1');
+ assert.equal(JSON.stringify(debug).includes(hardware.config.id),false);assert.equal(JSON.stringify(debug).includes(identity.token),false);
+ await request('/debug/recording',{recording:true});assert.equal((await request('/debug')).recording,true);
+ await request('/debug/recording',{recording:false});assert.equal((await request('/debug')).recording,false);
+ assert.equal(JSON.stringify(runtime.settings()),debugBefore);assert.deepEqual(hardware.state.writes,writesBefore);
  const localOptions=await request('/local-connections');assert.equal(localReads,0);assert.equal(JSON.stringify(localOptions).includes(localPin),false);
  const localOption=localOptions.candidates.find(c=>c.name==='Main synthetic bridge');assert.equal(localOption.canImportPin,true);
  const imported=await request('/local-connections/import',{id:localOption.id});assert.equal(imported.reference,localOption.credentialRef);assert.equal(localReads,1);

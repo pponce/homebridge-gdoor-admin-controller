@@ -144,3 +144,9 @@ body{margin:0;background:var(--canvas);color:var(--ink);font:14px/1.55 -apple-sy
 
 .garage-card[data-review=true]{grid-column:1/-1}
 .garage-card>.review-panel{margin:0;border-width:1px 0 0;border-radius:0}
+
+/* Debug actions are immediate and never enter the configuration save flow. */
+#coordinator-ui .debug-toggle{display:flex;align-items:center;gap:10px;font-weight:600}
+#coordinator-ui .debug-toggle input{width:18px;height:18px;flex:0 0 auto}
+#coordinator-ui .debug-summary{display:grid;gap:8px}
+#debug-page pre{max-height:360px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;background:var(--soft);padding:14px;border-radius:8px;font-size:12px}

@@ -11,7 +11,7 @@ const root=path.resolve('homebridge-ui/public');
 const example=JSON.parse(await readFile('examples/input-routing-config.json','utf8'));
 const base=example.controllers[0];base.inputs=base.inputs.slice(0,2);base.keypad={baseUrl:base.bolt.baseUrl,gatewayId:base.bolt.gatewayId,credentialRef:base.bolt.credentialRef,alarmId:1};
 Object.assign(base.motorPaths[0].connection,{resourceType:'On/Off switch',modelId:'lumi.switch.acn047',manufacturer:'Aqara'});
-const server=http.createServer(async(req,res)=>{try{const file=path.basename(new URL(req.url,'http://test').pathname)||'index.html';if(!['index.html','app.js','editor.js','config-save.js','connections.js','connection-editor.js','style.css'].includes(file))throw Error();res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':'text/html');res.end(await readFile(path.join(root,file)));}catch{res.writeHead(404);res.end();}});
+const server=http.createServer(async(req,res)=>{try{const file=path.basename(new URL(req.url,'http://test').pathname)||'index.html';if(!['index.html','app.js','editor.js','config-save.js','connections.js','connection-editor.js','debug.js','style.css'].includes(file))throw Error();res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':'text/html');res.end(await readFile(path.join(root,file)));}catch{res.writeHead(404);res.end();}});
 server.listen(0,'127.0.0.1');await once(server,'listening');
 
 // Model the native modal's documented APIs and footer. The parent enables its
@@ -25,9 +25,15 @@ async function fixture(browser,{mobile,dark,mode='managed'}){
   if(['fault','moving','enabled'].includes(mode))enabled=true;
   let reviews=0,applies=0,nativeSaves=0,probes=0,commissions=0,disables=0,releaseNative;const probedIds=[],savedKeys=['example-tailwind-key','example-deconz-key'];
   let blocks=mode==='initial'?[]:[{platform:'GDoorAndBoltCoordinator',name:'Custom name',_bridge:{username:'synthetic-bridge',port:12345},controllers:configuration.controllers}];
-  let localImports=0;
+  let localImports=0,debugReads=0,debugRecording=false,debugWrites=0;
   const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>{errors.push('Unexpected native dialog');void d.dismiss();});
   await page.exposeFunction('testRequest',async(name,body)=>{
+    if(name==='/debug'){
+      debugReads++;if(mode==='debug-unavailable')throw Error('unavailable');
+      return {schema:1,capturedAt:new Date().toISOString(),recording:debugRecording,traceMode:debugRecording?'full':'off',publicationMode:'inline',versions:{plugin:'0.4.16',homebridge:'2.4.0',hap:'2.2.2'},connectionInspection:'available',
+        controllers:[{garage:'Garage 1',door:'closed',bolt:'locked',busy:mode==='moving',fault:false}],tiles:[],clients:[],events:[],activity:[]};
+    }
+    if(name==='/debug/recording'){assert.deepEqual(Object.keys(body),['recording']);assert.equal(typeof body.recording,'boolean');assert.notEqual(mode,'moving');debugWrites++;debugRecording=body.recording;return{recording:debugRecording};}
     if(name==='/local-connections')return {candidates:[
       {id:'local-bridge',type:'homebridge',name:'Configured devices',baseUrl:'http://127.0.0.1:51001',canImportPin:true,credentialRef:'local-homebridge-test',detail:'Address and pairing PIN available. Access will be checked when added.'},
       {id:'local-gateway',type:'deconz',name:'Configured deCONZ',baseUrl:'http://192.0.2.60:8080',canImportPin:false,credentialRef:null,detail:'Address from homebridge-deconz. Select a saved deCONZ API key or enter one.'}
@@ -92,7 +98,7 @@ async function fixture(browser,{mobile,dark,mode='managed'}){
   assert.equal(await page.locator('#saved-keys .saved-key').count(),2);
   assert.equal(await page.locator('#credential-secret').inputValue(),'');
   await page.locator('#garages-tab').click();await page.locator('.garage-card').first().waitFor();
-  return{page,errors,probedIds,localImports:()=>localImports,reviews:()=>reviews,disables:()=>disables,configuration:()=>configuration,blocks:()=>blocks,applies:()=>applies,nativeSaves:()=>nativeSaves,probes:()=>probes,commissions:()=>commissions,release:()=>releaseNative?.()};
+  return{page,errors,probedIds,localImports:()=>localImports,debugReads:()=>debugReads,debugWrites:()=>debugWrites,reviews:()=>reviews,disables:()=>disables,configuration:()=>configuration,blocks:()=>blocks,applies:()=>applies,nativeSaves:()=>nativeSaves,probes:()=>probes,commissions:()=>commissions,release:()=>releaseNative?.()};
 }
 async function review(page){
   await page.getByRole('button',{name:'Review changes',exact:true}).click();
@@ -105,6 +111,37 @@ try{
  for(const [browserType,mobile,dark]of [[chromium,false,false],[webkit,true,true]]){
   const browser=await browserType.launch({headless:true});
   try{
+   for(const mode of ['enabled','moving','debug-unavailable']){
+     const x=await fixture(browser,{mobile,dark,mode}),p=x.page;
+     assert.equal(x.debugReads(),0,'No diagnostic requests before opening Debug');
+     await p.getByLabel('Garage name',{exact:true}).fill('Unsaved diagnostic test');
+     await p.getByRole('button',{name:'Debug',exact:true}).click();
+     await p.waitForFunction(()=>!document.getElementById('debug-refresh').disabled);
+     assert.equal(await p.locator('#debug-page').isVisible(),true);assert.equal(await p.locator('#garages-page').isVisible(),false);
+     assert.equal(await p.locator('#debug-tab').getAttribute('aria-current'),'page');
+     if(mode==='debug-unavailable'){
+       assert.equal(await p.locator('#debug-recording').isDisabled(),true);
+       assert.match(await p.locator('#debug-page').textContent(),/Diagnostic status is unavailable/);
+     }else if(mode==='moving'){
+       assert.equal(await p.locator('#debug-recording').isDisabled(),true);assert.equal(x.debugWrites(),0);
+     }else{
+       await p.locator('#debug-recording').click();
+       await p.waitForFunction(()=>!document.getElementById('debug-recording').disabled&&document.getElementById('debug-recording').checked);
+       assert.equal(x.debugWrites(),1);assert.equal(x.applies(),0);assert.equal(x.nativeSaves(),0);
+       const downloaded=p.waitForEvent('download');await p.locator('#debug-download').click();const file=await downloaded;
+       assert.match(file.suggestedFilename(),/^garage-diagnostics-.*\.json$/);
+       const stream=await file.createReadStream(),chunks=[];for await(const chunk of stream)chunks.push(chunk);
+       const report=JSON.parse(Buffer.concat(chunks).toString());assert.equal(report.recording,true);assert.equal(report.controllers[0].garage,'Garage 1');
+       await p.waitForFunction(()=>!document.getElementById('debug-recording').disabled);await p.locator('#debug-recording').click();
+       await p.waitForFunction(()=>!document.getElementById('debug-recording').disabled&&!document.getElementById('debug-recording').checked);
+       assert.equal(x.debugWrites(),2);
+       if(process.env.PREVIEW_OUTPUT)await p.screenshot({path:path.join(process.env.PREVIEW_OUTPUT,mobile?'debug-mobile.png':'debug-desktop.png'),fullPage:true});
+     }
+     const reads=x.debugReads();await p.locator('#general-tab').click();await p.locator('#garages-tab').click();
+     assert.equal(x.debugReads(),reads);assert.equal(await p.getByLabel('Garage name',{exact:true}).inputValue(),'Unsaved diagnostic test');
+     assert.equal(x.applies(),0);assert.equal(x.commissions(),0);assert.equal(x.disables(),0);assert.equal(x.probes(),0);
+     assert.deepEqual(x.errors,[]);await p.close();
+   }
    for(const mode of ['enabled','local-unavailable']){
      const x=await fixture(browser,{mobile,dark,mode}),p=x.page;
      await p.locator('#general-tab').click();await p.locator('#shared-type').selectOption('homebridge');
