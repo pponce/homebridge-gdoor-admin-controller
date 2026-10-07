@@ -132,12 +132,12 @@ export class CoordinatorRuntime {
       this.state.configuration = review.configuration; this.state.revision++; this.tickets.clear();
       for (const id of Object.keys(this.state.commissioned)) if (!review.configuration.controllers.some(p => p.id === id && hash(p) === this.state.commissioned[id])) delete this.state.commissioned[id];
       this.event(null, 'settings-applied'); await this.save(); await this.build(); return this.settings();
-    } finally { this.changing = false; }
+    } finally { this.changing = false; this.publishStates(); }
   }
   async resetCommissioning() {
     this.assertIdle(); requireValue(!this.state.maintenance, 'maintenance_held'); this.changing = true;
     try { this.state.commissioned = {}; this.tickets.clear(); this.event(null, 'credentials-change-review'); await this.save(); await this.build(); return { reset: true }; }
-    finally { this.changing = false; }
+    finally { this.changing = false; this.publishStates(); }
   }
   async commission(id, { revision, previousControllerStopped, physicalSetupReviewed, recover = false }) {
     this.assertIdle(); requireValue(!this.state.maintenance, 'maintenance_held');
@@ -155,7 +155,13 @@ export class CoordinatorRuntime {
       await journal.write({ inProgress: false, fault: false });
       this.state.commissioned[id] = hash(e.profile); this.tickets.clear(); this.event(id, recover ? 'recovery-confirmed' : 'commissioned');
       await this.save(); await this.build(); this.changing = false; return this.status(id);
-    } finally { this.changing = false; }
+    } finally { this.changing = false; this.publishStates(); }
+  }
+  publishStates() {
+    // build() reports while settings changes still hold actuation. Publish the
+    // final availability transition as soon as that hold ends, without waiting
+    // for an idle hardware poll or making GET derive a different snapshot.
+    for (const id of this.entries.keys()) this.publish(id, this.status(id).state);
   }
   async submit(id, body, source = 'admin') {
     const e = this.entry(id);
