@@ -1,6 +1,6 @@
 # Configuration save experience
 
-Version 0.4.10 integrates the tested `config-ui-save-preview` work at the owner's request. It retains the reporting experiments from 0.4.9 and does not change HomeKit publication, diagnostic defaults, movement behavior or the standalone administrator. See [release instructions](npm-release.md) and [release validation and publication status](status.md).
+Version 0.4.11 builds on the tested 0.4.10 save experience with General, garage status/actions, named key replacement and clearer optional keypad setup. It preserves the 0.4.9 reporting experiments, notification behavior and diagnostic defaults. The standalone administrator runtime is unchanged. See [release instructions](npm-release.md) and [validation status](status.md).
 
 ## Reference and framework
 
@@ -10,7 +10,7 @@ The [Homebridge custom modal implementation](https://github.com/homebridge/homeb
 
 This implementation uses those supported APIs and a local stylesheet with the reference's teal/slate light palette, warm dark surfaces, solid primary buttons, secondary borders, rounded panels and system fonts. It preserves Devices, Inputs and Behavior, uses a prominent Add a garage door button, and asks for the opener connection type before its API fields. It does not import upstream application code, assets, fonts or new runtime dependencies.
 
-## General and garage pages (0.4.11 preview)
+## General and garage pages (0.4.11)
 
 General is the landing page for garage readiness, saved connection-key names/replacement and optional web admin setup. Masks are placeholders, not secret values or secret lengths. Replacement starts with an empty password field, keeps the same name, clears the entered value after saving and preserves configuration drafts. Existing credential replacement policy still pauses controls until re-enabled.
 
@@ -42,8 +42,10 @@ Private-key saving clears the secret field and preserves unsaved configuration a
 
 ## Validation
 
+Version 0.4.11 passed all five jobs in [CI run 37665272198](https://github.com/pponce/homebridge-gDoorAndBolt-coordinator/actions/runs/37665272198), implementation 365e01c642a6ce3252d7272c40dbb7d9422926a1: 145 tests on Node 22/24, both supported Homebridge smoke-test versions, actual custom UI server IPC and Chromium/WebKit browser flows. New browser checks exercise General, selected-garage enable/disable, status colors, key replacement without secret disclosure, draft preservation, optional keypad setup and failed checks. A previous browser setup timed out, so CI now uses the matching official Playwright image; a subsequent accessible-label mismatch was fixed before this passing run. The owner must still verify the installed modal. These checks send no requests to household hardware.
+
 The merged 0.4.10 release also passed all five jobs in [CI run 37645305805](https://github.com/pponce/homebridge-gDoorAndBolt-coordinator/actions/runs/37645305805), revision `53027491e867f43addadf60ecb5f9870e39cb2a8`. A subsequent documentation-only commit records those results.
 
 All 142 tests passed locally and on Node 22/24 in [CI run 37642891710](https://github.com/pponce/homebridge-gDoorAndBolt-coordinator/actions/runs/37642891710), implementation `2b5876b8f2266c97a7db680501ad0766d1ed72a7`. Focused save-session tests cover reviewed snapshots, native acknowledgement, setup vs. managed persistence, bridge metadata, partial failure retry, uncertain apply reload and invalidated reviews. Desktop Chromium and mobile WebKit passed a model of the native footer/API contract, toasts, immediate dirty state, delayed/rejected saves, commissioning, draft-preserving credentials, theme changes and overflow. Actual custom UI server IPC and Homebridge 2.0.0/2.4.0 checks also passed. The browser harness models the parent controls; it does not run the Angular Homebridge modal itself. Screenshot artifacts accompany the run but have not been visually reviewed in this workspace. Live owner-host acceptance of the outer modal remains outstanding.
 
-Inline connection-key creation remains separate work; named keys are managed on General. The virtual-keypad selector is addressed by the 0.4.11 preview above. This update does not change those configuration schemas or defaults.
+Inline connection-key creation remains separate work; named keys are managed on General. The virtual-keypad selector is addressed by 0.4.11 above. This update does not change those configuration schemas or defaults.
