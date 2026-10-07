@@ -64,7 +64,7 @@ function buildEditor(configuration,position){
   editor=new ProfileEditor($('editor'),{configuration,credentials:loaded.credentials,changed,
     discoverHomebridge:body=>hb.request('/homebridge',body),discover:body=>hb.request('/deconz',body),error:message=>notice(message,true),
     renderCheckEnable:commissioning,viewChanged:refresh,getStatus:garageStatus,cardAction:garageAction,manageConnections:type=>{showPage('general');connectionEditor?.focus(type);}});
-  if(position){editor.selected=Math.min(position.selected,Math.max(0,configuration.controllers.length-1));editor.step=position.step;editor.expandedGarage=position.expandedGarage;editor.render();}
+  if(position){editor.selected=Math.min(position.selected,Math.max(0,configuration.controllers.length-1));editor.step=position.step;editor.expandedGarage=position.expandedGarage;editor.selectedInputs=new Map(position.selectedInputs??[]);editor.render();}
   connectionEditor=new ConnectionEditor($('shared-connections'),{configuration:()=>editor.configuration,credentials:()=>loaded.credentials,
     request:(path,body)=>hb.request(path,body),run:action,changed:configuration=>{changed(configuration);editor.render();},refresh:()=>{if(connectionEditor?.dirty&&save.phase==='review')save.changed(editor.configuration);refresh();},message:notice,
     keyCreated:reference=>{if(!loaded.credentials.includes(reference))loaded.credentials.push(reference);editor.credentials=loaded.credentials;connectionKeys();}});
@@ -112,7 +112,7 @@ async function load(){
   if(!hb){notice('Open this screen from the coordinator’s Settings in Homebridge.',true);return;}
   hb.hideSchemaForm?.();
   themeChoice=await hb.userCurrentLightingMode?.();applyTheme();
-  const position=editor&&{selected:editor.selected,step:editor.step,expandedGarage:editor.expandedGarage};
+  const position=editor&&{selected:editor.selected,step:editor.step,expandedGarage:editor.expandedGarage,selectedInputs:[...editor.selectedInputs]};
   blocks=await hb.getPluginConfig();loaded=await hb.request('/load');
   if(!loaded.connected&&blocks[0]?.controllers)loaded.settings.configuration.controllers=blocks[0].controllers;
   loaded.settings.configuration=withConnections(loaded.settings.configuration);

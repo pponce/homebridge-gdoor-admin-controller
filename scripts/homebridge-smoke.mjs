@@ -12,11 +12,15 @@ import { HapSubscription } from '../src/homebridge-devices.js';
 import { verifyHapReporting } from './hap-reporting-smoke.mjs';
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+const allocatedPorts = new Set();
 async function freePort() {
   const socket = net.createServer();
   await new Promise(resolve => socket.listen(0, '127.0.0.1', resolve));
   const port = socket.address().port;
-  await new Promise(resolve => socket.close(resolve)); return port;
+  await new Promise(resolve => socket.close(resolve));
+  // Sequential ephemeral allocations can return the same port before launch.
+  if (allocatedPorts.has(port)) return freePort();
+  allocatedPorts.add(port); return port;
 }
 async function until(check, milliseconds = 20000) {
   const end = Date.now() + milliseconds;
