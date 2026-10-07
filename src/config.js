@@ -1,3 +1,4 @@
+import { withConnections } from '../homebridge-ui/public/connections.js';
 export class ConfigurationError extends Error {
   constructor(code) { super(code); this.name = 'ConfigurationError'; }
 }
@@ -239,7 +240,8 @@ export function validateConfiguration(input, { allowEmpty = false } = {}) {
       existing.push(input); bindings.set(key, existing);
     }
   }
-  return { managementPort: port, controllers };
+  try { return withConnections({ managementPort: port, controllers, ...(input.connections!==undefined?{connections:input.connections}:{}) }); }
+  catch(error) { fail(error.message); }
 }
 
 export function routingInventory(controller) {

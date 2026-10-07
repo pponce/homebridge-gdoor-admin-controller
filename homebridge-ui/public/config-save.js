@@ -55,7 +55,7 @@ export class ConfigurationSave {
     if(!Array.isArray(blocks)||blocks.length>1)throw Error('unexpected_config_blocks');
     const block={...(blocks[0]??{}),platform:'GDoorAndBoltCoordinator',
       name:blocks[0]?.name??'Garage Door and Bolt',managementPort:configuration.managementPort,
-      controllers:structuredClone(configuration.controllers)};
+      controllers:structuredClone(configuration.controllers),connections:structuredClone(configuration.connections??[])};
     await this.hb.updatePluginConfig([block]);
   }
 }

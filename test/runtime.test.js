@@ -142,3 +142,23 @@ test('disable is durable, rejects stale or busy requests, sends no commands and 
   assert.equal(second.status('second-garage').actuationEnabled, true);
   assert.deepEqual(f.hardware.state.writes, []); assert.deepEqual(f.other.state.writes, []);
 });
+
+test('legacy enabled profile survives catalog import, catalog edits and restart with no hardware writes',async t=>{
+  const f=await fixture(t);await f.commission();await f.runtime.stop();
+  const legacy=await f.runtime.store.read();delete legacy.configuration.connections;await f.runtime.store.write(legacy);
+  const second=new CoordinatorRuntime({storagePath:f.storagePath,configuration:f.config,credentials:async()=>f.hardware.credentials,clock:f.clock});t.after(()=>second.stop());await second.start();
+  assert.equal(second.status(f.id).actuationEnabled,true);assert.equal(second.configuration.connections.length,2);
+  assert.deepEqual(second.configuration.controllers,legacy.configuration.controllers);
+  const snapshot=second.settings();snapshot.configuration.connections[0].name='Named controller';
+  const review=await second.review(snapshot.configuration,snapshot.revision);assert.deepEqual(review.requiresCommissioning,[]);await second.apply(review.token);
+  assert.equal(second.status(f.id).actuationEnabled,true);assert.deepEqual(f.hardware.state.writes,[]);
+});
+test('shared address changes require rechecking only garages using the changed device connection',async t=>{
+  const {updateConnection}=await import('../homebridge-ui/public/connections.js');
+  const f=await fixture(t,true);await f.commission();await f.runtime.commission('second-garage',{revision:f.runtime.state.revision,previousControllerStopped:true,physicalSetupReviewed:true});
+  const settings=f.runtime.settings(),shared=settings.configuration.connections.find(row=>row.baseUrl===f.hardware.config.bolt.baseUrl);
+  updateConnection(settings.configuration,shared.id,{...shared,baseUrl:'http://192.0.2.222:8080'});
+  const review=await f.runtime.review(settings.configuration,settings.revision);assert.deepEqual(review.requiresCommissioning,[f.id]);await f.runtime.apply(review.token);
+  assert.equal(f.runtime.status(f.id).actuationEnabled,false);assert.equal(f.runtime.status('second-garage').actuationEnabled,true);
+  assert.deepEqual(f.hardware.state.writes,[]);assert.deepEqual(f.other.state.writes,[]);
+});

@@ -23,7 +23,7 @@ try{
  const wait=(predicate)=>new Promise((resolve,reject)=>{const timeout=setTimeout(()=>{child.off('message',listen);reject(Error('UI IPC deadline'));},10000);const listen=m=>{if(predicate(m)){clearTimeout(timeout);child.off('message',listen);resolve(m);}};child.on('message',listen);});
  await wait(m=>m.action==='ready');
  const request=async(path,body={})=>{const requestId=randomUUID();const promise=wait(m=>m.action==='response'&&m.payload.requestId===requestId);child.send({action:'request',requestId,path,body});const m=await promise;assert.equal(m.payload.success,true,JSON.stringify(m.payload.data));return m.payload.data;};
- let loaded=await request('/load');assert.equal(loaded.connected,true);assert.deepEqual(hardware.state.requests,[]);
+ let loaded=await request('/load');assert.equal(loaded.connected,true);assert.equal(loaded.settings.configuration.connections.length,2);assert.deepEqual(hardware.state.requests,[]);
  for(const[reference,secret]of Object.entries(hardware.credentials))await request('/credentials',{reference,secret});
  const discovered=await request('/deconz',{baseUrl:hardware.config.bolt.baseUrl,credentialRef:hardware.config.bolt.credentialRef});
  const motor=hardware.config.motorPaths[0].connection;
@@ -41,7 +41,7 @@ try{
  loaded=await request('/load');assert.equal(loaded.settings.configuration.controllers[0].name,'IPC edited garage');assert.equal(loaded.settings.revision,2);
  const result=await request('/commission',{controller:hardware.config.id,revision:2,previousControllerStopped:true,physicalSetupReviewed:true,recover:false});assert.equal(result.status.actuationEnabled,true);assert.deepEqual(hardware.state.writes,[]);
  loaded=await request('/load');assert.deepEqual(loaded.credentials.sort(),Object.keys(hardware.credentials).sort());
- const renamed=structuredClone(loaded.settings.configuration);renamed.controllers[0].name='Renamed enabled garage';
+ const renamed=structuredClone(loaded.settings.configuration);renamed.controllers[0].name='Renamed enabled garage';renamed.connections[0].name='Saved device connection';
  const renameReview=await request('/review',{configuration:renamed,revision:loaded.settings.revision});
  assert.deepEqual(renameReview.review.requiresCommissioning,[]);await request('/apply',{token:renameReview.review.token});
  assert.equal(runtime.status(hardware.config.id).actuationEnabled,true);

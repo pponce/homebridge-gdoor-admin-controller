@@ -1,3 +1,4 @@
+import { sameConnection, selectConnection, connectionTypes, withConnections } from './connections.js';
 const el = (tag, text, cls) => { const n = document.createElement(tag); if (text !== undefined) n.textContent = text; if (cls) n.className = cls; return n; };
 const freshId = prefix => prefix + '-' + Array.from(crypto.getRandomValues(new Uint8Array(4)), byte=>byte.toString(16).padStart(2,'0')).join('');
 export function newGarage() {
@@ -10,10 +11,10 @@ export function newGarage() {
     motorPaths:[], inputs:[], keypad:null };
 }
 export class ProfileEditor {
-  constructor(root, { configuration, credentials = [], discover, discoverHomebridge, changed = () => {}, error = () => {}, renderCheckEnable, viewChanged = () => {}, getStatus, cardAction }) {
-    this.root=root; this.configuration=structuredClone(configuration); this.credentials=credentials; this.discover=discover; this.discoverHomebridge=discoverHomebridge; this.changed=changed; this.error=error;
+  constructor(root, { configuration, credentials = [], discover, discoverHomebridge, changed = () => {}, error = () => {}, renderCheckEnable, viewChanged = () => {}, getStatus, cardAction, manageConnections }) {
+    this.root=root; this.configuration=withConnections(configuration); this.credentials=credentials; this.discover=discover; this.discoverHomebridge=discoverHomebridge; this.changed=changed; this.error=error;
     this.renderCheckEnable=renderCheckEnable;this.viewChanged=viewChanged;this.getStatus=getStatus;this.cardAction=cardAction;
-    this.manualKeypad=new Set();this.expandedGarage=null;
+    this.manageConnections=manageConnections;this.manualKeypad=new Set();this.expandedGarage=null;
     this.selected=0; this.step=0; this.render();
   }
   change() { this.changed(this.configuration); }
@@ -38,7 +39,18 @@ export class ProfileEditor {
   }
   grid(parent){const g=el('div',undefined,'field-grid');parent.append(g);return g;}
   panel(parent,title,subtitle){const p=el('section',undefined,'device-block');p.append(el('h3',title));if(subtitle)p.append(el('p',subtitle,'subtle small'));parent.append(p);return p;}
-  credential(grid,connection){const input=this.input(grid,'Saved connection key',connection,'credentialRef',{help:'Choose a name saved under General → Connection keys. The key itself stays private.'});if(this.credentials.length){const list=el('datalist');list.id=freshId('keys');for(const key of this.credentials)list.append(Object.assign(el('option'),{value:key}));input.setAttribute('list',list.id);grid.append(list);}}
+  sharedConnection(parent,connection){
+    const type=connection.type??'deconz';const choices=this.configuration.connections.filter(row=>row.type===type);
+    const matched=choices.find(row=>sameConnection(row,connection));
+    const label=el('label',connectionTypes[type]+' connection');const select=el('select');select.setAttribute('aria-label',connectionTypes[type]+' connection');select.required=true;
+    select.append(Object.assign(el('option','Choose a saved connection'),{value:'',disabled:true}));
+    for(const row of choices)select.append(Object.assign(el('option',row.name),{value:row.id}));select.value=matched?.id??'';label.append(select);this.grid(parent).append(label);
+    select.onchange=()=>{const shared=choices.find(row=>row.id===select.value);if(!shared)return;selectConnection(connection,shared);this.change();this.render();};
+    if(matched)parent.append(el('p',matched.baseUrl+' · Saved key: '+matched.credentialRef,'help connection-summary'));
+    else parent.append(el('p','Create a '+connectionTypes[type]+' connection in General, then select it here.','help'));
+    if(this.manageConnections)parent.append(this.button('Manage connections in General',()=>this.manageConnections(type)));
+    return matched;
+  }
   connection(parent, obj, key, kind) {
     const current=obj[key];const types=kind==='garage'?[['tailwind','Tailwind local API'],['homebridge','Existing Homebridge garage']]:[['deconz','deCONZ directly'],['homebridge','Existing Homebridge device']];
     const choice=this.input(this.grid(parent),'Connection',current,'type',{options:types});
@@ -50,7 +62,7 @@ export class ProfileEditor {
     });
   }
   bridgeDevice(parent,connection,kind){
-    const grid=this.grid(parent);this.input(grid,'Homebridge accessory port',connection,'baseUrl',{help:'http://host:port for the bridge or child bridge that owns this device. This is not the Homebridge web UI port.'});this.credential(grid,connection);
+    this.sharedConnection(parent,connection);
     parent.append(el('p','Save this bridge’s pairing PIN as a private connection key. The selected Homebridge must allow unpaired accessory control (insecure mode). Native HomeKit accessories are not supported.','help'));
     const output=el('div',undefined,'discovery-results');parent.append(this.button('Find Homebridge devices',async()=>{
       if(!this.discoverHomebridge)return this.error('Discover Homebridge devices in the Homebridge plugin settings.');
@@ -69,7 +81,7 @@ export class ProfileEditor {
   }
   device(parent,connection,kind){
     if(connection.type==='homebridge')return this.bridgeDevice(parent,connection,kind);
-    const grid=this.grid(parent);this.input(grid,'deCONZ address',connection,'baseUrl',{help:'For example http://192.168.1.20:80'});this.credential(grid,connection);
+    this.sharedConnection(parent,connection);
     const output=el('p','Choose a device to pin its identity.','help');
     parent.append(this.button('Find devices',async()=>{
       if(!this.discover)return this.error('Use Homebridge settings to discover and connect devices.');
@@ -123,8 +135,8 @@ export class ProfileEditor {
     const opener=this.panel(root,'Garage opener','HomeKit and the virtual keypad use this connection.');
     this.connection(opener,p,'door','garage');
     if(p.door.type==='homebridge')this.bridgeDevice(opener,p.door,'garage');else {
-      const dg=this.grid(opener);
-      this.input(dg,'Tailwind address',p.door,'baseUrl',{help:'Local network address, for example http://192.168.1.30'});this.input(dg,'Door',p.door,'doorIndex',{type:'number',min:0,max:2,step:1,help:'0 is door 1; 1 is door 2; 2 is door 3.'});this.credential(dg,p.door);
+      const shared=this.sharedConnection(opener,p.door),dg=this.grid(opener);
+      const door=this.input(dg,'Tailwind door',p.door,'doorIndex',{type:'number',options:Array.from({length:shared?.doorCount??3},(_,index)=>[index,'Door '+(index+1)]),help:shared?.doorCount?'Choose which door on this Tailwind controller to use.':'Set the number of doors in General to narrow this list. Door 1 uses API index 0.'});door.required=true;
       const link=el('a','How to get a Tailwind local control key');link.href='https://gotailwind.zendesk.com/hc/en-us/articles/42573968819725-How-do-I-get-my-local-control-key-for-my-Tailwind-garage-door-controller';link.target='_blank';link.rel='noreferrer';opener.append(link);
     }
     const bolt=this.panel(root,'Separate bolt / lock','This is the output that retracts and extends the bolt.');this.connection(bolt,p,'bolt','bolt');this.device(bolt,p.bolt,'bolt');if(p.bolt.serviceType!=='lock')this.input(this.grid(bolt),'Relay ON means bolt extended',p.bolt,'lockedValue',{type:'checkbox',help:'Choose the mapping that matches your wiring. A relay report does not prove physical bolt position.'});
@@ -189,7 +201,7 @@ export class ProfileEditor {
     const note=el('p','Use the same gateway and alarm when linking this garage in the web admin interface. Opening and closing use '+(p.door.type==='tailwind'?'Tailwind':'the primary Homebridge opener')+'.','help');virtual.append(note);
     // A physical selection copies the alarm scope. It is not a live binding to
     // the physical input, and rendering must never rewrite an existing scope.
-    const g=this.grid(virtual);this.input(g,'deCONZ address',p.keypad,'baseUrl');this.input(g,'Gateway identity',p.keypad,'gatewayId');this.credential(g,p.keypad);this.input(g,'Alarm number',p.keypad,'alarmId',{type:'number',min:1,max:255,step:1});
+    this.sharedConnection(virtual,p.keypad);const g=this.grid(virtual);this.input(g,'Gateway identity',p.keypad,'gatewayId');this.input(g,'Alarm number',p.keypad,'alarmId',{type:'number',min:1,max:255,step:1});
     virtual.append(el('p','Selecting a physical keypad copies its alarm details. Later changes to that physical control do not change this saved connection.','help'));
   }
   behavior(root,p){

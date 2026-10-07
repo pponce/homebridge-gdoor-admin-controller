@@ -26,9 +26,17 @@ Remove this garage door uses no native browser confirmation, which can be unavai
 
 New-key creation cannot silently replace an existing name. Creating or deleting an unused key preserves enablement. Delete asks inline and checks both durable private profiles and the Homebridge platform configuration, including disabled garages and optional inputs; an in-use key is retained with an explanation. No saved secret is returned to the browser. Key replacement retains the existing commissioning-reset policy.
 
-## Shared connection design — follow-up
+## Shared device connections — 0.4.13
 
-The owner proposed reusable device connections in General. Recommended scope: named deCONZ gateway URL/key, named Tailwind device URL/token, and optionally named Homebridge bridge URL/PIN. Each garage would select those connections while retaining its Tailwind door index, bolt output, relay mapping, input routing and timings. Tailwind device door count could assist door-index validation, but should not create coordinated garages automatically. This is a design recommendation, not a schema migration in 0.4.12. Existing per-garage addresses and references remain valid.
+General includes reusable deCONZ gateways, Tailwind controllers and Homebridge accessory bridges, with purpose descriptions and an Add/Edit form. Connections contain a name, origin address and private saved-key reference. The form can select an existing key or create one privately with type-specific labels (API key, local control token, pairing PIN). Bare host:port addresses gain http://; addresses containing paths or embedded credentials are rejected. Raw keys never enter the configuration catalog or Homebridge platform block.
+
+Existing complete endpoint addresses/key references import automatically and deduplicate, including motor/input/virtual-keypad uses. Controller profiles and commissioning hashes remain unchanged. General lists who uses each connection; removing a connection is blocked while a garage uses it. New catalog entries and edits are part of the existing Review/Save transaction. Name/count-only edits preserve enablement; changing an address or saved-key reference expands to every matching use and requires checks for affected garages. Discard restores the prior catalog/profiles. Creating a new private key is immediate; a discarded connection draft can leave that unused key available for reuse or deletion.
+
+Each garage selects a named connection in Devices/Inputs. The interface offers Manage connections in General if setup is missing. Selecting another gateway/bridge clears pinned device identities and requires discovery on that device. Tailwind door choices are displayed as Door 1/2/3 while preserving zero-based API indices. Its confirmed door count belongs to the shared device; unknown counts stay Not specified rather than being guessed from existing assignments. Reducing the count below an assigned door is rejected before changing the draft.
+
+An unfinished Add/Edit connection form keeps the native Save disabled and directs the user to Add/Update or Cancel. Successful catalog updates then use the standard Review configuration / Save configuration / native bottom Save flow. No connection creation, selection or migration sends actuator commands.
+
+The separate administrator accepts and preserves the optional catalog. Its existing controller fields remain fully resolved. Update the administrator source before using its settings editor with a 0.4.13+ coordinator; its own URL/login and runtime behavior are retained.
 
 ## User flow
 

@@ -21,7 +21,7 @@
       "controllers": {
         "title": "Garage and bolt assemblies",
         "type": "array",
-        "minItems": 1,
+        "minItems": 0,
         "maxItems": 32,
         "items": {
           "type": "object",
@@ -395,6 +395,56 @@
                   }
                 }
               }
+            }
+          }
+        }
+      },
+      "connections": {
+        "title": "Shared device connections",
+        "type": "array",
+        "maxItems": 128,
+        "description": "Managed in General. Reusable deCONZ gateways, Tailwind controllers and Homebridge accessory bridges. Only saved key names belong here.",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "name",
+            "type",
+            "baseUrl",
+            "credentialRef"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "deconz",
+                "tailwind",
+                "homebridge"
+              ]
+            },
+            "baseUrl": {
+              "type": "string"
+            },
+            "credentialRef": {
+              "type": "string"
+            },
+            "doorCount": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 1,
+              "maximum": 3
             }
           }
         }

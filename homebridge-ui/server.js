@@ -7,6 +7,7 @@ import { PrivateStore } from '../src/private-store.js';
 import { requestJson } from '../src/transport.js';
 import { discoverHomebridge } from '../src/homebridge-devices.js';
 import { validateConfiguration } from '../src/config.js';
+import { withConnections } from './public/connections.js';
 import { Diagnostics } from '../src/diagnostics.js';
 
 export class UiServer extends HomebridgePluginUiServer {
@@ -62,7 +63,7 @@ export class UiServer extends HomebridgePluginUiServer {
       return { connected: true, adminConnection: { baseUrl: 'http://127.0.0.1:' + (await this.bootstrap()).port, identityFile: path.join(this.homebridgeStoragePath, 'gdoorandbolt-coordinator', 'identity.json') }, settings: settings.settings, controllers: controllers.controllers, maintenance: routing.maintenance, credentials, pluginVersion: identity.pluginVersion };
     } catch {
       const { block } = await this.bootstrap();
-      return { connected: false, settings: { revision: null, configuration: { managementPort: block.managementPort ?? 27773, controllers: block.controllers ?? [] } }, controllers: [], credentials };
+      return { connected: false, settings: { revision: null, configuration: withConnections({ managementPort: block.managementPort ?? 27773, controllers: block.controllers ?? [], connections: block.connections??[] }) }, controllers: [], credentials };
     }
   }
   async saveCredential({ reference, secret, mode }) {

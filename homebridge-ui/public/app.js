@@ -1,19 +1,22 @@
+import { ConnectionEditor } from './connection-editor.js';
+import { withConnections } from './connections.js';
 import { ProfileEditor } from './editor.js';
 import { ConfigurationSave, sameConfiguration } from './config-save.js';
 const hb=window.homebridge;
 const $=id=>document.getElementById(id);
 const save=new ConfigurationSave(hb);
-let editor, loaded, blocks=[], busy=false, themeChoice, currentPage='general';
+let editor, connectionEditor, loaded, blocks=[], busy=false, themeChoice, currentPage='general';
 const connectionChecks=new Map();
 const checkForms=new Map();let deletingKey=null;
 
 function notice(message,error=false){$('notice').textContent=message;$('notice').dataset.error=String(error);hb?.fixScrollHeight?.();}
 function toast(message,type='success'){hb?.toast?.[type]?.(message);}
 function refresh(){
-  const clean=save.canClose&&!busy;
+  const formDirty=!!connectionEditor?.dirty;
+  const clean=save.canClose&&!busy&&!formDirty;
   if(clean)hb?.enableSaveButton?.();else hb?.disableSaveButton?.();
   $('workspace').disabled=busy;$('coordinator-ui').setAttribute('aria-busy',String(busy));
-  $('editor-fields').disabled=!save.canEdit;
+  $('editor-fields').disabled=!save.canEdit;if(connectionEditor)connectionEditor.fields.disabled=!save.canEdit;
   const labels={loading:['Loading settings','Please wait.'],setup:['Set up your garage door','Review your configuration before saving.'],
     dirty:['Unsaved changes','Review and save your changes to continue.'],review:['Ready to save','Check the summary, then save configuration.'],
     saved:['All changes saved','Use Homebridge’s Save button below to close these settings.'],
@@ -21,13 +24,14 @@ function refresh(){
     'save-uncertain':['Save needs checking','Reload saved settings before making more changes.']};
   const [title,hint]=labels[save.phase];
   $('save-state').textContent=busy?'Working…':title;$('save-state').dataset.state=save.phase;
-  $('save-hint').textContent=hint;
+  $('save-hint').textContent=formDirty?'Click Add connection or Update connection, or cancel the connection edit.':hint;
+  if(formDirty&&!busy)$('save-state').textContent='Finish the connection form';
   $('review-button').hidden=['review','sync-pending','save-uncertain'].includes(save.phase);
   if(save.phase!=='review')$('review').hidden=true;
-  $('review-button').disabled=save.phase==='saved'||!editor;
+  $('review-button').disabled=save.phase==='saved'||!editor||formDirty;
   $('retry-save').hidden=save.phase!=='sync-pending';
   $('reload').textContent=save.canEdit?'Discard changes':'Reload saved settings';
-  $('reload').disabled=['saved','loading','sync-pending'].includes(save.phase);
+  $('reload').disabled=['loading','sync-pending'].includes(save.phase)||save.phase==='saved'&&!formDirty;
   editor?.refreshCards();garageOverview();
 }
 async function action(fn,errorMessage='Could not complete the request. Check the coordinator connection and try again.'){
@@ -51,11 +55,15 @@ function changed(configuration){
   refresh();
 }
 function buildEditor(configuration,position){
-  editor=null;
+  editor=null;connectionEditor=null;
   editor=new ProfileEditor($('editor'),{configuration,credentials:loaded.credentials,changed,
     discoverHomebridge:body=>hb.request('/homebridge',body),discover:body=>hb.request('/deconz',body),error:message=>notice(message,true),
-    renderCheckEnable:commissioning,viewChanged:refresh,getStatus:garageStatus,cardAction:garageAction});
+    renderCheckEnable:commissioning,viewChanged:refresh,getStatus:garageStatus,cardAction:garageAction,manageConnections:type=>{showPage('general');connectionEditor?.focus(type);}});
   if(position){editor.selected=Math.min(position.selected,Math.max(0,configuration.controllers.length-1));editor.step=position.step;editor.expandedGarage=position.expandedGarage;editor.render();}
+  connectionEditor=new ConnectionEditor($('shared-connections'),{configuration:()=>editor.configuration,credentials:()=>loaded.credentials,
+    request:(path,body)=>hb.request(path,body),run:action,changed:configuration=>{changed(configuration);editor.render();},refresh,message:notice,
+    keyCreated:reference=>{if(!loaded.credentials.includes(reference))loaded.credentials.push(reference);editor.credentials=loaded.credentials;connectionKeys();}});
+
 }
 function commissioning(root,profile){
   const section=document.createElement('section');section.className='card-checks';section.setAttribute('aria-label','Checks for '+profile.name);
@@ -101,6 +109,7 @@ async function load(){
   const position=editor&&{selected:editor.selected,step:editor.step,expandedGarage:editor.expandedGarage};
   blocks=await hb.getPluginConfig();loaded=await hb.request('/load');
   if(!loaded.connected&&blocks[0]?.controllers)loaded.settings.configuration.controllers=blocks[0].controllers;
+  loaded.settings.configuration=withConnections(loaded.settings.configuration);
   let saved=loaded.connected;
   if(!loaded.connected&&Array.isArray(blocks[0]?.controllers)){
     try{await hb.request('/validate',{configuration:loaded.settings.configuration});saved=true;}catch{/* Incomplete drafts still need review. */}
@@ -145,7 +154,7 @@ $('credential-form').onsubmit=event=>{event.preventDefault();void action(async()
   const response=await hb.request('/credentials',{reference:$('credential-reference').value,secret:$('credential-secret').value,mode:$('credential-reference').readOnly?'replace':'create'});$('credential-secret').value='';
   if(!response.saved){notice('That name is already saved. Choose another name, or use Replace key below.',true);return;}
   if(!loaded.credentials.includes($('credential-reference').value))loaded.credentials.push($('credential-reference').value);
-  resetKeyForm();connectionKeys();
+  resetKeyForm();connectionKeys();connectionEditor?.refreshKeys();
   editor.credentials=loaded.credentials;editor.render();
   // Key replacement can pause controls; refresh rows without discarding draft.
   try{const value=await hb.request('/load');loaded.controllers=value.controllers;checkForms.clear();editor.render();}catch{/* Check status on next reload. */}
@@ -157,6 +166,7 @@ function showPage(page){
     $(name+'-page').hidden=page!==name;
     if(page===name)$(name+'-tab').setAttribute('aria-current','page');else $(name+'-tab').removeAttribute('aria-current');
   }
+  if(page==='general'){connectionEditor?.renderList();connectionEditor?.refreshKeys();connectionKeys();}
   hb?.fixScrollHeight?.();
 }
 function garageStatus(profile){
@@ -219,14 +229,14 @@ function connectionKeys(){
     remove.onclick=()=>{deletingKey=name;connectionKeys();};controls.append(remove);row.append(label,mask,controls);
     if(deletingKey===name){
       const confirm=document.createElement('div');confirm.className='key-delete';
-      const used=editor.configuration.controllers.filter(p=>usesKey(p,name)).map(p=>p.name);
-      const message=document.createElement('p');message.className='help';message.textContent=used.length?'Used by '+used.join(', ')+'. Select another key in those garage settings and save before deleting this key.':'Delete this saved key? This takes effect immediately.';
+      const used=[...editor.configuration.controllers.filter(p=>usesKey(p,name)).map(p=>p.name),...(editor.configuration.connections??[]).filter(row=>row.credentialRef===name).map(row=>row.name+' connection')];
+      const message=document.createElement('p');message.className='help';message.textContent=used.length?'Used by '+used.join(', ')+'. Change those connection or garage settings and save before deleting this key.':'Delete this saved key? This takes effect immediately.';
       confirm.append(message);
       if(!used.length){const accept=document.createElement('button');accept.type='button';accept.className='danger';accept.textContent='Delete saved key';accept.onclick=()=>action(async()=>{
         const result=await hb.request('/credentials/delete',{reference:name});
         if(!result.deleted){notice('This key is still used by saved garage settings. Change those settings and save before deleting it.',true);return;}
         loaded.credentials=loaded.credentials.filter(key=>key!==name);editor.credentials=loaded.credentials;deletingKey=null;
-        if($('credential-reference').value===name)resetKeyForm();connectionKeys();editor.render();notice('Connection key deleted. Your configuration draft is unchanged.');toast('Connection key deleted.');
+        if($('credential-reference').value===name)resetKeyForm();connectionKeys();connectionEditor?.refreshKeys();editor.render();notice('Connection key deleted. Your configuration draft is unchanged.');toast('Connection key deleted.');
       });confirm.append(accept);}
       const cancel=document.createElement('button');cancel.type='button';cancel.className='secondary';cancel.textContent='Cancel deletion';cancel.onclick=()=>{deletingKey=null;connectionKeys();};confirm.append(cancel);row.append(confirm);
     }

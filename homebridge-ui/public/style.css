@@ -133,3 +133,11 @@ body{margin:0;background:var(--canvas);color:var(--ink);font:14px/1.55 -apple-sy
 #coordinator-ui #credential-form-title{margin-top:20px}
 
 .garage-card[data-expanded=true]{grid-column:1/-1}
+
+.connection-list{display:grid;gap:12px;margin:18px 0 24px}
+.shared-connection{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:16px;background:var(--soft);border:1px solid var(--line);border-radius:9px}
+.shared-connection>div:first-child{min-width:0;overflow-wrap:anywhere}
+.shared-connection .actions{flex-shrink:0}
+.connection-form{padding:18px;background:var(--soft);border:1px solid var(--line);border-radius:10px}
+.connection-summary{overflow-wrap:anywhere;margin-bottom:12px!important}
+@media(max-width:600px){.shared-connection{align-items:flex-start;flex-direction:column}.connection-form{padding:14px}}

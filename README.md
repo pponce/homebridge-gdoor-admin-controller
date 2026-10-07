@@ -22,7 +22,7 @@ The separately installed [administration application](https://github.com/pponce/
 After npm publication, install on a Homebridge 2 / Node 22 or 24 host:
 
 ```sh
-sudo hb-service add homebridge-gdoorandbolt-coordinator@0.4.12
+sudo hb-service add homebridge-gdoorandbolt-coordinator@0.4.13
 ```
 
 Use Homebridge settings to configure the plugin in its own child bridge. New garages remain disabled until checked and enabled. Follow the [owner installation guide](docs/owner-test.md) for taking over from an existing controller. This package does not install a separate system service.
@@ -38,6 +38,6 @@ npm test
 npm pack --dry-run --ignore-scripts
 ```
 
-Version 0.4.12 keeps checks and enable/disable controls in the garage cards and fixes per-garage draft status and removal. Adding a new draft leaves unchanged enabled garages green. General places clearly labeled new-key fields above saved names, with Replace and Delete actions. Unused-key creation/deletion preserves enablement; in-use deletion is rejected. Name-only edits preserve existing enablement. The native save confirmation and bottom Save action remain. It includes the selectable [HomeKit reporting experiments](docs/homekit-reporting.md#next-experiments--049) from 0.4.9 without changing their defaults or movement behavior. Registry publication is performed by the maintainer after release checks pass. Examples contain synthetic devices and require real discovery/configuration. Uncommissioned startup and inventory make no hardware requests; commissioned operation reads devices. No startup, probe or discovery sends actuator commands. See [device checks](docs/device-checks.md) and the [behavior parity inventory](docs/behavior-parity.md).
+Version 0.4.13 adds reusable device connections in General for deCONZ, Tailwind and existing Homebridge accessories. Save a name, address and private-key reference once, then select that connection during garage setup. Existing connections import automatically; valid garage enablement is preserved. Tailwind door count is optional, and garage selections show Door 1/2/3. Shared address/key-reference edits update affected profiles through Review/Save and their existing check policy. Keys can be created inline and remain private. See [the configuration flow](docs/config-ui-experience.md). Update the separate administrator client before editing 0.4.13+ coordinator settings there. It includes the selectable [HomeKit reporting experiments](docs/homekit-reporting.md#next-experiments--049) from 0.4.9 without changing their defaults or movement behavior. Registry publication is performed by the maintainer after release checks pass. Examples contain synthetic devices and require real discovery/configuration. Uncommissioned startup and inventory make no hardware requests; commissioned operation reads devices. No startup, probe or discovery sends actuator commands. See [device checks](docs/device-checks.md) and the [behavior parity inventory](docs/behavior-parity.md).
 
 Read the [implementation plan](docs/implementation-plan.md), [migration plan](docs/migration.md), [API contract](docs/api-v1.md), and [current status](docs/status.md).

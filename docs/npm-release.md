@@ -1,12 +1,12 @@
 # Maintainer npm publication
 
-Release 0.4.12 corrects garage-card draft status and removal, and simplifies connection-key management. Checks and enable/disable controls live inside each garage card; Devices, Inputs and Behavior are the only setup tabs. Adding an unsaved garage keeps other unchanged enabled garages green. Remove this garage door removes the selected draft immediately without browser dialogs. Removing a saved garage is staged for review/save, and Discard changes restores it.
+Release 0.4.13 adds reusable device connections under General: deCONZ URL/API key, Tailwind address/local token/optional door count, and existing Homebridge accessory bridge address/pairing PIN. Context explains how each is used. New connections can reuse saved keys or create a private key inline, and garage setup selects connections by name. Existing addresses/key references import automatically without changing hardware profiles or enablement. Tailwind doors display one-based names. Catalog edits use Review/Save; actual connection changes require checks only for affected garages.
 
-General shows clearly labeled new-key fields above the saved names and hidden values. Replace and Delete are explicit actions. Keys referenced by saved settings cannot be deleted; unused-key creation/deletion does not pause existing garages. Replacement retains the re-enablement policy. Native Save configuration, success toasts and bottom Save behavior remain.
+The 0.4.12 card, draft-removal and key-management fixes remain. The standalone administrator's settings client is updated to preserve the optional catalog; pull that administrator update before editing settings there if it is installed. Its UI stays standalone at its own URL. See [configuration UI](config-ui-experience.md).
 
 The virtual keypad is optional and belongs to the standalone web admin. A dropdown replaces the old buttons: Not used hides the alarm fields; a configured physical keypad supplies an alarm scope, or details can be entered manually. Existing scopes are preserved. The plugin does not claim to detect whether the web admin is installed. Native Save configuration, success toast and bottom Homebridge Save behavior remain. See [the save flow and validation limits](config-ui-experience.md).
 
-The release retains 0.4.9's independent HomeKit reporting experiments: event recording only, subscriber inspection only, and deferred garage publication with diagnostics off. The Home display issue remains unresolved; startup and post-trial defaults remain full diagnostics/inline publication. Movement behavior, bolt publication, faster closing, saved profiles and existing commissioning records are retained on upgrade. Reviewed name-only changes now preserve commissioning; explicit Disable removes it only for the selected garage. CI covers Homebridge 2.0.0 and the owner-reported 2.4.0 runtime. The separate administrator needs no installation update.
+The release retains 0.4.9's independent HomeKit reporting experiments: event recording only, subscriber inspection only, and deferred garage publication with diagnostics off. The Home display issue remains unresolved; startup and post-trial defaults remain full diagnostics/inline publication. Movement behavior, bolt publication, faster closing, saved profiles and existing commissioning records are retained on upgrade. Reviewed name-only changes now preserve commissioning; explicit Disable removes it only for the selected garage. CI covers Homebridge 2.0.0 and the owner-reported 2.4.0 runtime. An installed administrator needs the matching client compatibility update before editing coordinator settings.
 
 Use a clean clone at `~/devProjects/homebridge-gDoorAndBolt-coordinator`. Fetch/pull the reviewed main revision, then run:
 
@@ -18,13 +18,13 @@ The script requires that exact commit and a clean working tree, runs the unit su
 
 The script uses your normal npm account. If needed, npm prints a browser authentication URL to copy into a browser; it does not launch a browser. Publication may also request browser authentication. Run it as your normal user, not with sudo. Keep tokens out of commands and source files.
 
-The exact archive and a publication receipt are retained in `.release/0.4.12/`, excluded from Git and the npm package. Publication is attempted once; registry reads wait up to ten minutes for metadata availability and confirm that the published integrity matches the saved artifact. A verification timeout does not establish publication failure. Metadata success does not guarantee that npm's archive download has propagated; an installation failure must leave Homebridge stopped for a later retry. If the connection drops, rerun the same command: an identical existing release is verified without publishing again. A different artifact at that version stops the script. An incomplete local pack also stops for inspection rather than replacing an existing release archive.
+The exact archive and a publication receipt are retained in `.release/0.4.13/`, excluded from Git and the npm package. Publication is attempted once; registry reads wait up to ten minutes for metadata availability and confirm that the published integrity matches the saved artifact. A verification timeout does not establish publication failure. Metadata success does not guarantee that npm's archive download has propagated; an installation failure must leave Homebridge stopped for a later retry. If the connection drops, rerun the same command: an identical existing release is verified without publishing again. A different artifact at that version stops the script. An incomplete local pack also stops for inspection rather than replacing an existing release archive.
 
 The publication script does not install a plugin, restart a service or move hardware. After it prints `RESULT: npm publication verified`, install on the Homebridge host:
 
 ```sh
 sudo hb-service stop
-sudo hb-service add homebridge-gdoorandbolt-coordinator@0.4.12
+sudo hb-service add homebridge-gdoorandbolt-coordinator@0.4.13
 sudo hb-service start
 ```
 
