@@ -169,7 +169,7 @@ try{
      assert.equal(x.probes(),0);assert.equal(x.commissions(),0);
      await p.getByLabel('Operate garage through',{exact:true}).selectOption('primary');
      assert.equal(await behavior.inputValue(),'drop');
-     assert.equal(await behavior.locator('option[value="interrupt"]').isDisabled(),true);
+     assert.equal(await behavior.locator('option[value="interrupt"]').evaluate(option=>option.disabled),true,JSON.stringify({route:await p.getByLabel('Operate garage through',{exact:true}).inputValue(),option:await behavior.locator('option[value="interrupt"]').evaluate(option=>option.outerHTML),errors:x.errors}));
      await review(p);await p.getByRole('button',{name:'Save configuration',exact:true}).click();await saved(p);
      assert.equal(x.configuration().controllers[0].inputs[1].motorPath,'primary');
      assert.equal(x.configuration().controllers[0].inputs[1].busyBehavior,'drop');
