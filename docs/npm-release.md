@@ -2,7 +2,7 @@
 
 Devices now contains opener connections, bolt and opener relays. Controls replaces Inputs, with explanatory text and per-control selection. Device movement behavior applies to linked toggle controls, while keypad PIN behavior remains separate. Saved divergent control behavior is preserved until explicitly reconciled.
 
-Optional physical keypad stop/reverse on a compatible pulse relay. Either PIN outcome may interrupt movement started by that keypad; only a correct PIN opens a closed door. From open or its partial stop, either outcome closes. Default behavior remains Ignore new presses. Unavailable on the garage opener connection, including Tailwind, and on the virtual keypad. Validation pending.
+Optional physical keypad stop/reverse on a compatible pulse relay. Either PIN outcome may interrupt movement started by that keypad; only a correct PIN opens a closed door. From open or its partial stop, either outcome closes. Default behavior remains Ignore new presses. Unavailable on the garage opener connection, including Tailwind, and on the virtual keypad. All five coordinator CI jobs passed in run 37703569747 (172 unit tests, Homebridge 2.0/2.4, UI IPC and desktop/mobile browser flows). Administrator compatibility is on main at 45e26c1d586bdcfa22b3b3b486485ba78ee4db6e with all three CI jobs passing; update an installed administrator before editing opted-in keypad profiles there. Source is ready for publication; physical acceptance remains outstanding.
 
 # Release 0.4.18
 
