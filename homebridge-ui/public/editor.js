@@ -23,7 +23,9 @@ export class ProfileEditor {
     if(type==='checkbox'){wrap.className='check';field.checked=!!obj[key];wrap.prepend(field);}
     else {field.value=obj[key]??'';wrap.append(field);}
     if(help)wrap.append(el('span',help,'help'));
-    field.addEventListener('change',()=>{obj[key]=type==='checkbox'?field.checked:type==='number'?Number(field.value):field.value;this.change();if(rerender)this.render();});
+    const update=()=>{obj[key]=type==='checkbox'?field.checked:type==='number'?Number(field.value):field.value;this.change();};
+    if(!options&&type!=='checkbox')field.addEventListener('input',update);
+    field.addEventListener('change',()=>{update();if(rerender)this.render();});
     grid.append(wrap);return field;
   }
   grid(parent){const g=el('div',undefined,'field-grid');parent.append(g);return g;}
@@ -81,8 +83,8 @@ export class ProfileEditor {
   render(){
     this.root.replaceChildren();const list=el('div',undefined,'garage-list');
     this.configuration.controllers.forEach((p,index)=>{const b=this.button('',()=>{this.selected=index;this.render();},'garage-card');b.setAttribute('aria-pressed',String(index===this.selected));b.append(el('strong',p.name),el('span',(p.inputs?.length??0)+' physical controls · '+(p.exposeBoltLock?'Garage + lock tiles':'Garage tile')));list.append(b);});
-    list.append(this.button('Add a garage',()=>{this.configuration.controllers.push(newGarage());this.selected=this.configuration.controllers.length-1;this.change();this.render();},'add-garage'));this.root.append(list);
-    const p=this.configuration.controllers[this.selected];if(!p){const empty=el('section',undefined,'panel empty');empty.append(el('h2','Start with one garage'),el('p','Add the opener and the separate bolt you want to coordinate.','subtle'));this.root.append(empty);return;}
+    list.append(this.button('Add a garage door',()=>{this.configuration.controllers.push(newGarage());this.selected=this.configuration.controllers.length-1;this.change();this.render();},'add-garage'));this.root.append(list);
+    const p=this.configuration.controllers[this.selected];if(!p){const empty=el('section',undefined,'panel empty');empty.append(el('h2','No garage doors yet'),el('p','Use Add a garage door to connect an opener and its separate bolt.','subtle'));this.root.append(empty);return;}
     p.motorPaths??=[];p.inputs??=[];p.timing??={};
     const steps=el('nav',undefined,'steps');steps.setAttribute('aria-label','Garage setup');['Devices','Inputs','Behavior'].forEach((name,index)=>{const b=this.button(String(index+1).padStart(2,'0')+'  '+name,()=>{this.step=index;this.render();});if(index===this.step)b.setAttribute('aria-current','step');steps.append(b);});this.root.append(steps);
     const content=el('div',undefined,'step-content');this.root.append(content);
@@ -90,9 +92,10 @@ export class ProfileEditor {
   }
   devices(root,p){
     const identity=this.panel(root,'Garage details');const grid=this.grid(identity);this.input(grid,'Garage name',p,'name');identity.append(el('p','Controller ID: '+p.id+' · Use this to link the standalone administrator.','help'));this.input(grid,'Show a separate bolt Lock tile',p,'exposeBoltLock',{type:'checkbox'});
-    const opener=this.panel(root,'Garage opener','HomeKit and the virtual keypad use this connection.');const dg=this.grid(opener);
+    const opener=this.panel(root,'Garage opener','HomeKit and the virtual keypad use this connection.');
     this.connection(opener,p,'door','garage');
     if(p.door.type==='homebridge')this.bridgeDevice(opener,p.door,'garage');else {
+      const dg=this.grid(opener);
       this.input(dg,'Tailwind address',p.door,'baseUrl',{help:'Local network address, for example http://192.168.1.30'});this.input(dg,'Door',p.door,'doorIndex',{type:'number',min:0,max:2,step:1,help:'0 is door 1; 1 is door 2; 2 is door 3.'});this.credential(dg,p.door);
       const link=el('a','How to get a Tailwind local control key');link.href='https://gotailwind.zendesk.com/hc/en-us/articles/42573968819725-How-do-I-get-my-local-control-key-for-my-Tailwind-garage-door-controller';link.target='_blank';link.rel='noreferrer';opener.append(link);
     }
