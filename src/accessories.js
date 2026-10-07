@@ -117,7 +117,13 @@ export class CoordinatorAccessories {
   stop() { for (const v of this.active.values()) this.cancelNotification(v); }
   send(v, explicit) {
     const report = v.report;
-    for (const [field, type] of this.fields(v)) {
+    const fields = this.fields(v);
+    // Match the owner-verified legacy garage patch's explicit terminal pair:
+    // TargetDoorState first, then CurrentDoorState. Ordinary reports and bolt
+    // reports retain their existing order. Both reported values are committed
+    // before either notification; neither notification invokes a SET handler.
+    if (explicit && v.kind === 'garage') [fields[0], fields[1]] = [fields[1], fields[0]];
+    for (const [field, type] of fields) {
       const c = v.service.getCharacteristic(type);
       if (!report.available) c.updateValue(this.failure());
       else if (explicit && field !== 'obstruction') c.sendEventNotification(report[field]);
@@ -129,8 +135,8 @@ export class CoordinatorAccessories {
     if (key === null) { this.cancelNotification(v); this.send(v, false); return; }
     if (key === v.notificationKey) { this.send(v, false); return; }
     this.cancelNotification(v); v.notificationKey = key;
-    // One publication method per field, current then target, for both tiles.
-    // Restore the old bolt's three explicit reports at two-second intervals.
+    // One publication method per field; send() preserves the legacy garage
+    // terminal order and the working bolt's current-then-target order.
     // Ordinary runtime observations continue reconciliation after the budget.
     this.send(v, true);
     let remaining = 2;

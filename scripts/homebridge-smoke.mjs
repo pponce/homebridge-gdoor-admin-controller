@@ -118,6 +118,7 @@ async function main() {
       const writes=structuredClone(hardware.state.writes);
       await until(async()=>garageEvents.slice(since).some(e=>e.name==='current'&&e.value===value&&e.at>=first.at+1000),5000);
       await until(async()=>['boltCurrent','boltTarget'].every(field=>captureEvents.slice(captureSince).filter(event=>event[field]===(value?'locked':'unlocked')).length>=2),5000);
+      await until(async()=>garageEvents.slice(since).some(e=>e.name==='target'&&e.value===value&&e.at>=first.at+1000),5000);
       assert.deepEqual(hardware.state.writes,writes,'Reaffirmation must not operate hardware');
       const rows=await readCharacteristics();
       for(const iid of [current.iid,target.iid])assert.equal(rows.find(c=>c.aid===garage.aid&&c.iid===iid).value,value);
@@ -154,7 +155,7 @@ async function main() {
     child.kill('SIGTERM');
     await until(async () => child.exitCode !== null || child.signalCode !== null, 10000);
     await assert.rejects(fetch(origin + '/v1/identity', { signal: AbortSignal.timeout(1000) }));
-    console.log('Actual Homebridge child bridge passed prompt acknowledgement, healthy reads, all four pushed states on one diagnostic connection, garage and bolt reaffirmation after HomeKit and physical-button operations, ordered coordination and shutdown.');
+    console.log('Actual Homebridge child bridge passed prompt acknowledgement, healthy reads, all four pushed states on one diagnostic connection, repeated terminal garage pairs and unchanged bolt reaffirmation after HomeKit and physical-button operations, ordered coordination and shutdown.');
   } catch (error) {
     // Synthetic logs only, with the generated management token still redacted.
     const safeLogs = logs.replaceAll(identity?.token || 'never-match-placeholder', '[redacted]');

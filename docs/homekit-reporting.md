@@ -74,3 +74,21 @@ Sources:
 The comparison above describes 0.4.4. Version 0.4.5 implements committed reporting snapshots and synchronous callback GET handlers, following the old publisher. HAP's onGet path awaits the handler and then stores its result; a read started before a newer report can therefore store the earlier value after that report. The callback path stores a synchronous read before returning, so a later report remains authoritative. The actual-HAP test explicitly reproduces the old overwrite and tests the corrected garage and lock paths. This is a reproducible race, but owner testing is still needed to determine whether it resolves the reported Apple Home display regression.
 
 Both tiles now use current-then-target reports with bounded explicit reaffirmation (three total, two seconds apart). Ordinary fresh observations continue reconciliation. GET answers use the same committed snapshot as publication; initialization seeds restored accessories, preparation reports coherent current/target values, and delayed SET callbacks cannot replace newer opposite targets. No HTTP Webhooks dependency or hardware behavior changes are involved. Five configurable reporting controls from the original controller are still not exposed; fixed reporting defaults are used in this correction.
+
+## Recorded working legacy path and 0.4.6
+
+The previous audit compared the current generic Plus implementation, but the original controller repository also contains the owner-tested legacy patch and its installation record. Its September 20 entry, “Live notification update verified; two tile cycles successful,” records installation, restart verification, and successful opening/closing trials with three terminal notifications. The updater sets `homekit_notify_repeats=3`; its seed/validation path preserves that value in the later Controller settings overlay. A fallback default of zero is not evidence that notifications were disabled in that recorded installation.
+
+The exact legacy explicit path stores both values, calls `TargetDoorState.sendEventNotification(target)`, then calls `CurrentDoorState.sendEventNotification(current)`. At completion and on the next two idle observations, both values are repeated. Ordinary reports resume afterward. This does not invoke the SET handlers or move hardware.
+
+The newer generic Plus publisher processes the controller's payload in insertion order: current then target. Our earlier phrase “the old order” failed to distinguish that generic implementation from the historical working patch. Both notify both supplied fields when explicit notification is requested; neither implements current-only forced repetition.
+
+Version 0.4.6 therefore restores the legacy **explicit garage** target-then-current sequence, retaining the fixed three-report/two-second schedule, coherent snapshots and synchronous GET protection. Ordinary garage reports and all bolt reports remain as in 0.4.5. The initially proposed current-only change was not released. This is a narrow parity correction against a recorded working source, not proof that event order causes or resolves Apple's lingering Closing display. HAP transport may batch/reorder event payloads; local delivery tests do not establish Apple Home rendering.
+
+Sources in the original repository at `7d4e0f04e4ef3631e721e571adb292cf11988e87`:
+
+- [Legacy explicit notification implementation and enabling updater](https://github.com/pponce/garageDoorController/blob/7d4e0f04e4ef3631e721e571adb292cf11988e87/scripts/update_garage_feedback.py)
+- [Original notification design and schedule](https://github.com/pponce/garageDoorController/blob/7d4e0f04e4ef3631e721e571adb292cf11988e87/notes/feedback-notifications.md)
+- [Recorded successful installation and trials](https://github.com/pponce/garageDoorController/blob/7d4e0f04e4ef3631e721e571adb292cf11988e87/notes/current-status.md#live-notification-update-verified-two-tile-cycles-successful-2026-09-20-utc)
+
+The owner's working original stack is the behavior reference for future regressions. Trace its applicable implementation and deployment record before proposing changes, preserve working semantics, and test deliberate differences. Do not ask the owner to reconstruct recorded setup decisions.

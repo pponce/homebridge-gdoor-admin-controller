@@ -62,10 +62,10 @@ test('getters return the committed report until a new report is published; expir
   f.status.actuationEnabled = false; assert.throws(() => f.read('LockCurrentState'),f.HapStatusError);
 });
 
-test('both tiles explicitly report current then target three times, without restarting on unchanged polls', () => {
+test('garage and bolt pairs are reaffirmed three times without restarting on unchanged polls', () => {
   const f = fixture(); f.values.set('CurrentDoorState',1); f.values.set('TargetDoorState',1);
   f.publish(closed);
-  const pair = [['CurrentDoorState',1],['TargetDoorState',1],['LockCurrentState',1],['LockTargetState',1]];
+  const pair = [['TargetDoorState',1],['CurrentDoorState',1],['LockCurrentState',1],['LockTargetState',1]];
   assert.deepEqual(f.events,pair);
   f.publish(closed); assert.equal(f.events.length,4); assert.equal(f.pending.size,2);
   f.tick(); f.tick(); assert.deepEqual(f.events,[...pair,...pair,...pair]); assert.equal(f.pending.size,0);
@@ -88,7 +88,7 @@ test('new direction cancels old terminal garage reports and bolt change cancels 
   f.publish({ ...closed, target: 'open', busy: true }); f.tick(); assert.deepEqual(doorEvents(f),[]);
   f.publish({ ...open, phase: 'opening', busy: true }); f.events.length = 0;
   f.publish(open); f.tick(); f.tick();
-  assert.deepEqual(doorEvents(f),Array(3).fill([['CurrentDoorState',0],['TargetDoorState',0]]).flat());
+  assert.deepEqual(doorEvents(f),Array(3).fill([['TargetDoorState',0],['CurrentDoorState',0]]).flat());
   assert.ok(boltEvents(f).every(([,value]) => value === 0));
 });
 
@@ -127,7 +127,7 @@ test('SET acknowledges queued intent promptly and subsequent physical feedback o
   await f.set('TargetDoorState',0);
   assert.deepEqual(calls,[['example','open','homekit']]);
   assert.equal(f.read('TargetDoorState'),0); assert.equal(f.read('CurrentDoorState'),2);
-  assert.deepEqual(doorEvents(f).slice(-2),[['CurrentDoorState',1],['TargetDoorState',1]]); // no fake terminal report
+  assert.deepEqual(doorEvents(f).slice(-1),[['CurrentDoorState',1]]); // no fake terminal report
   f.publish(open); assert.equal(f.read('CurrentDoorState'),0);
   f.tick(); f.tick(); assert.equal(calls.length,1);
 });
@@ -153,4 +153,17 @@ test('rejected or obsolete SET leaves reported values intact and repeated bindin
   let acknowledge; f.runtime.submit = () => new Promise(resolve => { acknowledge = resolve; });
   const pending = f.set('TargetDoorState',0); f.accessories.active.delete('garage'); acknowledge({accepted:true});
   await assert.rejects(pending,f.HapStatusError); assert.equal(v.report.target,1);
+});
+
+test('garage completion matches the owner-verified legacy target-then-current notifications while bolt stays unchanged', () => {
+  const f = fixture(); f.publish(open);
+  f.publish({ ...open, phase: 'closing', target: 'closed', busy: true });
+  f.events.length = 0;
+  f.publish(closed); f.tick(); f.tick();
+  // Golden terminal sequence: garageDoorController/scripts/update_garage_feedback.py
+  // FORCE_BLOCK and notes/feedback-notifications.md (September 20 live acceptance).
+  assert.deepEqual(doorEvents(f), Array(3).fill([['TargetDoorState',1],['CurrentDoorState',1]]).flat());
+  // The independently working bolt retains its current/target report contract.
+  assert.deepEqual(boltEvents(f), Array(3).fill([['LockCurrentState',1],['LockTargetState',1]]).flat());
+  assert.equal(f.read('TargetDoorState'),1);
 });

@@ -50,6 +50,14 @@ export async function verifyHapReporting() {
   await assert.rejects(set,error=>error===hap.HAPStatus.NOT_ALLOWED_IN_CURRENT_STATE);
   assert.equal(target.value,1,'Late SET must not replace newer target feedback');
   report({phase:'closed'}); assert.equal(await target.handleGetRequest(),1);
+  report({phase:'open',target:'open',bolt:'unlocked'});
+  report({phase:'closing',target:'closed',busy:true});
+  const completion=[];
+  target.on('change',change=>completion.push(['target',change.newValue]));
+  current.on('change',change=>completion.push(['current',change.newValue]));
+  report({phase:'closed',bolt:'locked',busy:false});
+  assert.deepEqual(completion,[['target',1],['current',1]],'Match the legacy terminal notification order using actual HAP');
+  assert.equal(current.value,1); assert.equal(target.value,1);
   publisher.stop();
-  console.log('Actual HAP reproduces the previous GET race and passes synchronous reporting, lock/garage cache preservation, restored accessories and superseded SET checks.');
+  console.log('Actual HAP reproduces the previous GET race and passes synchronous reporting, lock/garage cache preservation, legacy garage terminal notification order, restored accessories and superseded SET checks.');
 }
