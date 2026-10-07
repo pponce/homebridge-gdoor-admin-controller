@@ -1,7 +1,9 @@
+import { randomUUID } from 'node:crypto';
+
 export class CoordinatorAccessories {
   constructor(api, identity, runtime, cached = [], timers = { setTimeout, clearTimeout }) {
-    this.api = api; this.runtime = runtime; this.identity = identity; this.cached = new Map(cached.map(a => [a.UUID, a])); this.active = new Map();
-    this.timers = timers;
+    this.api = api; this.runtime = runtime; this.identity = identity;
+    this.cached = new Map(cached.map(a => [a.UUID, a])); this.active = new Map(); this.timers = timers;
   }
   sync() {
     this.stop();
@@ -12,32 +14,16 @@ export class CoordinatorAccessories {
         let a = this.active.get(uuid)?.accessory ?? this.cached.get(uuid);
         const fresh = !a; if (!a) a = new this.api.platformAccessory(kind === 'garage' ? p.name : p.name + ' Bolt', uuid);
         a.context = { coordinator: p.id, kind }; a.displayName = kind === 'garage' ? p.name : p.name + ' Bolt';
-        const info = a.getService(S.AccessoryInformation);
-        info.setCharacteristic(C.Manufacturer, 'Garage Door and Bolt Coordinator').setCharacteristic(C.Model, kind === 'garage' ? 'Coordinated Garage' : 'Coordinated Bolt')
-          .setCharacteristic(C.SerialNumber, p.id + '-' + kind);
+        a.getService(S.AccessoryInformation).setCharacteristic(C.Manufacturer, 'Garage Door and Bolt Coordinator')
+          .setCharacteristic(C.Model, kind === 'garage' ? 'Coordinated Garage' : 'Coordinated Bolt').setCharacteristic(C.SerialNumber, p.id + '-' + kind);
         const type = kind === 'garage' ? S.GarageDoorOpener : S.LockMechanism;
         const service = a.getService(type) ?? a.addService(type, a.displayName);
         service.setCharacteristic(C.Name, a.displayName);
-        const state = () => {
-          const e = this.runtime.entry(p.id); const s = this.runtime.status(p.id);
-          if (!s.actuationEnabled || s.state.fault || s.state.unavailable || !e.engine?.observedAt || Date.now() - e.engine.observedAt > Math.max(10000, p.timing.idlePollSeconds * 2500))
-            throw new this.api.hap.HapStatusError(this.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
-          return s.state;
-        };
-        const command = async command => {
-          const { randomUUID } = await import('node:crypto');
-          try { await this.runtime.submit(p.id, { command, requestId: randomUUID(), issuedAt: Date.now(), bootId: this.runtime.bootId }, 'homekit'); }
-          catch { throw new this.api.hap.HapStatusError(this.api.hap.HAPStatus.NOT_ALLOWED_IN_CURRENT_STATE); }
-        };
-        if (kind === 'garage') {
-          service.getCharacteristic(C.CurrentDoorState).onGet(() => this.doorState(state()));
-          service.getCharacteristic(C.TargetDoorState).onGet(() => this.doorTarget(state())).onSet(v => command(v === 0 ? 'open' : 'close'));
-          service.getCharacteristic(C.ObstructionDetected).onGet(() => { state(); return this.runtime.entry(p.id).engine.sample?.obstruction === true; });
-        } else {
-          service.getCharacteristic(C.LockCurrentState).onGet(() => state().bolt === 'locked' ? 1 : state().bolt === 'unlocked' ? 0 : 3);
-          service.getCharacteristic(C.LockTargetState).onGet(() => state().bolt === 'locked' ? 1 : 0).onSet(v => command(v === 1 ? 'lock' : 'unlock'));
-        }
-        this.active.set(uuid, { accessory: a, service, kind, id: p.id });
+        const v = { accessory: a, service, kind, id: p.id, targetGeneration: 0 };
+        this.active.set(uuid, v); this.bind(v);
+        // Seed cached and new accessories from one report, before registration.
+        // Reading runtime memory here never reads or operates hardware.
+        this.commit(v, this.report(v, this.runtime.status(p.id).state)); this.publish(v);
         if (fresh) this.api.registerPlatformAccessories('homebridge-gdoorandbolt-coordinator', 'GDoorAndBoltCoordinator', [a]);
         else this.api.updatePlatformAccessories([a]);
       }
@@ -46,46 +32,119 @@ export class CoordinatorAccessories {
     for (const [uuid,a] of removed) if (!retained.has(uuid)) { this.api.unregisterPlatformAccessories('homebridge-gdoorandbolt-coordinator', 'GDoorAndBoltCoordinator', [a]); this.active.delete(uuid); }
     this.cached.clear();
   }
-  doorState(s) { return s.phase === 'opening' || s.phase === 'unbolting' && s.target === 'open' ? 2 :
-    ['closing','bolting'].includes(s.phase) || s.phase === 'unbolting' && s.target === 'closed' ? 3 : s.phase === 'closed' ? 1 : s.phase === 'open' ? 0 : 4; }
+  fields(v) {
+    const C = this.api.hap.Characteristic;
+    return v.kind === 'garage' ? [['current', C.CurrentDoorState], ['target', C.TargetDoorState], ['obstruction', C.ObstructionDetected]] :
+      [['current', C.LockCurrentState], ['target', C.LockTargetState]];
+  }
+  failure() { return new this.api.hap.HapStatusError(this.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE); }
+  bind(v) {
+    for (const [field, type] of this.fields(v)) {
+      const c = v.service.getCharacteristic(type);
+      // Match the old publisher's synchronous GET contract. onGet awaits even
+      // a plain return value; a concurrent report can otherwise be overwritten
+      // when that earlier read completes. Remove handlers when restoring cache.
+      c.removeOnGet(); c.removeAllListeners('get');
+      c.on('get', callback => {
+        try { callback(null, this.read(v, field)); } catch (error) { callback(error); }
+      });
+      if (field === 'target') {
+        c.removeOnSet(); c.removeAllListeners('set');
+        c.on('set', (value, callback) => { void this.command(v, value, callback); });
+      }
+    }
+  }
+  fresh(id, observedAt) {
+    try {
+      const e = this.runtime.entry(id); const s = this.runtime.status(id);
+      return Boolean(s.actuationEnabled && !s.state.fault && !s.state.unavailable && observedAt &&
+        Date.now() - observedAt <= Math.max(10000, e.profile.timing.idlePollSeconds * 2500));
+    } catch { return false; }
+  }
+  read(v, field) {
+    if (!v.report?.available || !this.fresh(v.id, v.report.observedAt)) throw this.failure();
+    return v.report[field];
+  }
+  async command(v, value, callback) {
+    const generation = v.targetGeneration;
+    const command = v.kind === 'garage' ? value === 0 ? 'open' : 'close' : value === 1 ? 'lock' : 'unlock';
+    try {
+      await this.runtime.submit(v.id, { command, requestId: randomUUID(), issuedAt: Date.now(), bootId: this.runtime.bootId }, 'homekit');
+      // HAP writes the requested target after this callback. Do not let a late
+      // acknowledgement replace a newer report or a rebuilt accessory binding.
+      if (![...this.active.values()].includes(v) || !v.report?.available ||
+        v.targetGeneration !== generation && v.report.target !== value) throw this.failure();
+      if (v.report.target !== value) {
+        const report = { ...v.report, target: value, notificationKey: null };
+        // Accepted intent is preparation, not proof of physical movement.
+        if (v.kind === 'garage') report.current = value === 0 ? 2 : 3;
+        this.commit(v, report); this.publish(v);
+      }
+      callback();
+    } catch { callback(new this.api.hap.HapStatusError(this.api.hap.HAPStatus.NOT_ALLOWED_IN_CURRENT_STATE)); }
+  }
+  doorState(s) {
+    // The engine publishes its target before the pre-movement read completes.
+    // Report preparation as a coherent current/target pair, as the old
+    // controller did for unbolting; never report Open with Target Closed.
+    if (s.busy && ['open', 'closed'].includes(s.phase) && s.target && s.target !== s.phase) return s.target === 'open' ? 2 : 3;
+    return s.phase === 'opening' || s.phase === 'unbolting' && s.target === 'open' ? 2 :
+      ['closing','bolting'].includes(s.phase) || s.phase === 'unbolting' && s.target === 'closed' ? 3 : s.phase === 'closed' ? 1 : s.phase === 'open' ? 0 : 4;
+  }
   doorTarget(s) { return (s.target ?? s.phase) === 'open' ? 0 : 1; }
+  report(v, state) {
+    const observedAt = this.runtime.entry(v.id).engine?.observedAt;
+    const available = !state.fault && !state.unavailable && this.fresh(v.id, observedAt);
+    const report = { available, observedAt, notificationKey: null };
+    if (v.kind === 'garage') {
+      report.current = this.doorState(state); report.target = this.doorTarget(state); report.obstruction = state.obstruction === true;
+      if (available && ['open', 'closed'].includes(state.phase) && (!state.target || state.target === state.phase))
+        report.notificationKey = JSON.stringify([state.phase, state.openEstimated === true, state.closeEstimated === true]);
+    } else {
+      report.current = state.bolt === 'locked' ? 1 : state.bolt === 'unlocked' ? 0 : 3;
+      report.target = report.current === 3 ? v.report?.target ?? 0 : report.current;
+      if (available && report.current !== 3) report.notificationKey = String(report.current);
+    }
+    return report;
+  }
+  commit(v, report) {
+    if (v.report?.target !== report.target) v.targetGeneration = (v.targetGeneration ?? 0) + 1;
+    v.report = report;
+  }
   cancelNotification(v) {
     this.timers.clearTimeout(v.notificationTimer); v.notificationTimer = null; v.notificationKey = null;
   }
   stop() { for (const v of this.active.values()) this.cancelNotification(v); }
-  terminalKey(state) {
-    if (!['open', 'closed'].includes(state.phase) || state.fault || state.unavailable ||
-      state.target && state.target !== state.phase) return null;
-    return JSON.stringify([state.phase, state.target, state.openEstimated === true, state.closeEstimated === true]);
+  send(v, explicit) {
+    const report = v.report;
+    for (const [field, type] of this.fields(v)) {
+      const c = v.service.getCharacteristic(type);
+      if (!report.available) c.updateValue(this.failure());
+      else if (explicit && field !== 'obstruction') c.sendEventNotification(report[field]);
+      else c.updateValue(report[field]);
+    }
   }
-  reaffirmGarage(v, state, unavailable) {
-    const key = unavailable ? null : this.terminalKey(state);
-    if (key === null) { this.cancelNotification(v); return; }
-    if (key === v.notificationKey) return;
+  publish(v) {
+    const key = v.report.notificationKey;
+    if (key === null) { this.cancelNotification(v); this.send(v, false); return; }
+    if (key === v.notificationKey) { this.send(v, false); return; }
     this.cancelNotification(v); v.notificationKey = key;
-    const C = this.api.hap.Characteristic;
-    const send = fresh => {
-      // A real terminal state only. This does not invoke onSet, operate any
-      // hardware, or manufacture an intermediate state to provoke an event.
-      const value = fresh.phase === 'open' ? 0 : 1;
-      v.service.getCharacteristic(C.TargetDoorState).sendEventNotification(value);
-      v.service.getCharacteristic(C.CurrentDoorState).sendEventNotification(value);
-    };
-    send(state);
+    // One publication method per field, current then target, for both tiles.
+    // Restore the old bolt's three explicit reports at two-second intervals.
+    // Ordinary runtime observations continue reconciliation after the budget.
+    this.send(v, true);
     let remaining = 2;
     const repeat = () => {
-      if (v.notificationKey !== key) return;
       v.notificationTimer = null;
-      let status; let e;
-      // A profile rebuild can remove the entry before accessory sync runs.
-      try { status = this.runtime.status(v.id); e = this.runtime.entry(v.id); }
+      let status; let live;
+      try { status = this.runtime.status(v.id); live = this.report(v, status.state); }
       catch { this.cancelNotification(v); return; }
-      const observedAt = e.engine?.observedAt;
-      if (!status.actuationEnabled || status.state.busy || this.terminalKey(status.state) !== key ||
-        !observedAt || Date.now() - observedAt > Math.max(10000, e.profile.timing.idlePollSeconds * 2500)) {
+      if (v.notificationKey !== key || v.report.notificationKey !== key || !this.fresh(v.id, v.report.observedAt) ||
+        live.notificationKey !== key || !live.available || v.kind === 'garage' && status.state.busy ||
+        live.current !== v.report.current || live.target !== v.report.target) {
         this.cancelNotification(v); return;
       }
-      send(status.state);
+      this.send(v, true);
       if (--remaining > 0) schedule();
     };
     const schedule = () => { v.notificationTimer = this.timers.setTimeout(repeat, 2000); v.notificationTimer.unref?.(); };
@@ -93,22 +152,9 @@ export class CoordinatorAccessories {
   }
   update(id, state) {
     if (id === null) { this.sync(); return; }
-    const C = this.api.hap.Characteristic;
-    for (const v of this.active.values()) if (v.id === id) {
-      const unavailable = !this.runtime.status(id).actuationEnabled || state.fault || state.unavailable;
-      const failure = new this.api.hap.HapStatusError(this.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
-      if (v.kind === 'garage') {
-        v.service.updateCharacteristic(C.ObstructionDetected, state.obstruction === true ? true : unavailable ? failure : false);
-        if (state.target || ['open', 'closed'].includes(state.phase)) v.service.updateCharacteristic(C.TargetDoorState, this.doorTarget(state));
-        v.service.updateCharacteristic(C.CurrentDoorState, unavailable ? failure : this.doorState(state));
-        this.reaffirmGarage(v, state, unavailable);
-      } else {
-        // Garage operations also move the bolt. Keep HomeKit's target in sync
-        // with the reported relay state instead of leaving a stale "locking"
-        // target behind after the garage has retracted the bolt.
-        v.service.updateCharacteristic(C.LockCurrentState, unavailable ? failure : state.bolt === 'locked' ? 1 : state.bolt === 'unlocked' ? 0 : 3);
-        if (['locked','unlocked'].includes(state.bolt)) v.service.updateCharacteristic(C.LockTargetState, unavailable ? failure : state.bolt === 'locked' ? 1 : 0);
-      }
-    }
+    const accessories = [...this.active.values()].filter(v => v.id === id);
+    // Commit both tiles before any HAP event/getter can observe this report.
+    for (const v of accessories) this.commit(v, this.report(v, state));
+    for (const v of accessories) this.publish(v);
   }
 }

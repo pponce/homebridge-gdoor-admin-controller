@@ -68,3 +68,9 @@ Sources:
 - [Coordinator 0.4.4 accessories](https://github.com/pponce/homebridge-gDoorAndBolt-coordinator/blob/f2af2ed9d236e9041359b2404c1ab432ab978dea/src/accessories.js)
 - [Coordinator 0.4.4 movement engine](https://github.com/pponce/homebridge-gDoorAndBolt-coordinator/blob/f2af2ed9d236e9041359b2404c1ab432ab978dea/src/engine.js)
 - [Coordinator 0.4.3 accessories](https://github.com/pponce/homebridge-gDoorAndBolt-coordinator/blob/8cc520a1e53c8487e57a893d02a970f452441a4a/src/accessories.js)
+
+## Version 0.4.5 correction
+
+The comparison above describes 0.4.4. Version 0.4.5 implements committed reporting snapshots and synchronous callback GET handlers, following the old publisher. HAP's onGet path awaits the handler and then stores its result; a read started before a newer report can therefore store the earlier value after that report. The callback path stores a synchronous read before returning, so a later report remains authoritative. The actual-HAP test explicitly reproduces the old overwrite and tests the corrected garage and lock paths. This is a reproducible race, but owner testing is still needed to determine whether it resolves the reported Apple Home display regression.
+
+Both tiles now use current-then-target reports with bounded explicit reaffirmation (three total, two seconds apart). Ordinary fresh observations continue reconciliation. GET answers use the same committed snapshot as publication; initialization seeds restored accessories, preparation reports coherent current/target values, and delayed SET callbacks cannot replace newer opposite targets. No HTTP Webhooks dependency or hardware behavior changes are involved. Five configurable reporting controls from the original controller are still not exposed; fixed reporting defaults are used in this correction.
