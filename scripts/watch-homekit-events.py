@@ -108,7 +108,65 @@ def value_label(field, value):
     return values.get(value, "unknown")
 
 
-def watch(storage, seconds):
+def reporting_view(snapshot, labels):
+    """Project only this diagnostic's documented fields; never print raw responses."""
+    tiles = []
+    for tile in snapshot.get("tiles", []):
+        if tile.get("controllerId") not in labels:
+            continue
+        fields = []
+        for row in tile.get("fields", []):
+            field = row.get("field")
+            if field not in ("doorCurrent", "doorTarget", "boltCurrent", "boltTarget", "obstruction"):
+                continue
+            fields.append({key: row.get(key) for key in ("field", "reported", "cached", "status", "supportsEvents", "subscribers")})
+        tiles.append({"garage": labels[tile["controllerId"]], "kind": tile.get("kind"),
+                      "available": tile.get("available"), "fields": fields})
+    clients = []
+    for client in snapshot.get("clients", []):
+        row = {key: client.get(key) for key in ("id", "paired", "requestInProgress", "writtenBytes", "socketWritable")}
+        for key in ("subscriptions", "queued"):
+            row[key] = [{"garage": labels[item["controllerId"]], "field": item.get("field"),
+                         **({"value": item.get("value")} if key == "queued" else {})}
+                        for item in client.get(key, []) if item.get("controllerId") in labels]
+        clients.append(row)
+    return {"connectionInspection": snapshot.get("connectionInspection"), "truncated": snapshot.get("truncated"),
+            "tiles": tiles, "clients": clients}
+
+
+def watch_reporting(port, authorization, controllers, seconds):
+    labels = {p["id"]: "Garage %d" % (i + 1) for i, p in enumerate(controllers)}
+    started = time.monotonic()
+    previous = None
+    sequence = None
+    print("READY: keep Home open and test one indoor-button open/close cycle.\n"
+          "If Home stays Closing, wait 10 seconds, then leave and re-enter Home once.\n"
+          "Observing existing HomeKit connections only; no new HAP subscriber or movement command.", flush=True)
+    while time.monotonic() - started < seconds:
+        response = get_json(port, "/v1/homekit-reporting", authorization)
+        snapshot = response["reporting"]
+        if snapshot.get("schema") != 1:
+            raise CaptureError("Unsupported reporting diagnostic.")
+        if sequence is None:
+            print("Runtime versions:", json.dumps({key: snapshot.get(key) for key in ("homebridgeVersion", "hapVersion")}), flush=True)
+            sequence = max([e.get("sequence", 0) for e in snapshot.get("events", [])] or [0])
+        view = reporting_view(snapshot, labels)
+        if view != previous:
+            print("%7.2fs REPORT %s" % (time.monotonic() - started, json.dumps(view)), flush=True)
+            previous = view
+        for event in snapshot.get("events", []):
+            if event.get("sequence", 0) <= sequence:
+                continue
+            sequence = event["sequence"]
+            if event.get("controllerId") not in labels:
+                continue
+            row = {key: event.get(key) for key in ("kind", "field", "value", "explicit", "client", "subscribers") if key in event}
+            row["garage"] = labels[event["controllerId"]]
+            print("%7.2fs TRACE  %s" % (time.monotonic() - started, json.dumps(row)), flush=True)
+        time.sleep(min(1, max(0, seconds - (time.monotonic() - started))))
+
+
+def watch(storage, seconds, reporting=False):
     root = storage / "gdoorandbolt-coordinator"
     saved = json.loads((root / "profiles.json").read_text())
     identity = json.loads((root / "identity.json").read_text())
@@ -117,13 +175,19 @@ def watch(storage, seconds):
     if len(platforms) != 1:
         raise CaptureError("Expected one coordinator platform in this Homebridge storage.")
     platform = platforms[0]
-    bridge = {**config["bridge"], **platform.get("_bridge", {})}
-    port, pin = bridge["port"], bridge["pin"]
     management_port = platform.get("managementPort") or 27773
     authorization = "Bearer " + identity["token"]
     controllers = saved["configuration"]["controllers"]
     info = get_json(management_port, "/v1/identity", authorization)
     print("Running version:", info.get("pluginVersion", "unknown"), flush=True)
+    if reporting:
+        try:
+            watch_reporting(management_port, authorization, controllers, seconds)
+        except KeyboardInterrupt:
+            pass
+        return
+    bridge = {**config["bridge"], **platform.get("_bridge", {})}
+    port, pin = bridge["port"], bridge["pin"]
     # Only one HAP read, to discover IDs. No polling of HAP values during capture:
     # reading them repeatedly could hide the missing-push problem under investigation.
     selected = select_tiles(get_json(port, "/accessories", pin), controllers)
@@ -191,6 +255,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--storage", type=Path, help="Homebridge storage directory (auto-detected by default)")
     parser.add_argument("--seconds", type=int, default=180)
+    parser.add_argument("--reporting", action="store_true", help="Read the plugin's paired-connection diagnostic instead of creating a HAP subscriber (0.4.7+)")
     args = parser.parse_args()
     try:
         if not 10 <= args.seconds <= 600:
@@ -203,7 +268,7 @@ def main():
             if len(roots) != 1:
                 raise CaptureError("Storage was not uniquely detected; supply --storage.")
             storage = roots.pop()
-        watch(storage, args.seconds)
+        watch(storage, args.seconds, args.reporting)
     except CaptureError as error:
         print("Capture stopped:", str(error), flush=True)
         return 1

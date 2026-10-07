@@ -69,3 +69,18 @@ test('motion, settings and maintenance writes cannot succeed in milestone 1', as
   assert.equal((await request(port, '/v1/controllers/example-garage?token=anything')).status, 404);
   assert.equal((await request(port, '/v1/controllers/missing')).status, 404);
 });
+
+test('HomeKit reporting inspection is authenticated, read-only and isolates diagnostic failures', async t => {
+  let calls=0; let fail=false;
+  const server=createManagementServer({identity:{token,instanceId},configuration,reporting:()=>{
+    calls++; if(fail)throw Error('private-internals'); return {schema:1,tiles:[],clients:[],events:[]};
+  }});
+  const port=await listenLocal(server,0); t.after(()=>closeServer(server));
+  const path='/v1/homekit-reporting';
+  assert.equal((await request(port,path,{headers:{Authorization:'wrong'}})).status,401);
+  assert.equal((await request(port,path,{headers:{Origin:'https://example.invalid'}})).status,403);
+  assert.equal((await request(port,path,{method:'POST'})).status,405); assert.equal(calls,0);
+  const ok=await request(port,path); assert.equal(ok.status,200); assert.equal(ok.body.reporting.schema,1);
+  fail=true; const unavailable=await request(port,path); assert.equal(unavailable.status,503);
+  assert.deepEqual(unavailable.body,{error:'reporting_inspection_unavailable'});
+});

@@ -26,6 +26,7 @@ POST bodies are JSON, include the pinned `instanceId`, and contain exactly the f
 | POST /v1/controllers/{id}/commission | revision, previousControllerStopped, physicalSetupReviewed, recover | status |
 | POST /v1/controllers/{id}/commands | command, requestId, issuedAt, bootId | operation |
 | GET /v1/activity | — | events |
+| GET /v1/homekit-reporting (optional, 0.4.7+) | — | reporting |
 | GET /v1/guard | — | ready |
 | GET /v1/maintenance | — | maintenance (null or transaction) |
 | POST /v1/maintenance/preflight,pause,verify,resume,complete | transactionId, physicalCheck, gateway | acknowledged |
@@ -57,3 +58,11 @@ Commands are open, close, lock or unlock. requestId is 16–64 alphanumeric/hyph
 Before deCONZ PIN submission, the admin requests a one-use receipt scoped to gateway/alarm/controller. After deCONZ's outcome, it forwards only accepted/rejected/unknown, disarm/arm_away/arm_stay/arm_night and elapsed seconds. The PIN never reaches this API. The two-second receipt captures eligibility and the operation epoch. Accepted disarm additionally reads the configured alarm's fresh disarmed state; rejected closes. Busy, late, changed-epoch and unknown outcomes do not move anything. Both paths use the primary opener.
 
 Maintenance pause is durable and disables every input. The same transaction ID must verify, resume and complete; pause/complete are idempotent for that transaction. Resume does not release the pause: only complete does. A registered Homebridge maintenance participant requires preparation while closed/locked, then bolt-test and unchanged-door confirmations after its service restarts. Read checks never perform those physical tests. Restart preserves maintenance. Missing/unavailable participants cannot acknowledge completion. Generic admin transaction recovery never repeats an uncertain deCONZ write.
+
+## Optional HomeKit reporting diagnostic
+
+`GET /v1/homekit-reporting` is an authenticated, loopback-only, read-only diagnostic; the ordinary API version and capability contract are unchanged. Older/fixture servers may return 404. Unsupported inspection returns 503 `reporting_inspection_unavailable`; other methods return 405. Administrators do not require this endpoint for operation.
+
+`reporting` has schema 1, optional runtime version strings, connectionInspection (available/unavailable), truncated, tiles, clients and events. Tiles contain controllerId, kind, availability and fields with reported/cached scalar values, HAP status, event support, AID/IID and anonymous subscriber labels. Clients contain anonymous process-local labels, paired booleans, subscriptions and queued events limited to coordinator characteristics, request-in-progress state and socket byte counters. Events hold at most 200 recent GET/error/publication summaries; publication rows include the subscribers present when reporting. Inspection limits client/queue output and reports truncation. Null indicates unavailable information.
+
+No hardware read, HAP GET/SET, event subscription, state refresh, or configuration write occurs on this endpoint. No credentials, pairing identities, addresses or unrelated accessory data are exposed. Guarded HAP internal reads are diagnostic only; unavailable fields must not be interpreted as zero subscribers or successful delivery. A paired subscriber/empty queue/byte-count increase does not establish that Apple Home rendered a value.

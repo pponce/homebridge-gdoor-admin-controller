@@ -35,7 +35,8 @@ export class CoordinatorPlatform {
     }
     const diagnostics = new Diagnostics(this.runtime.configuration, () => readCredentials(storagePath));
     const probe = diagnostics.probe.bind(diagnostics); diagnostics.probe = id => { diagnostics.configuration = this.runtime.configuration; return probe(id); };
-    this.server = createManagementServer({ identity, configuration: this.configuration, diagnostics, runtime: this.runtime });
+    this.server = createManagementServer({ identity, configuration: this.configuration, diagnostics, runtime: this.runtime,
+      reporting: () => this.accessories?.reporting.snapshot() ?? { schema: 1, connectionInspection: 'unavailable', tiles: [], clients: [], events: [] } });
     this.server.on('error', () => this.log.error('Coordinator management API error.'));
     await listenLocal(this.server, this.configuration.managementPort);
     if (this.stopped) { await closeServer(this.server); await this.runtime.stop(); return; }

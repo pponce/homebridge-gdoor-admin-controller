@@ -100,6 +100,15 @@ async function main() {
       const listener=new HapSubscription(hapOrigin,'031-45-154',garage.aid,characteristic.iid);
       subscriptions.push(listener);listener.on('value',value=>garageEvents.push({name,value,at:Date.now()}));listener.start();await until(async()=>listener.ready);
     }
+    const reporting=(await management('/v1/homekit-reporting')).reporting;
+    assert.equal(reporting.connectionInspection,'available','Actual Homebridge connection inventory must be inspectable');
+    assert.ok(reporting.clients.some(c=>!c.paired&&['doorCurrent','doorTarget','boltCurrent','boltTarget'].every(field=>c.subscriptions.some(s=>s.field===field))), 'Identify the existing four-field diagnostic subscriber');
+    assert.ok(reporting.tiles.every(t=>t.fields.every(f=>f.supportsEvents===true)));
+    assert.equal(JSON.stringify(reporting).includes('031-45-154'),false);
+    // Reading the diagnostic must not produce another HomeKit GET or subscriber.
+    const beforeDiagnosticReads=reporting.events.filter(e=>e.kind==='get').map(e=>e.sequence);
+    const afterDiagnostic=(await management('/v1/homekit-reporting')).reporting;
+    assert.deepEqual(afterDiagnostic.events.filter(e=>e.kind==='get').map(e=>e.sequence),beforeDiagnosticReads);
     const readCharacteristics=async()=>{
       const ids=garage.aid+'.'+current.iid+','+garage.aid+'.'+target.iid+','+bolt.aid+'.'+lockCurrent.iid;
       const result=await fetch(hapOrigin+'/characteristics?id='+ids,{headers:{Authorization:'031-45-154'},signal:AbortSignal.timeout(3000)});
@@ -147,6 +156,9 @@ async function main() {
       await assertTerminalEvents(value,since);
     }
     assert.deepEqual(hardware.state.writes.slice(4),[['bolt',false],['motor',true],['motor',false],['motor',true],['motor',false],['bolt',true]]);
+    const finalTrace=(await management('/v1/homekit-reporting')).reporting;
+    assert.ok(finalTrace.events.some(e=>e.kind==='publish'&&e.field==='doorCurrent'&&e.value===1));
+    assert.ok(finalTrace.events.some(e=>e.kind==='get'&&e.field==='doorCurrent'&&e.client?.paired===false));
     assert.equal(logs.includes(identity.token), false);
     assert.equal(captureOutput.includes(identity.token),false);
     assert.equal(captureOutput.includes('031-45-154'),false);

@@ -2,6 +2,9 @@ import importlib.util
 import json
 from pathlib import Path
 import unittest
+from unittest.mock import patch
+import contextlib
+import io
 
 spec = importlib.util.spec_from_file_location("capture", Path(__file__).resolve().parents[1] / "scripts/watch-homekit-events.py")
 capture = importlib.util.module_from_spec(spec)
@@ -9,6 +12,26 @@ spec.loader.exec_module(capture)
 
 
 class CaptureTests(unittest.TestCase):
+    def test_reporting_view_excludes_unrelated_fields_and_uses_anonymous_garage_names(self):
+        view = capture.reporting_view({"tiles": [{"controllerId": "private-id", "kind": "garage", "available": True,
+            "private": "SECRET", "fields": [{"field": "doorCurrent", "cached": 1, "reported": 1, "secret": "SECRET"}]}],
+            "clients": [{"id": "connection-1", "paired": True, "username": "SECRET", "subscriptions": [
+                {"controllerId": "private-id", "field": "doorCurrent"}, {"controllerId": "unrelated", "field": "private"}]}]},
+            {"private-id": "Garage 1"})
+        self.assertNotIn("SECRET", json.dumps(view))
+        self.assertNotIn("private-id", json.dumps(view))
+        self.assertEqual(view["clients"][0]["subscriptions"], [{"garage": "Garage 1", "field": "doorCurrent"}])
+
+    def test_reporting_mode_only_reads_management_and_does_not_subscribe_to_hap(self):
+        snapshot = {"reporting": {"schema": 1, "tiles": [], "clients": [], "events": []}}
+        output = io.StringIO()
+        with patch.object(capture, "get_json", return_value=snapshot) as request, \
+             patch.object(capture.time, "monotonic", side_effect=[0, 0, 0, 0, 2]), \
+             patch.object(capture.time, "sleep"), contextlib.redirect_stdout(output):
+            capture.watch_reporting(12345, "PRIVATE-TOKEN", [], 1)
+        request.assert_called_once_with(12345, "/v1/homekit-reporting", "PRIVATE-TOKEN")
+        self.assertNotIn("PRIVATE-TOKEN", output.getvalue())
+
     def test_fragmented_ack_and_multiple_characteristics_in_one_event(self):
         payload = {"characteristics": [{"aid": 2, "iid": 10, "value": 1}, {"aid": 3, "iid": 12, "value": 1}]}
         body = json.dumps(payload).encode()

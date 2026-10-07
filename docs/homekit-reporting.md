@@ -92,3 +92,20 @@ Sources in the original repository at `7d4e0f04e4ef3631e721e571adb292cf11988e87`
 - [Recorded successful installation and trials](https://github.com/pponce/garageDoorController/blob/7d4e0f04e4ef3631e721e571adb292cf11988e87/notes/current-status.md#live-notification-update-verified-two-tile-cycles-successful-2026-09-20-utc)
 
 The owner's working original stack is the behavior reference for future regressions. Trace its applicable implementation and deployment record before proposing changes, preserve working semantics, and test deliberate differences. Do not ask the owner to reconstruct recorded setup decisions.
+
+## Existing HomeKit connections — diagnostic 0.4.7
+
+The owner tested 0.4.6 and the garage still stayed Closing. That release did not resolve the display issue. The following diagnostic observes the existing connections rather than adding another HAP subscriber:
+
+```bash
+{
+  cd "$HOME/devProjects/homebridge-gDoorAndBolt-coordinator" &&
+  sudo python3 -B scripts/watch-homekit-events.py --reporting --seconds 180
+}
+```
+
+This requires 0.4.7 installed and running. Keep Home open, use the indoor button for one open/close cycle, and wait ten seconds if the display stays Closing. Then leave Home and re-enter it once while the capture continues. Ctrl+C ends the capture. Share the printed output. No extra garage/bolt action is needed after that cycle.
+
+`TRACE` identifies publication, successful reads and read errors. Each publication records anonymous subscribers present at that moment; `paired:true` distinguishes paired HomeKit connections from local unpaired diagnostics. It does not identify which device or application owns the connection. `REPORT` compares reported values to the HAP cache and shows event permissions, subscriptions, queued coordinator events, pending-request flags and socket byte counters. No pairing identity, address, PIN, token or unrelated accessory data is printed. Values retain HAP numbers: garage 0=Open, 1=Closed, 2=Opening, 3=Closing, 4=Stopped; lock 0=Unlocked, 1=Locked.
+
+A missing paired subscription, a cached/reported mismatch, a read returning Closing after a Closed report, and a persistent queue are different failure boundaries. The trace is intended to distinguish them. An empty queue or growing byte counter is not proof of delivery/rendering at Home. Existing HAP internals are inspected behind compatibility guards; no transport methods or subscriptions are overridden. This release changes observation only, preserving 0.4.6's reporting and movement behavior.

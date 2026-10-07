@@ -1,9 +1,11 @@
 import { randomUUID } from 'node:crypto';
+import { HomekitReporting } from './homekit-reporting.js';
 
 export class CoordinatorAccessories {
   constructor(api, identity, runtime, cached = [], timers = { setTimeout, clearTimeout }) {
     this.api = api; this.runtime = runtime; this.identity = identity;
     this.cached = new Map(cached.map(a => [a.UUID, a])); this.active = new Map(); this.timers = timers;
+    this.reporting = new HomekitReporting(this);
   }
   sync() {
     this.stop();
@@ -39,14 +41,20 @@ export class CoordinatorAccessories {
   }
   failure() { return new this.api.hap.HapStatusError(this.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE); }
   bind(v) {
+    v.characteristics = new Map();
     for (const [field, type] of this.fields(v)) {
       const c = v.service.getCharacteristic(type);
+      v.characteristics.set(field, c);
       // Match the old publisher's synchronous GET contract. onGet awaits even
       // a plain return value; a concurrent report can otherwise be overwritten
       // when that earlier read completes. Remove handlers when restoring cache.
       c.removeOnGet(); c.removeAllListeners('get');
-      c.on('get', callback => {
-        try { callback(null, this.read(v, field)); } catch (error) { callback(error); }
+      c.on('get', (callback, _context, connection) => {
+        try {
+          const value = this.read(v, field);
+          this.reporting.record('get', v, field, value, connection);
+          callback(null, value);
+        } catch (error) { this.reporting.record('get-error', v, field, null, connection); callback(error); }
       });
       if (field === 'target') {
         c.removeOnSet(); c.removeAllListeners('set');
@@ -125,9 +133,11 @@ export class CoordinatorAccessories {
     if (explicit && v.kind === 'garage') [fields[0], fields[1]] = [fields[1], fields[0]];
     for (const [field, type] of fields) {
       const c = v.service.getCharacteristic(type);
+      const previous = c.value; const forced = explicit && field !== 'obstruction';
       if (!report.available) c.updateValue(this.failure());
-      else if (explicit && field !== 'obstruction') c.sendEventNotification(report[field]);
+      else if (forced) c.sendEventNotification(report[field]);
       else c.updateValue(report[field]);
+      if (report.available && (forced || previous !== report[field])) this.reporting.record('publish', v, field, report[field], null, forced);
     }
   }
   publish(v) {

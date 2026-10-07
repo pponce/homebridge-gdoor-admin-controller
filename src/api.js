@@ -6,7 +6,7 @@ import { Fault, requireValue } from './fault.js';
 
 export const PLUGIN_VERSION = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
 export const CAPABILITIES = Object.freeze({ inventory: true, routingInventory: true, diagnostics: false, settingsWrite: false, motion: false, maintenance: false, keypad: false });
-export function createManagementServer({ identity, configuration, diagnostics, runtime }) {
+export function createManagementServer({ identity, configuration, diagnostics, runtime, reporting }) {
   const expectedAuthorization = Buffer.from(`Bearer ${identity.token}`);
   const envelope = { apiVersion: 1, instanceId: identity.instanceId };
   const controllers = () => runtime ? runtime.inventory() : inventory(configuration);
@@ -20,6 +20,11 @@ export function createManagementServer({ identity, configuration, diagnostics, r
       if (given.length !== expectedAuthorization.length || !timingSafeEqual(given, expectedAuthorization)) return send(401, { error: 'unauthorized' });
       if (request.headers.origin !== undefined) return send(403, { error: 'origin_not_allowed' });
       if (request.headers.host !== `127.0.0.1:${server.address().port}`) return send(403, { error: 'host_not_allowed' });
+      if (request.url === '/v1/homekit-reporting' && reporting) {
+        if (request.method !== 'GET') return send(405, { error: 'read_only_diagnostic' });
+        try { return send(200, { ...envelope, reporting: reporting() }); }
+        catch { return send(503, { error: 'reporting_inspection_unavailable' }); }
+      }
       if (runtime && request.url?.startsWith('/v1/')) {
         if (request.method === 'GET') {
           if (request.url === '/v1/settings') return send(200, { ...envelope, settings: runtime.settings() });

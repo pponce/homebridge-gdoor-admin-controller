@@ -1,6 +1,6 @@
 # Development status
 
-2026-10-06: owner testing has exposed HomeKit reporting and physical-input failures. Physical acceptance is not established. The owner has stopped the old services and enabled the new coordinator. The initial disabled-install instructions below describe the earlier cutover stage; the active work is the garage-only 0.4.6 reporting experiment at the end of this document.
+2026-10-06: owner testing has exposed HomeKit reporting and physical-input failures. Physical acceptance is not established. The owner has stopped the old services and enabled the new coordinator. The initial disabled-install instructions below describe the earlier cutover stage; the active work is the 0.4.7 reporting diagnostic at the end of this document.
 
 ## Validated source
 
@@ -143,3 +143,13 @@ All 119 local Node tests and the package dry-run pass. CI [37564179400](https://
 Owner installation sequence is explicitly `sudo hb-service stop`, `sudo hb-service add homebridge-gdoorandbolt-coordinator@0.4.6`, then `sudo hb-service start`. Complete SSH Git update and npm verification first; print authentication URLs without launching the browser and allow ten minutes for registry verification. On installation failure leave Homebridge stopped. Keep the original controller/web services stopped.
 
 The owner also requested a later configuration UX update using `mathiashornbek/homebridge-roborock-matter` as the reference: retain current tabs/features, adopt its colors/button treatment, successful-save toast, and a working bottom Save control with validation indication alongside the custom save action. This is deferred until the HomeKit status test is resolved; no framework or design has yet been selected or copied.
+
+## Owner-tested 0.4.6 still Closing; diagnostic 0.4.7
+
+The owner reports the same lingering garage Closing display after 0.4.6. Changing terminal notification order is not a sufficient fix. The bolt behavior remains accepted and unchanged. Re-entering Home immediately shows the correct state, consistent with a refresh/read correcting stale live state, but the actual Home read sequence has not yet been captured. Do not attribute this to iOS or claim that a local diagnostic subscriber proves Apple Home received/applied the event.
+
+Registration source was checked: static Plus and dynamic coordinator accessories both become Homebridge HAP accessories bridged through the same notification implementation. No registration fix was established. The next step is evidence from existing paired HomeKit connections, rather than another notification-order or timing experiment.
+
+Version 0.4.7 adds a bounded, in-memory, read-only reporting trace and optional authenticated GET /v1/homekit-reporting. It records published values with subscribers at publication time, GET values with anonymous client labels, reported versus HAP cached values, event permissions, current paired/unpaired subscriptions, pending coordinator events, request-in-progress state and socket byte counters. No addresses, pairing identities, keys, names or unrelated accessory values are retained or returned. Guarded reads of HAP internals may report unavailable on unsupported versions; no HAP method, socket, subscription or transport is replaced or modified. Queue/counter observations do not prove remote rendering.
+
+The existing capture script's --reporting mode reads only the management API; it does not create a HAP subscriber or trigger characteristic GETs. The owner will keep Home visible for an indoor-button cycle, wait ten seconds if stuck, then leave and re-enter Home once so the trace can capture any fresh reads. API documentation is synchronized with the administrator; its behavior and install do not change. This is diagnostic instrumentation, not a claimed root-cause fix. All 125 local Node tests, the package dry-run and all 16 cross-repository checks pass. CI and the owner capture remain pending.
