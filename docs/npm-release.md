@@ -17,7 +17,11 @@ The exact archive and a publication receipt are retained in `.release/0.4.6/`, e
 The publication script does not install a plugin, restart a service or move hardware. After it prints `RESULT: npm publication verified`, install on the Homebridge host:
 
 ```sh
+sudo hb-service stop
 sudo hb-service add homebridge-gdoorandbolt-coordinator@0.4.6
+sudo hb-service start
 ```
+
+Keep that stop → install → start order. The combined owner script stops on an install failure and leaves Homebridge stopped; it only restarts after a successful install. Git update and npm publication/verification complete before stopping Homebridge.
 
 For an already enabled coordinator, update only while the garage is stationary, closed and locked, with controls unused. Keep the old movement/input services stopped. The update retains the enabled profile; it does not require adding the garage again. Then retest indoor open/close, accepted/rejected physical PIN outcomes and both HomeKit directions, checking final garage and bolt status. For a new installation follow [owner-test.md](owner-test.md), keeping the garage disabled until the old services are stopped. Source validation, npm publication, host installation and physical acceptance are separate milestones.
