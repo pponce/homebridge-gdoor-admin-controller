@@ -1,6 +1,6 @@
 # Configuration save experience
 
-Version 0.4.12 corrects the garage-card and key-management behavior reported after 0.4.11. Checks and enablement are inline inside the garage card, with no fourth setup tab. New-key fields precede saved names and explicit Replace/Delete actions.
+Version 0.4.13 adds reusable device connections in General and named selectors during garage setup. Existing addresses and saved-key references import automatically. It retains 0.4.12's inline garage checks, accurate per-garage draft status and explicit key management.
 
 ## Reference and framework
 
@@ -59,6 +59,8 @@ If managed apply succeeds but native persistence fails, the UI states which step
 Private-key saving clears the secret field and preserves unsaved configuration and tab selection. Its success toast does not mark that draft saved or enable native Save. Key replacement still uses the existing commissioning reset policy. Homebridge's theme classes are observed for live light/dark changes.
 
 ## Validation
+
+Version 0.4.13 passed all five jobs in [CI run 37687401074](https://github.com/pponce/homebridge-gDoorAndBolt-coordinator/actions/runs/37687401074), implementation c3291563c280f2213e566a01eda1243e10261361: 154 tests on Node 22/24, actual Homebridge 2.0.0/2.4.0, actual UI IPC and desktop Chromium/mobile WebKit. A first full run also passed at a5da00bb8e470efa16df2ba8307c7fe0bbdac7b2; the final run additionally verifies that pending connection forms invalidate older reviews. Scenarios cover imported connections, inline private-key creation, selection during new-garage setup, confirmed door counts, shared address propagation and preservation of enablement for metadata-only edits. All 29 administrator client/adapter/install checks and 16 real cross-repository checks pass. The administrator's unchanged retained-application browser workflow is separate from these coordinator release gates. Owner-host acceptance and npm publication remain separate steps.
 
 Version 0.4.12 passed all five jobs in [CI run 37680295430](https://github.com/pponce/homebridge-gDoorAndBolt-coordinator/actions/runs/37680295430), implementation edf183c61e48a998b603d6c01989be754185f04f: 147 tests on Node 22/24, both supported Homebridge versions, actual UI server IPC, desktop Chromium and mobile WebKit. Regression coverage starts with an enabled garage, adds/removes drafts with native confirm unavailable, preserves other edits, restores clean Save when appropriate, retains inline checks and tests key creation/deletion without enablement loss. A first-run browser failure also exposed a redundant blur rebuild that swallowed a garage-card click; that was corrected before the passing run. Real outer-modal acceptance still belongs to the owner.
 
