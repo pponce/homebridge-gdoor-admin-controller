@@ -1,6 +1,6 @@
-# Release 0.4.16 preparation
+# Release 0.4.16
 
-Adds the Debug tab after Garage doors, with temporary recording controls, status snapshots and sanitized downloads. Includes 0.4.15 configured-connection selection. Recording remains OFF at startup; movement and reporting behavior are unchanged. Browser/runtime validation pending.
+Adds the Debug tab after Garage doors, with temporary recording controls, status snapshots and sanitized downloads. Includes 0.4.15 configured-connection selection. Recording remains OFF at startup; movement and reporting behavior are unchanged. All five browser/runtime CI jobs passed in run 37695140948. Source is ready for maintainer publication; npm publication and owner installation remain separate.
 
 # Release 0.4.15
 
