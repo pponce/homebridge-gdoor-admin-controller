@@ -59,6 +59,19 @@ test('closed sensor wins a race with an interruption and no pulse follows closur
   assert.equal(f.state.pulses, 1); assert.equal(f.state.locked, true);
 });
 
+test('relay closing with zero wait carries its pending unlock through travel without repeating OFF', async () => {
+  const f=fixture('not-closed');await f.engine.initialize();f.state.locked=true;f.state.closeAt=400;
+  f.engine.bolt.write=async value=>{
+    f.state.writes.push(['bolt',value,f.state.now]);
+    if(value)f.state.locked=true;else f.state.retractAt=f.state.now+150;
+  };
+  f.hook((_e,s)=>{if(s.retractAt!==undefined&&s.now>=s.retractAt){s.locked=false;delete s.retractAt;}});
+  assert.equal((await f.engine.execute('close',f.options)).phase,'closed');
+  assert.deepEqual(f.state.writes.slice(0,2),[['bolt',false,0],['relay',true,0]]);
+  assert.equal(f.state.writes.filter(([kind,value])=>kind==='bolt'&&value===false).length,1);
+  assert.equal(f.state.pulses,1);assert.equal(f.state.locked,true);
+});
+
 test('idle read outages recover without movement; active outages remain latched', async () => {
   const f = fixture(); await f.engine.initialize(); f.state.outage = true;
   assert.equal((await f.engine.observe()).phase, 'unavailable'); assert.equal(f.state.writes.length, 0);

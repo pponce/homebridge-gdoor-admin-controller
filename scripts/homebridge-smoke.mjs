@@ -118,7 +118,7 @@ async function main() {
       await until(async()=>lockTargets.at(-1)===(value===0?0:1));
       await assertTerminalEvents(value,since);
     }
-    assert.deepEqual(hardware.state.writes,[['bolt',false],['door','open'],['bolt',false],['door','close'],['bolt',true]]);
+    assert.deepEqual(hardware.state.writes,[['bolt',false],['door','open'],['door','close'],['bolt',true]]);
     for(const [value,phase]of [[0,'open'],[1,'closed']]){
       await until(async()=>(await management(endpoint+'/state')).status.inputStates[button.id]==='ready');
       // Allow the live-source context to settle after the previous worker ends.
@@ -127,7 +127,7 @@ async function main() {
       await until(async()=>{const s=(await management(endpoint+'/state')).status.state;return s.phase===phase&&!s.busy;});
       await assertTerminalEvents(value,since);
     }
-    assert.deepEqual(hardware.state.writes.slice(5),[['bolt',false],['motor',true],['motor',false],['bolt',false],['motor',true],['motor',false],['bolt',true]]);
+    assert.deepEqual(hardware.state.writes.slice(4),[['bolt',false],['motor',true],['motor',false],['motor',true],['motor',false],['bolt',true]]);
     assert.equal(logs.includes(identity.token), false);
     child.kill('SIGTERM');
     await until(async () => child.exitCode !== null || child.signalCode !== null, 10000);

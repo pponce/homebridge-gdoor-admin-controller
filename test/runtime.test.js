@@ -42,7 +42,7 @@ test('production runtime begins non-actuating, commissions through read-only che
   assert.equal(f.runtime.status(f.id).state.phase, 'open');
   await f.runtime.submit(f.id, f.command('close')); await f.runtime.entry(f.id).job;
   assert.equal(f.runtime.status(f.id).state.phase, 'closed');
-  assert.deepEqual(f.hardware.state.writes, [['bolt', false], ['door', 'open'], ['bolt', false], ['door', 'close'], ['bolt', true]]);
+  assert.deepEqual(f.hardware.state.writes, [['bolt', false], ['door', 'open'], ['door', 'close'], ['bolt', true]]);
 });
 test('review/apply enforces revisions, invalidates changed commissioning and does not move hardware', async t => {
   const f = await fixture(t); await f.commission(); const before = f.runtime.settings();

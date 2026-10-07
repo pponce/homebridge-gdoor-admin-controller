@@ -91,14 +91,14 @@ test('already retracted open still waits; fully-open sensor mode never uses time
   assert.equal(engine.state.fault, 'door_open_timeout'); assert.equal(engine.state.openEstimated, false);
 });
 
-test('close always refreshes OFF, uses its own delay and bolts after continuous closed stability', async () => {
+test('close skips an already-OFF write, retains configured settling and bolts after continuous closed stability', async () => {
   const { engine, model } = fixture({ model: { door: 'not-closed', locked: false },
     door: (_command, m) => { m.closeAt = m.now + 80; },
     tick: m => { if (m.closeAt && m.now >= m.closeAt) m.door = 'closed'; } });
   await engine.initialize(); await engine.execute('close');
   assert.equal(engine.state.phase, 'closed'); assert.equal(engine.state.closeEstimated, false);
-  assert.deepEqual(model.writes.map(x => x.slice(0, 2)), [['bolt', false], ['door', 'close'], ['bolt', true]]);
-  assert.equal(model.writes[1][2], 40); assert.equal(model.writes[2][2], model.closeAt + 20);
+  assert.deepEqual(model.writes.map(x => x.slice(0, 2)), [['door', 'close'], ['bolt', true]]);
+  assert.equal(model.writes[0][2], 40); assert.equal(model.writes[1][2], model.closeAt + 20);
   assert.equal(model.now, model.closeAt + 40); // No obsolete second pre-bolt wait.
 });
 
@@ -114,7 +114,7 @@ test('a re-extension during close sends one corrective OFF without another motor
     tick: m => { if (m.now === 60) m.locked = true; if (m.now >= 100) m.door = 'closed'; } });
   await engine.initialize(); await engine.execute('close');
   assert.equal(engine.state.phase, 'closed');
-  assert.deepEqual(model.writes.map(x => x.slice(0, 2)), [['bolt', false], ['door', 'close'], ['bolt', false], ['bolt', true]]);
+  assert.deepEqual(model.writes.map(x => x.slice(0, 2)), [['door', 'close'], ['bolt', false], ['bolt', true]]);
 });
 
 test('a stuck bolt during close times out with no retry or second motor command', async () => {
@@ -123,7 +123,78 @@ test('a stuck bolt during close times out with no retry or second motor command'
   await engine.initialize(); await engine.execute('close');
   assert.equal(engine.state.fault, 'bolt_retract_timeout');
   assert.equal(model.writes.filter(x => x[0] === 'door').length, 1);
-  assert.equal(model.writes.filter(x => x[0] === 'bolt').length, 2);
+  assert.equal(model.writes.filter(x => x[0] === 'bolt').length, 1);
+});
+
+test('zero-wait closing uses one recent assembly check before the motor command', async () => {
+  const {engine,model}=fixture({model:{door:'not-closed',locked:false},timing:{closeRetractSettleMs:0}});
+  await engine.initialize();model.reads=0;let readsAtMotor;
+  engine.door.write=async(command,{beforeWrite})=>{
+    await beforeWrite();assert.equal(model.journal.inProgress,true);assert.equal(model.locked,false);
+    readsAtMotor=model.reads;model.writes.push(['door',command,model.now]);model.door='closed';
+  };
+  await engine.execute('close');
+  assert.equal(readsAtMotor,1);assert.deepEqual(model.writes[0],['door','close',0]);
+  assert.equal(model.writes.some(([kind,value])=>kind==='bolt'&&value===false),false);
+  assert.equal(engine.state.phase,'closed');assert.equal(engine.state.fault,null);
+});
+
+test('an initially-ON bolt closes after unlock acknowledgement at zero wait, or after OFF confirmation and positive settling', async () => {
+  for(const settling of [0,20]){
+    const {engine,model}=fixture({model:{door:'not-closed',locked:false},timing:{closeRetractSettleMs:settling},
+      bolt:(locked,m)=>{if(locked)m.locked=true;else m.retractAt=m.now+30;},
+      tick:m=>{if(m.retractAt!==undefined&&m.now>=m.retractAt){m.locked=false;delete m.retractAt;}if(m.closeAt&&m.now>=m.closeAt)m.door='closed';}});
+    await engine.initialize();model.locked=true;
+    engine.door.write=async(command,{beforeWrite})=>{
+      await beforeWrite();assert.equal(model.locked,settling===0);
+      assert.equal(engine.state.bolt,settling===0?'locked':'unlocked','No fabricated OFF report');
+      assert.equal(model.now,settling===0?0:50);
+      model.writes.push(['door',command,model.now]);model.closeAt=model.now+80;
+    };
+    await engine.execute('close');
+    assert.deepEqual(model.writes.map(x=>x.slice(0,2)),[['bolt',false],['door','close'],['bolt',true]]);
+    assert.equal(engine.state.phase,'closed');assert.equal(engine.state.fault,null);
+  }
+});
+
+test('zero-wait closing never repeats a pending unlock or bolts a closed door before OFF is observed', async () => {
+  const {engine,model}=fixture({model:{door:'not-closed',locked:false},timing:{closeRetractSettleMs:0},bolt:()=>{},
+    tick:m=>{if(m.now>=20)m.door='closed';}});
+  await engine.initialize();model.locked=true;
+  engine.door.write=async(command,{beforeWrite})=>{await beforeWrite();model.writes.push(['door',command,model.now]);};
+  await engine.execute('close');
+  assert.deepEqual(model.writes.map(x=>x.slice(0,2)),[['bolt',false],['door','close']]);
+  assert.equal(engine.state.fault,'bolt_retract_timeout');
+});
+
+test('zero-wait closing does not pulse after an ambiguous unlock acknowledgement', async () => {
+  const {engine,model}=fixture({model:{door:'not-closed',locked:false},timing:{closeRetractSettleMs:0},
+    bolt:()=>{throw new Fault('bolt_write_ambiguous');}});
+  await engine.initialize();model.locked=true;await engine.execute('close');
+  assert.deepEqual(model.writes.map(x=>x.slice(0,2)),[['bolt',false]]);
+  assert.equal(engine.state.fault,'bolt_write_ambiguous');
+});
+
+test('slow motor preparation refreshes an old OFF sample and blocks a now-locked start', async () => {
+  const {engine,model}=fixture({model:{door:'not-closed',locked:false},timing:{closeRetractSettleMs:0}});
+  await engine.initialize();model.reads=0;
+  engine.door.write=async(_command,{beforeWrite})=>{
+    model.now+=1600;model.locked=true;await beforeWrite();assert.fail('must not reach actuator');
+  };
+  await engine.execute('close');
+  assert.equal(model.reads,2);assert.equal(engine.state.fault,'motor_precondition_lost');assert.deepEqual(model.writes,[]);
+});
+
+test('an extension after the initial OFF check is corrected during closing without another motor command', async () => {
+  const {engine,model}=fixture({model:{door:'not-closed',locked:false},timing:{closeRetractSettleMs:0},
+    tick:m=>{if(m.now>=40)m.door='closed';}});
+  await engine.initialize();
+  engine.door.write=async(command,{beforeWrite})=>{
+    await beforeWrite();model.writes.push(['door',command,model.now]);model.locked=true;
+  };
+  await engine.execute('close');
+  assert.deepEqual(model.writes.map(x=>x.slice(0,2)),[['door','close'],['bolt',false],['bolt',true]]);
+  assert.equal(engine.state.phase,'closed');assert.equal(engine.state.fault,null);
 });
 
 test('ambiguous motor result latches durable fault and never retries or switches route', async () => {

@@ -13,14 +13,14 @@ export class TravelEstimate {
 }
 
 // Runs inside the assembly's existing durable operation and single worker.
-export async function followInterruptedTravel(engine, direction, departing = false) {
+export async function followInterruptedTravel(engine, direction, departing = false, checked = null) {
   const e = engine;
   e.admitInterruption(false);
   e.update({ phase: direction, target: direction === 'opening' ? 'open' : 'closed', openEstimated: false, closeEstimated: false });
   const started = e.clock.now(); const deadline = started + e.timing.motionTimeoutMs;
   if (!departing) e.travel.start(direction, started);
-  await e.motorCommand(direction === 'opening' ? 'open' : 'close');
-  let completion = null; let retractPending = null;
+  await e.motorCommand(direction === 'opening' ? 'open' : 'close', checked);
+  let completion = null; let retractPending = checked?.retractionRequestedAt ?? null;
   for (;;) {
     const s = await e.read(); const now = e.clock.now();
     if (direction === 'closing') {

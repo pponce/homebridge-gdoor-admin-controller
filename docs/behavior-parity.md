@@ -10,7 +10,7 @@ Known gaps from the source audit: five configurable notification/reconciliation 
 | --- | --- |
 | HomeKit / virtual keypad use Tailwind; physical controls use the assigned relay | Shared worker, native adapters and real loopback HTTP/WebSocket tests |
 | Stop opening / reverse closing through an optional pulse path | Bounded pulse cleanup, partial-travel estimate, same-input continuation, sensor-closure race tests |
-| Retract before motion; close refreshes OFF; separate settle delays | Ordered driver tests; never an automatic motor retry or route fallback |
+| Opening confirms retraction; closing uses its configured wait | Owner-requested change in 0.4.4: skip redundant OFF; zero-wait close starts after any needed OFF acknowledgement and monitors retraction during travel; positive wait confirms OFF then settles. Never an automatic motor retry or route fallback |
 | Closed-sensor departure starts estimated full opening | Tailwind not-closed stays distinct from physical fully-open |
 | Stable closed confirmation then one bolt extension and settle | Fresh reads and unexpected-extension correction; timed closing requires explicit estimated-bolting policy |
 | Manual external unlock override | Preserved until next operation/restart; no startup auto-bolt |

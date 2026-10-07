@@ -26,6 +26,17 @@ An input profile names the source, the triggering event/edge, the action, the mo
 
 See [the fully synthetic configuration example](../examples/input-routing-config.json). It includes a deCONZ button, a physical keypad and a button supplied by another Homebridge plugin. No brand name is a routing condition. The custom Homebridge configuration screen provides device discovery and guided profiles; the separate administrator edits the same authoritative profiles.
 
+### Closing wait in 0.4.4
+
+`Behavior → Bolt retraction → Before closing` sets the garage default. A physical input can override it with `Timing for this control → Retract before closing`; a blank override inherits the default. The effective value applies to that operation on either motor path.
+
+- At zero, one recent assembly check precedes the motor command. An already-OFF bolt is not commanded OFF again. An ON bolt receives one unlock request; after its acknowledgement, closing can start before OFF feedback arrives. The same worker monitors retraction during travel without repeating an outstanding unlock request.
+- Above zero, any required unlock must report OFF, followed by the configured settling interval before movement. The interval is also honored when the initial read is already OFF.
+- Slow adapter preparation that makes the initial check older than 1.5 seconds triggers a fresh check. Driver identity/reachability checks still run, so zero does not mean zero network latency.
+- Closing still monitors each subsequent extension, requires retraction before completing closed confirmation, and extends the bolt only after the configured closed/stability checks. An ambiguous unlock prevents the motor command. Retraction timeout or an ambiguous movement latches a fault; it does not replay motor commands.
+
+Zero-wait closing intentionally permits retraction and door travel to overlap. No fixed amount of clearance is inferred from Tailwind's not-closed feedback. A command acknowledgement is not physical retraction evidence. This is the owner's requested change from the original controller's unconditional pre-close OFF refresh and confirmation. Opening behavior is unchanged.
+
 Initial connector scope is deCONZ and existing Homebridge services. This does not add native HomeKit pairing, an arbitrary webhook or universal support for every device brand. An input must provide supported events; a relay must provide verified active/inactive level control and an idempotent inactive write. A command-only toggle is not interchangeable with that relay contract. Existing automations/local actions that independently move the door need review during commissioning: observing a button cannot intercept a separate direct motor action.
 
 ## Event handling and output ownership
