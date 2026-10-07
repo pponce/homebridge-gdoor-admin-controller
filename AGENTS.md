@@ -15,3 +15,5 @@
 - CI should run only for relevant code changes or explicit dispatch; avoid expensive repeated full-suite runs without a concrete risk.
 - Record progress, validation and remaining work in docs/status.md. No live cutover until the migration gates are satisfied and the owner is ready.
 - Owner update scripts use SSH Git and print npm's browser authentication URL without opening it, allowing up to ten minutes to verify publication. Complete source/publication checks before installation; install in this explicit order: sudo hb-service stop, sudo hb-service add the pinned plugin version, sudo hb-service start. Stop on installation failure and leave Homebridge stopped. Keep the old controller/web services stopped.
+
+- Retain HomeKit reporting diagnostics as an on-demand troubleshooting capability. Keep internal recording ON during the unresolved Home display investigation. Only after the underlying fix is validated with recording OFF should a future release default recording to OFF; update comparison cleanup/restoration guidance consistently. Do not remove diagnostic access or treat recording overhead as the permanent fix.
