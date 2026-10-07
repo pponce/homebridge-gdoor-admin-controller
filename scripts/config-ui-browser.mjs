@@ -270,6 +270,11 @@ try{
      assert.equal(await p.locator('#native-save').isDisabled(),true);
      await p.getByRole('button',{name:'Update connection',exact:true}).click();
      await p.locator('#notice').filter({hasText:'Review and save'}).waitFor();
+     await review(p);
+     await p.locator('#shared-name').fill('Unfinished next connection');
+     assert.equal(await p.getByRole('button',{name:'Save configuration',exact:true}).count(),0,'A pending form invalidates an earlier review');
+     assert.equal(await p.locator('#native-save').isDisabled(),true);
+     await p.getByRole('button',{name:'Cancel connection edit',exact:true}).click();
      await review(p);await p.getByRole('button',{name:'Save configuration',exact:true}).click();await saved(p);
      assert.deepEqual(x.configuration().controllers,original,'Catalog-only edits retain resolved hardware profiles');
      assert.equal(await p.locator('.overview-row').getAttribute('data-state'),'enabled');

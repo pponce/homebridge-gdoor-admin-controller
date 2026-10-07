@@ -65,7 +65,7 @@ export class ConnectionEditor {
     this.root.scrollIntoView({behavior:'smooth',block:'start'});
   }
   async commit(){
-    const configuration=this.configuration(),isNewKey=this.key.value==='__new__';
+    const wasEditing=!!this.editing,configuration=this.configuration(),isNewKey=this.key.value==='__new__';
     const row={id:this.editing??id(),type:this.type.value,name:this.name.value,baseUrl:connectionOrigin(this.address.value,{allowBare:true}),credentialRef:isNewKey?this.keyName.value:this.key.value,...(this.type.value==='tailwind'?{doorCount:this.count.value===''?null:Number(this.count.value)}:{})};
     const checked=validateConnections([row])[0];
     // Validate duplicates, all affected profiles and door count before storing a key.
@@ -78,7 +78,7 @@ export class ConnectionEditor {
     }else if(!this.credentials().includes(checked.credentialRef)){this.message('Choose an existing saved key, or create one here.',true);return;}
     configuration.connections=draft.connections;configuration.controllers=draft.controllers;
     this.reset();this.changed(configuration);this.renderList();
-    this.message('Connection added to your configuration. Review and save to apply it.');
+    this.message(wasEditing?'Connection updated in your draft. Review and save to apply it.':'Connection added to your configuration. Review and save to apply it.');
   }
   renderList(){
     this.list.replaceChildren();const configuration=this.configuration();

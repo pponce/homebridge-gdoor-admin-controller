@@ -61,17 +61,17 @@ function buildEditor(configuration,position){
     renderCheckEnable:commissioning,viewChanged:refresh,getStatus:garageStatus,cardAction:garageAction,manageConnections:type=>{showPage('general');connectionEditor?.focus(type);}});
   if(position){editor.selected=Math.min(position.selected,Math.max(0,configuration.controllers.length-1));editor.step=position.step;editor.expandedGarage=position.expandedGarage;editor.render();}
   connectionEditor=new ConnectionEditor($('shared-connections'),{configuration:()=>editor.configuration,credentials:()=>loaded.credentials,
-    request:(path,body)=>hb.request(path,body),run:action,changed:configuration=>{changed(configuration);editor.render();},refresh,message:notice,
+    request:(path,body)=>hb.request(path,body),run:action,changed:configuration=>{changed(configuration);editor.render();},refresh:()=>{if(connectionEditor?.dirty&&save.phase==='review')save.changed(editor.configuration);refresh();},message:notice,
     keyCreated:reference=>{if(!loaded.credentials.includes(reference))loaded.credentials.push(reference);editor.credentials=loaded.credentials;connectionKeys();}});
 
 }
 function commissioning(root,profile){
   const section=document.createElement('section');section.className='card-checks';section.setAttribute('aria-label','Checks for '+profile.name);
   const hint=document.createElement('p');hint.className='help';
-  const fields=document.createElement('fieldset');fields.disabled=save.phase!=='saved'||!loaded?.connected;
+  const fields=document.createElement('fieldset');fields.disabled=save.phase!=='saved'||!!connectionEditor?.dirty||!loaded?.connected;
   section.append(hint,fields);root.append(section);
   const row=loaded.controllers.find(row=>row.id===profile.id);
-  hint.textContent=save.phase==='saved'?'Check connections here. Enabling takes effect immediately.':'Save or discard configuration changes before checking or changing enablement.';
+  hint.textContent=save.phase==='saved'&&!connectionEditor?.dirty?'Check connections here. Enabling takes effect immediately.':'Save or discard configuration changes before checking or changing enablement.';
   if(!loaded.connected||!row){const message=document.createElement('p');message.className='help';
     message.textContent=loaded.connected?'Save this garage door before checking its connections.':'Save your setup and restart the coordinator child bridge to check and enable this garage door.';
     fields.append(message);return;}
@@ -180,7 +180,7 @@ function garageStatus(profile){
   if(status.held==='maintenance')return warning('Maintenance paused');
   if(status.state?.fault||status.state?.unavailable||status.state?.obstruction||connectionChecks.get(profile.id)===false||
     status.held&&!['not-commissioned'].includes(status.held))return warning('Needs attention');
-  const draft=save.phase!=='saved',detail=draft?'Save or discard pending changes before changing enablement.':'';
+  const draft=save.phase!=='saved'||!!connectionEditor?.dirty,detail=draft?'Save or discard pending changes before changing enablement.':'';
   return status.actuationEnabled?{tone:'enabled',label:'Enabled',action:'Disable',disabled:!!status.state?.busy||draft||!save.canEdit,
     detail:status.state?.busy?'An operation is active. Wait for it to finish before disabling.':detail}:
     {tone:'disabled',label:'Disabled',action:'Enable',disabled:!save.canEdit,detail};
