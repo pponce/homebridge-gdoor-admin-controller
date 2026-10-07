@@ -31,7 +31,7 @@ async function main() {
   const button = platform.controllers[0].inputs[0]; button.rearmSeconds = 0; button.timing = {};
   platform.controllers[0].motorPaths[0].openPulseSeconds = platform.controllers[0].motorPaths[0].closePulseSeconds = .1;
   const hardware = await hardwareFixture(platform.controllers[0]);
-  let child; let logs = ''; let identity; const subscriptions=[];let releaseRead;
+  let child; let capture; let captureOutput=''; const captureEvents=[]; let logs = ''; let identity; const subscriptions=[];let releaseRead;
   try {
     platform.controllers[0] = hardware.config;
     Object.assign(hardware.config.feedback,{openingSeconds:1,closedStableSeconds:0,boltSettleSeconds:0});
@@ -80,6 +80,17 @@ async function main() {
     const lock=bolt.services.find(s=>serviceType(s,'45'));
     const lockTarget=lock.characteristics.find(c=>serviceType(c,'1E'));
     const lockCurrent=lock.characteristics.find(c=>serviceType(c,'1D'));
+    // The owner diagnostic uses one event connection for all four fields and
+    // reads only the management API afterwards. Exercise that exact script.
+    capture=spawn('python3',['-B','-u',path.join(root,'scripts/watch-homekit-events.py'),'--storage',directory,'--seconds','90'],{stdio:['ignore','pipe','pipe']});
+    let captureBuffer='';
+    capture.stdout.on('data',data=>{
+      captureOutput+=data;captureBuffer+=data;
+      const lines=captureBuffer.split('\n');captureBuffer=lines.pop();
+      for(const line of lines){const match=/^\s*[\d.]+s PUSH\s+(.*)$/.exec(line);if(match)captureEvents.push(JSON.parse(match[1]));}
+    });
+    capture.stderr.on('data',data=>{captureOutput+=data;});
+    await until(async()=>{assert.equal(capture.exitCode,null,captureOutput);return captureOutput.includes('READY:');});
     const lockTargets=[];const subscription=new HapSubscription(hapOrigin,'031-45-154',bolt.aid,lockTarget.iid);
     subscriptions.push(subscription);subscription.on('value',value=>lockTargets.push(value));subscription.start();await until(async()=>subscription.ready);
     const garageEvents=[];
@@ -94,7 +105,10 @@ async function main() {
       assert.ok(body.characteristics.every(c=>c.status===undefined||c.status===0),JSON.stringify(body));
       return body.characteristics;
     };
+    let captureSince=0;
     const assertTerminalEvents=async(value,since)=>{
+      await until(async()=>['doorCurrent','doorTarget','boltCurrent','boltTarget'].every(field=>
+        captureEvents.slice(captureSince).some(event=>event[field]===(field.startsWith('door')?(value?'closed':'open'):(value?'locked':'unlocked')))),3000);
       // A live client must receive both values, then receive the same terminal
       // current value again without polling it or sending another motor command.
       await until(async()=>['current','target'].every(name=>garageEvents.slice(since).some(e=>e.name===name&&e.value===value)),3000);
@@ -107,6 +121,7 @@ async function main() {
     };
     for(const [value,phase]of [[0,'open'],[1,'closed']]){
       const since=garageEvents.length;
+      captureSince=captureEvents.length;
       let reading=false;const heldRead=new Promise(resolve=>{releaseRead=resolve;});
       hardware.state.beforeDoorRead=async()=>{hardware.state.beforeDoorRead=null;reading=true;await heldRead;};
       await until(async()=>reading);
@@ -122,17 +137,21 @@ async function main() {
     for(const [value,phase]of [[0,'open'],[1,'closed']]){
       await until(async()=>(await management(endpoint+'/state')).status.inputStates[button.id]==='ready');
       // Allow the live-source context to settle after the previous worker ends.
-      await sleep(200);const since=garageEvents.length;
+      await sleep(200);const since=garageEvents.length;captureSince=captureEvents.length;
       hardware.emit(button.source.resourceId,button.trigger);
       await until(async()=>{const s=(await management(endpoint+'/state')).status.state;return s.phase===phase&&!s.busy;});
       await assertTerminalEvents(value,since);
     }
     assert.deepEqual(hardware.state.writes.slice(4),[['bolt',false],['motor',true],['motor',false],['motor',true],['motor',false],['bolt',true]]);
     assert.equal(logs.includes(identity.token), false);
+    assert.equal(captureOutput.includes(identity.token),false);
+    assert.equal(captureOutput.includes('031-45-154'),false);
+    capture.kill('SIGINT');await until(async()=>capture.exitCode!==null,5000);
+    assert.equal(capture.exitCode,0,captureOutput);
     child.kill('SIGTERM');
     await until(async () => child.exitCode !== null || child.signalCode !== null, 10000);
     await assert.rejects(fetch(origin + '/v1/identity', { signal: AbortSignal.timeout(1000) }));
-    console.log('Actual Homebridge child bridge passed prompt command acknowledgement, healthy reads, lock updates, terminal garage notifications and bounded reaffirmation after HomeKit and physical-button operations, ordered coordination and shutdown.');
+    console.log('Actual Homebridge child bridge passed prompt acknowledgement, healthy reads, all four pushed states on one diagnostic connection, garage reaffirmation after HomeKit and physical-button operations, ordered coordination and shutdown.');
   } catch (error) {
     // Synthetic logs only, with the generated management token still redacted.
     const safeLogs = logs.replaceAll(identity?.token || 'never-match-placeholder', '[redacted]');
@@ -140,6 +159,7 @@ async function main() {
     throw new Error(String(error) + ': ' + safeLogs.slice(-1400));
   } finally {
     releaseRead?.();for(const subscription of subscriptions)subscription.stop();
+    if(capture&&capture.exitCode===null&&capture.signalCode===null)capture.kill('SIGKILL');
     if (child && child.exitCode === null && child.signalCode === null) { child.kill('SIGTERM'); await sleep(1000); child.kill('SIGKILL'); }
     await hardware.close(); await rm(directory, { recursive: true, force: true });
   }
