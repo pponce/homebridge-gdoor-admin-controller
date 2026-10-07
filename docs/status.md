@@ -2,7 +2,7 @@
 
 ## Configuration UI save experience — separate development branch
 
-The owner requests starting the Roborock-inspired configuration UI work while reporting experiments continue. Prepared on `config-ui-save-experience`, version 0.4.10-dev.0, preserving main's 0.4.9 test release. [Implementation notes](config-ui-experience.md) pin the upstream UI and Homebridge modal references and explain the native Save/toast contract.
+The owner requests starting the Roborock-inspired configuration UI work while reporting experiments continue. Prepared on `config-ui-save-preview`, version 0.4.10-dev.0, preserving main's 0.4.9 test release. [Implementation notes](config-ui-experience.md) pin the upstream UI and Homebridge modal references and explain the native Save/toast contract.
 
 The plugin now awaits configuration persistence, shows a native success toast, and enables the host's bottom Save/validity indicator to finish the modal. Drafts disable that action immediately while typing. Managed saves mirror only confirmed settings and preserve child-bridge metadata; partial native-save failure retries without reapplying the controller, while an uncertain apply response requires a reload. The redesigned local stylesheet preserves the three tabs, adds stronger buttons and an Add a garage door label, follows Homebridge theme changes, and clarifies immediate commissioning. No controller movement/reporting code or standalone-admin runtime is changed.
 
