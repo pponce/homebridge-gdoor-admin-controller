@@ -124,22 +124,25 @@ export class ProfileEditor {
     this.root.replaceChildren();this.root.append(this.garageList());
     const p=this.configuration.controllers[this.selected];if(!p){const empty=el('section',undefined,'panel empty');empty.append(el('h2','No garage doors yet'),el('p','Use Add a garage door to connect an opener and its separate bolt.','subtle'));this.root.append(empty);this.viewChanged();return;}
     p.motorPaths??=[];p.inputs??=[];p.timing??={};
-    const names=['Devices','Inputs','Behavior'];
+    const names=['Devices','Controls','Behavior'];
     const steps=el('nav',undefined,'steps');steps.setAttribute('aria-label','Garage setup');names.forEach((name,index)=>{const b=this.button(String(index+1).padStart(2,'0')+'  '+name,()=>{this.step=index;this.render();});if(index===this.step)b.setAttribute('aria-current','step');steps.append(b);});this.root.append(steps);
     const content=el('div',undefined,'step-content');this.root.append(content);
     if(this.step===0)this.devices(content,p);else if(this.step===1)this.inputs(content,p);else this.behavior(content,p);
     this.viewChanged();
   }
   devices(root,p){
+    root.append(el('p','Devices operate or report on one part of your garage: the door or the bolt. Controls request a coordinated operation; the coordinator handles the door and bolt sequence.','help setup-model'));
     const identity=this.panel(root,'Garage details');const grid=this.grid(identity);this.input(grid,'Garage name',p,'name');identity.append(el('p','Controller ID: '+p.id+' · Use this to link the standalone administrator.','help'));this.input(grid,'Show a separate bolt Lock tile',p,'exposeBoltLock',{type:'checkbox'});
-    const opener=this.panel(root,'Garage opener','HomeKit and the virtual keypad use this connection.');
+    const opener=this.panel(root,'Garage opener','The default opener connection and source of door position feedback. HomeKit and the virtual keypad use this device; other controls can choose it or an opener relay.');
     this.connection(opener,p,'door','garage');
     if(p.door.type==='homebridge')this.bridgeDevice(opener,p.door,'garage');else {
       const shared=this.sharedConnection(opener,p.door),dg=this.grid(opener);
       const door=this.input(dg,'Tailwind door',p.door,'doorIndex',{type:'number',options:Array.from({length:shared?.doorCount??3},(_,index)=>[index,'Door '+(index+1)]),help:shared?.doorCount?'Choose which door on this Tailwind controller to use.':'Set the number of doors in General to narrow this list. Door 1 uses API index 0.'});door.required=true;
       const link=el('a','How to get a Tailwind local control key');link.href='https://gotailwind.zendesk.com/hc/en-us/articles/42573968819725-How-do-I-get-my-local-control-key-for-my-Tailwind-garage-door-controller';link.target='_blank';link.rel='noreferrer';opener.append(link);
     }
+    opener.append(el('p','During movement: stop / reverse is unavailable through this garage opener connection. Use a compatible opener relay for that behavior.','help'));
     const bolt=this.panel(root,'Separate bolt / lock','This is the output that retracts and extends the bolt.');this.connection(bolt,p,'bolt','bolt');this.device(bolt,p.bolt,'bolt');if(p.bolt.serviceType!=='lock')this.input(this.grid(bolt),'Relay ON means bolt extended',p.bolt,'lockedValue',{type:'checkbox',help:'Choose the mapping that matches your wiring. A relay report does not prove physical bolt position.'});
+    this.openerRelays(root,p);
     root.append(this.button('Remove this garage door',()=>{
       const index=this.configuration.controllers.findIndex(profile=>profile.id===p.id);if(index<0)return;
       this.configuration.controllers.splice(index,1);this.selected=Math.max(0,index-1);
@@ -148,46 +151,59 @@ export class ProfileEditor {
     },'danger'));
     root.append(el('p','Removes this garage door from your draft. Saved garage doors keep running until you review and save the removal. Discard changes restores saved garage doors.','help'));
   }
-  inputs(root,p){
-    root.append(el('div','HomeKit + virtual keypad → '+(p.door.type==='tailwind'?'Tailwind API':'Garage opener (Homebridge)'),'route-note'));
-    const paths=this.panel(root,'Additional motor path','Optional: a relay that pulses the opener, separate from the bolt output.');
+  applyDeviceBehavior(p,path){
+    const enabled=path.interruption==='stop-opening-reverse-closing';
+    for(const input of p.inputs.filter(input=>input.motorPath===path.id)){
+      if(input.action==='toggle')input.busyBehavior=enabled?'interrupt':'drop';
+      else if(!enabled)input.busyBehavior='drop';
+    }
+  }
+  openerRelays(root,p){
+    const paths=this.panel(root,'Additional opener devices','Optional opener relays, connected directly through deCONZ or mapped to an existing Homebridge switch. Each operates the door; the bolt has its own device.');
     p.motorPaths.forEach((path,index)=>{
-      const card=this.panel(paths,path.name);const g=this.grid(card);this.input(g,'Path name',path,'name');this.connection(card,path,'connection','motor');this.device(card,path.connection,'motor');this.input(this.grid(card),'Relay ON activates the opener',path.connection,'activeValue',{type:'checkbox'});if(path.connection.type==='homebridge')this.input(this.grid(card),'I verified OFF always releases this output, including repeated OFF commands',path.connection,'inactiveWriteIdempotent',{type:'checkbox',help:'A toggle-only switch cannot be used as the motor relay.'});
+      const card=this.panel(paths,path.name);const g=this.grid(card);this.input(g,'Device name',path,'name');this.connection(card,path,'connection','motor');this.device(card,path.connection,'motor');this.input(this.grid(card),'Relay ON activates the opener',path.connection,'activeValue',{type:'checkbox'});if(path.connection.type==='homebridge')this.input(this.grid(card),'I verified OFF always releases this output, including repeated OFF commands',path.connection,'inactiveWriteIdempotent',{type:'checkbox',help:'A toggle-only switch cannot be used as the motor relay.'});
       const times=this.grid(card);for(const [k,l] of [['openPulseSeconds','Opening pulse (seconds)'],['closePulseSeconds','Closing pulse (seconds)']])this.input(times,l,path,k,{type:'number',min:.1,max:2,step:.1});
-      this.input(times,'Button interruption support',path,'interruption',{options:[['disabled','No stop / reverse'],['stop-opening-reverse-closing','Stop opening / reverse closing']],help:'Enable only for a relay and opener verified to support this sequence.'});
-      card.append(this.button('Remove motor path',()=>{p.motorPaths.splice(index,1);this.change();this.render();},'danger'));
+      this.input(times,'During movement',path,'interruption',{options:[['disabled','No stop / reverse'],['stop-opening-reverse-closing','Stop opening / reverse closing']],help:'Enable only for a relay and opener verified to support this sequence. Applies to toggle buttons and switches using this device; keypad authorization is configured under Controls.'}).addEventListener('change',()=>{this.applyDeviceBehavior(p,path);this.change();this.render();});
+      const mismatched=p.inputs.filter(input=>input.motorPath===path.id&&input.action==='toggle'&&input.busyBehavior!==(path.interruption==='stop-opening-reverse-closing'?'interrupt':'drop'));
+      if(mismatched.length){card.append(el('p','Saved controls with different movement behavior: '+mismatched.map(input=>input.name).join(', ')+'. Existing behavior is preserved until you apply the device setting.','help'));card.append(this.button('Apply device behavior to linked controls',()=>{this.applyDeviceBehavior(p,path);this.change();this.render();}));}
+      card.append(this.button('Remove opener device',()=>{p.motorPaths.splice(index,1);this.change();this.render();},'danger'));
     });
-    paths.append(this.button('Add motor relay',()=>{p.motorPaths.push({id:freshId('motor'),name:'Opener relay',type:'pulse-relay',connection:{type:'deconz',baseUrl:p.bolt.type==='deconz'?p.bolt.baseUrl:'',credentialRef:p.bolt.type==='deconz'?p.bolt.credentialRef:'garage-deconz',activeValue:true},openPulseSeconds:1,closePulseSeconds:1,interruption:'disabled'});delete p.motorPaths.at(-1).connection.lockedValue;p.motorPaths.at(-1).connection.resourceId='';p.motorPaths.at(-1).connection.uniqueId='';this.change();this.render();}));
-    const inputs=this.panel(root,'Physical controls','Assign a live button press or keypad outcome to this garage and a motor path.');
-    root.insertBefore(inputs,paths);
+    paths.append(this.button('Add opener relay',()=>{p.motorPaths.push({id:freshId('motor'),name:'Opener relay',type:'pulse-relay',connection:{type:'deconz',baseUrl:p.bolt.type==='deconz'?p.bolt.baseUrl:'',credentialRef:p.bolt.type==='deconz'?p.bolt.credentialRef:'garage-deconz',activeValue:true},openPulseSeconds:1,closePulseSeconds:1,interruption:'disabled'});delete p.motorPaths.at(-1).connection.lockedValue;p.motorPaths.at(-1).connection.resourceId='';p.motorPaths.at(-1).connection.uniqueId='';this.change();this.render();}));
+  }
+  inputs(root,p){
+    root.append(el('p','Controls request coordinated garage and bolt operation. A button, keypad or Homebridge switch is a control when we listen to it. Choose which opener device carries out its requests; the coordinator handles the bolt automatically.','help setup-model'));
+    root.append(el('div','HomeKit + virtual keypad → '+(p.door.type==='tailwind'?'Tailwind API':'Garage opener (Homebridge)'),'route-note'));
+    const inputs=this.panel(root,'Your controls','Select a control to edit its source, action and opener device.');
     const openerLabel='Garage opener ('+(p.door.type==='tailwind'?'Tailwind':'Homebridge')+')';
     const routeLabel=input=>input.motorPath==='primary'?openerLabel:'Relay: '+(p.motorPaths.find(path=>path.id===input.motorPath)?.name??'Missing relay');
-    const selector=el('div',undefined,'input-selector');selector.setAttribute('role','group');selector.setAttribute('aria-label','Select an input');inputs.append(selector);
+    const selector=el('div',undefined,'input-selector');selector.setAttribute('role','group');selector.setAttribute('aria-label','Select a control');inputs.append(selector);
     if(!p.inputs.some(input=>input.id===this.selectedInputs.get(p.id)))this.selectedInputs.set(p.id,p.inputs[0]?.id);
     const refreshSelector=()=>{
       selector.replaceChildren();
       for(const input of p.inputs){
         const choice=this.button('',()=>{this.selectedInputs.set(p.id,input.id);this.render();this.root.querySelector('.input-choice[aria-pressed="true"]')?.focus();},'secondary input-choice');
         choice.dataset.inputId=input.id;choice.setAttribute('aria-pressed',String(input.id===this.selectedInputs.get(p.id)));
-        choice.append(el('strong',input.name||'Unnamed input'),el('span',(input.source.kind==='keypad'?'Keypad':input.source.kind==='switch'?'Switch':'Button')+' · '+routeLabel(input)+(input.enabled?'':' · Disabled'),'small'));
+        choice.append(el('strong',input.name||'Unnamed control'),el('span',(input.source.kind==='keypad'?'Keypad':input.source.kind==='switch'?'Switch':'Button')+' · '+routeLabel(input)+(input.enabled?'':' · Disabled'),'small'));
         selector.append(choice);
       }
     };
     refreshSelector();
-    if(!p.inputs.length)inputs.append(el('p','No inputs yet. Add a button or keypad to configure one.','help'));
+    if(!p.inputs.length)inputs.append(el('p','No controls yet. Add a button, keypad or Homebridge switch.','help'));
     p.inputs.forEach((input,index)=>{
       if(input.id!==this.selectedInputs.get(p.id))return;
       const card=this.panel(inputs,input.name);card.classList.add('input-profile');const g=this.grid(card);
-      this.input(g,'Control name',input,'name').addEventListener('input',()=>{refreshSelector();card.querySelector('h3').textContent=input.name||'Unnamed input';});this.input(g,'Use this control',input,'enabled',{type:'checkbox'}).addEventListener('change',refreshSelector);
+      this.input(g,'Control name',input,'name').addEventListener('input',()=>{refreshSelector();card.querySelector('h3').textContent=input.name||'Unnamed control';});this.input(g,'Use this control',input,'enabled',{type:'checkbox'}).addEventListener('change',refreshSelector);
       this.connection(card,input,'source',input.source.kind);
-      if(input.source.type==='deconz')this.input(g,'Input type',input.source,'kind',{options:[['button','deCONZ button'],['keypad','Physical deCONZ keypad']],rerender:true});
-      if(input.source.kind==='keypad'){input.action='keypad';input.trigger='native-outcome';input.source.alarmId??=1;input.busyBehavior='drop';}
+      if(input.source.type==='deconz')this.input(g,'Control type',input.source,'kind',{options:[['button','deCONZ button'],['keypad','Physical deCONZ keypad']],rerender:true});
+      if(input.source.kind==='keypad'){if(input.action!=='keypad')input.busyBehavior='drop';input.action='keypad';input.trigger='native-outcome';input.source.alarmId??=1;}
       else {delete input.source.alarmId;if(input.action==='keypad')input.action='toggle';if(input.trigger==='native-outcome'||input.source.type==='homebridge'&&input.source.kind==='button'&&input.trigger>2)input.trigger=input.source.type==='homebridge'?0:1002;if(input.source.kind==='switch'&&typeof input.trigger!=='string')input.trigger='on';}
       this.device(card,input.source,input.source.kind);const actions=this.grid(card);
       if(input.source.kind==='keypad')this.input(actions,'Alarm system number',input.source,'alarmId',{type:'number',min:1,max:255,step:1});
-      else {if(input.source.kind==='switch')this.input(actions,'Switch transition',input,'trigger',{options:[['on','Turns on'],['off','Turns off'],['either','Either transition']]});else this.input(actions,'Button event',input,'trigger',{type:'number',min:0,max:input.source.type==='homebridge'?2:65535,step:1,help:input.source.type==='homebridge'?'0: single press, 1: double press, 2: long press.':'For example, 1002 is the usual single press on many deCONZ buttons.'});this.input(actions,'Action',input,'action',{options:[['toggle','Open / close toggle'],['open','Open'],['close','Close']]});}
-      this.input(actions,'Control door using',input,'motorPath',{options:[['primary',openerLabel],...p.motorPaths.map(path=>[path.id,'Relay: '+path.name])],help:'Choose whether this control sends commands through the garage opener connection or pulses a relay.'}).addEventListener('change',refreshSelector);
-      this.input(actions,'During movement',input,'busyBehavior',{options:[['drop','Ignore new presses'],['interrupt','Stop / reverse this control’s operation',input.source.kind==='keypad']],help:'Stop / reverse also requires a compatible configured motor path.'});
+      else {if(input.source.kind==='switch')this.input(actions,'Switch transition',input,'trigger',{options:[['on','Turns on'],['off','Turns off'],['either','Either transition']]});else this.input(actions,'Button event',input,'trigger',{type:'number',min:0,max:input.source.type==='homebridge'?2:65535,step:1,help:input.source.type==='homebridge'?'0: single press, 1: double press, 2: long press.':'For example, 1002 is the usual single press on many deCONZ buttons.'});this.input(actions,'Action',input,'action',{options:[['toggle','Open / close toggle'],['open','Open'],['close','Close']]}).addEventListener('change',()=>{input.busyBehavior=input.action==='toggle'&&p.motorPaths.find(path=>path.id===input.motorPath)?.interruption==='stop-opening-reverse-closing'?'interrupt':'drop';this.change();this.render();});}
+      this.input(actions,'Operate garage through',input,'motorPath',{options:[['primary',openerLabel],...p.motorPaths.map(path=>[path.id,'Relay: '+path.name])],help:'Choose whether this control sends commands through the garage opener connection or pulses a relay.'}).addEventListener('change',()=>{const supported=p.motorPaths.find(path=>path.id===input.motorPath)?.interruption==='stop-opening-reverse-closing';input.busyBehavior=input.action==='toggle'&&supported?'interrupt':input.source.kind==='keypad'&&supported?input.busyBehavior:'drop';this.change();this.render();});
+      const canInterrupt=p.motorPaths.find(path=>path.id===input.motorPath)?.interruption==='stop-opening-reverse-closing';
+      if(input.source.kind==='keypad')this.input(actions,'PIN behavior',input,'busyBehavior',{options:[['drop','Correct PIN opens; incorrect PIN closes'],['interrupt','Correct PIN to open; either PIN to stop, reverse or close',!canInterrupt]],help:'The second option requires a compatible opener relay. It can interrupt only movement started by this keypad. An incorrect PIN never opens a closed door, but can reverse a closing door.'});
+      else card.append(el('p',input.action==='toggle'?(input.busyBehavior==='interrupt'?'Movement behavior: stop opening / reverse closing, using the selected opener device.':'Movement behavior: ignore presses during movement. Configure the opener device under Devices.'):'Open-only and close-only controls ignore requests during movement. Use a toggle control for device stop / reverse behavior.','help control-movement'));
       this.input(actions,'Rearm delay (seconds)',input,'rearmSeconds',{type:'number',min:0,max:10,step:.1});
       const advanced=el('details');advanced.append(el('summary','Timing for this control'));const tg=this.grid(advanced);input.timing??={};
       for(const [key,label] of [['openRetractSettleSeconds','Retract before opening'],['closeRetractSettleSeconds','Retract before closing'],['openingSeconds','Estimated opening travel'],['closingSeconds','Estimated closing travel']]){
@@ -195,7 +211,7 @@ export class ProfileEditor {
         this.input(tg,label+' (seconds)',input.timing,key,{type:'number',min:key.includes('Retract')?0:1,max:300,step:.1,help,emptyUnset:true});
       }card.append(advanced);card.append(this.button('Remove control',()=>{p.inputs.splice(index,1);this.selectedInputs.set(p.id,p.inputs[Math.min(index,p.inputs.length-1)]?.id);this.change();this.render();},'danger'));
     });
-    inputs.append(this.button('Add a button or keypad',()=>{p.inputs.push({id:freshId('input'),name:'Indoor button',enabled:true,source:{type:'deconz',kind:'button',baseUrl:p.bolt.baseUrl,gatewayId:p.bolt.gatewayId,resourceId:'',uniqueId:'',resourceType:'ZHASwitch',modelId:'',manufacturer:'',credentialRef:p.bolt.credentialRef},trigger:1002,action:'toggle',motorPath:p.motorPaths[0]?.id??'primary',busyBehavior:'drop',rearmSeconds:1.5,timing:{}});this.selectedInputs.set(p.id,p.inputs.at(-1).id);this.change();this.render();}));
+    inputs.append(this.button('Add control',()=>{p.inputs.push({id:freshId('input'),name:'Indoor button',enabled:true,source:{type:'deconz',kind:'button',baseUrl:p.bolt.baseUrl,gatewayId:p.bolt.gatewayId,resourceId:'',uniqueId:'',resourceType:'ZHASwitch',modelId:'',manufacturer:'',credentialRef:p.bolt.credentialRef},trigger:1002,action:'toggle',motorPath:p.motorPaths[0]?.id??'primary',busyBehavior:p.motorPaths[0]?.interruption==='stop-opening-reverse-closing'?'interrupt':'drop',rearmSeconds:1.5,timing:{}});this.selectedInputs.set(p.id,p.inputs.at(-1).id);this.change();this.render();}));
     this.virtualKeypad(root,p);
   }
   virtualKeypad(root,p){

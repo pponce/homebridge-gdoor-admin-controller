@@ -93,3 +93,13 @@ full retains all tracing; events records bounded event/timestamp history but omi
 deferred schedules garage publication through setImmediate. It keeps the latest committed complete report, coalesces pending updates and checks report generation, binding, live state, enablement and freshness before sending. Reversal, removal/rebind, shutdown and invalid feedback cannot replay an obsolete success. Error publication and initial accessory seeding remain inline. Bolt publication stays inline. Committed synchronous GETs, HAP methods, terminal target/current order, two-second repeat schedule and all hardware behavior remain unchanged. This is an experimental scheduling change, not a guarantee of a separate HAP batch or a 250 ms delay.
 
 Modes are process-local, apply to all coordinator profiles, and restart as off/inline starting in 0.4.14, at the owner’s request for a startup-OFF comparison; earlier diagnostic releases used full/inline. Changing modes sends no notification, hardware command, HAP subscription or configuration write; it does not reset commissioning or replay history. These endpoints are optional and are not used by the standalone administrator.
+
+
+### Physical keypad interruption policy (0.4.19)
+
+Existing input `busyBehavior: interrupt` now also permits native physical keypad profiles on a motor path declaring `interruption: stop-opening-reverse-closing`. It remains invalid for `primary` and undeclared relay paths. No new endpoint or JSON field is added. Default/drop behavior is unchanged. In opt-in mode only a correct, disarmed-confirmed outcome opens from closed; rejected outcomes at closed do nothing. Either outcome closes an open/owned-partial door, stops an owned opening operation, or reverses an owned closing operation. An accepted-disarm interruption still requires disarmed confirmation. Ownership, event freshness, closed-sensor checks, single-pulse writes and restart holds remain enforced. Virtual keypad/built-in routes are unchanged.
+
+
+### Devices and Controls UI (0.4.19)
+
+User-facing Devices groups the primary opener, bolt and additional opener relays. Controls groups input sources and their selected opener. Schema IDs (`door`, `bolt`, `motorPaths`, `inputs`, `motorPath`) stay unchanged. Device movement edits materialize behavior into linked toggle profiles; new/rerouted toggle profiles use the selected device setting. Divergent legacy profiles are preserved until explicitly reconciled under Devices. Keypad `busyBehavior` is a separate opt-in PIN policy, never automatically enabled by configuring device capability. Explicit open/close controls retain drop behavior.

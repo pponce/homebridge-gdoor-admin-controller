@@ -174,7 +174,7 @@ function inputs(value = [], paths) {
     } else if (selected.kind === 'switch') trigger = choice(row.trigger, ['on', 'off', 'either'], 'invalid_switch_edge');
     else { if (row.trigger !== 'native-outcome') fail('invalid_keypad_trigger'); trigger = row.trigger; }
     const busyBehavior = choice(row.busyBehavior, ['drop', 'interrupt'], 'invalid_busy_behavior');
-    if (busyBehavior === 'interrupt' && (selected.kind === 'keypad' || action !== 'toggle' || path?.interruption !== 'stop-opening-reverse-closing')) fail('unsupported_input_interruption');
+    if (busyBehavior === 'interrupt' && (!['toggle', 'keypad'].includes(action) || path?.interruption !== 'stop-opening-reverse-closing')) fail('unsupported_input_interruption');
     const timing = row.timing ?? {};
     fields(timing, timingFields, 'invalid_input_timing');
     for (const key of Object.keys(timing)) number(timing[key], key.includes('Retract') ? 0 : 1, key.includes('Retract') ? 120 : 300, 'invalid_input_timing');

@@ -59,11 +59,13 @@ test('Homebridge switch inputs cannot be motor/bolt feedback and edge bindings c
   second.trigger = 'either'; assert.throws(() => validateConfiguration(cfg), /overlapping_input_binding/);
 });
 
-test('stop/reverse requires a pulse path declaration and cannot be enabled for a keypad or Tailwind path', () => {
+test('stop/reverse requires a pulse path declaration and allows an opted-in keypad but not a Tailwind path', () => {
   const cfg = copy(); cfg.controllers[0].inputs[0].motorPath = 'primary';
   assert.throws(() => validateConfiguration(cfg), /unsupported_input_interruption/);
   cfg.controllers[0].inputs[0].motorPath = 'wall-relay';
   cfg.controllers[0].inputs[1].busyBehavior = 'interrupt';
+  assert.equal(validateConfiguration(cfg).controllers[0].inputs[1].busyBehavior, 'interrupt');
+  cfg.controllers[0].motorPaths[0].interruption = 'disabled';
   assert.throws(() => validateConfiguration(cfg), /unsupported_input_interruption/);
 });
 

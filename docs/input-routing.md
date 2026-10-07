@@ -64,3 +64,19 @@ The running plugin connects deCONZ WebSocket inputs and selected Homebridge HAP 
 - [deCONZ button events](https://dresden-elektronik.github.io/deconz-rest-doc/endpoints/sensors/button_events/) and [WebSocket notifications](https://dresden-elektronik.github.io/deconz-rest-doc/endpoints/websocket/).
 - [Homebridge programmable-switch events](https://developers.homebridge.io/HAP-NodeJS/classes/_definitions.Characteristics.ProgrammableSwitchEvent.html). Repeated equal-valued press events must not be treated like a boolean switch state.
 - Existing owner behavior is traced in [behavior-parity.md](behavior-parity.md) to the pinned source commit.
+
+
+## Optional physical keypad stop/reverse — 0.4.19
+
+A physical deCONZ keypad may opt into `busyBehavior: interrupt` only on a pulse relay explicitly configured for stop-opening/reverse-closing. Default `drop` retains existing keypad behavior. The garage opener (Tailwind or Homebridge) and virtual keypad do not support this mode. There is no fallback between routes.
+
+With this option enabled, a correct, disarmed-confirmed PIN outcome opens a confirmed-closed door. An incorrect PIN while closed is ignored without bolt or motor commands. From fully open or this keypad's estimated partial stop, either PIN outcome closes. During movement started by this same keypad, either outcome stops opening or reverses closing. Accepted-disarm outcomes still require fresh disarmed confirmation during interruption. Other controllers' movements, unavailable states and expired/duplicate events are ineligible and never queued.
+
+The owner explicitly selected this as an optional interruption feature and accepts that an incorrect PIN can reopen a closing door. It is not a substitute for opener safety sensors. The existing engine rechecks not-closed/retracted state before a pulse; sensor-confirmed closure wins the race, and reversal removes the old close's bolt authority. Timed partial/open positions remain estimates; ambiguous writes and restart holds are retained. The relay race cannot be eliminated because closed-sensor reporting and motor actuation are not atomic.
+
+
+## Devices and Controls UI
+
+Devices contains the garage opener/state source, separate bolt, and additional opener relays (direct deCONZ or Homebridge switch mappings). Controls contains buttons, physical keypads and Homebridge event sources that request coordinated operation; HomeKit/virtual keypad routes are explained there. A device actuates or reports one component, while a control requests the assembly worker's combined sequence.
+
+During movement is configured once on the opener relay and applied to linked toggle controls. Existing divergent policies are preserved with an explicit reconciliation action under Devices. New/rerouted toggle controls inherit by materializing the device setting into their stored profile. Dedicated open/close controls ignore mid-movement commands. Keypad PIN behavior remains a separate authorization opt-in and requires device support. No arbitrary Homebridge garage service is assumed to provide a stop command.

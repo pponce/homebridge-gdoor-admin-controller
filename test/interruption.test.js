@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { MovementEngine } from '../src/engine.js';
 import { PulseMotor } from '../src/pulse-motor.js';
 import { Fault } from '../src/fault.js';
+import { InputRouter } from '../src/input-routing.js';
 
 function fixture(initial = 'closed') {
   const state = { now: 0, door: initial, locked: initial === 'closed', direction: null,
@@ -139,4 +140,65 @@ test('failed reversal does not start a successful reopening estimate or lock the
   assert.equal(result.fault, 'motor_relay_release_unconfirmed');
   assert.equal(result.openEstimated, false);
   assert.equal(f.state.writes.some(([kind, value]) => kind === 'bolt' && value === true), false);
+});
+
+function keypadRouter(f, busyBehavior = 'interrupt') {
+  const clock = { now: () => f.state.now, wall: () => 100000 + f.state.now };
+  const router = new InputRouter(f.engine, [{ id: 'keypad', enabled: true, source: { type: 'deconz', kind: 'keypad' },
+    trigger: 'native-outcome', action: 'keypad', motorPath: 'relay', busyBehavior, rearmSeconds: 0, timing: {} }], clock);
+  let sequence = 0;
+  const arm = () => router.arm('keypad', { session: 'live', sequence, value: 'rejected' });
+  const offer = (value, alarmDisarmed = true) => router.offer('keypad', { session: 'live', sequence: ++sequence,
+    value, epoch: router.epoch, snapshot: false, receivedAt: clock.now(), occurredAt: clock.wall() }, router.capture('keypad'), { alarmDisarmed });
+  return { router, arm, offer };
+}
+
+for (const stopValue of ['accepted-disarm', 'rejected']) {
+  for (const closeValue of ['accepted-disarm', 'rejected']) test(`keypad ${stopValue} stops opening; ${closeValue} closes the partial stop`, async () => {
+    const f = fixture(); const k = keypadRouter(f); await f.engine.initialize(); k.arm();
+    assert.equal((await k.offer('rejected')).accepted, false);
+    assert.equal((await k.offer('accepted-disarm', false)).accepted, false);
+    assert.equal(f.state.writes.length, 0);
+    let interruption; let requested = false;
+    f.hook((e, s) => {
+      if (!requested && e.interruptionAllowed && s.now >= 250) {
+        requested = true; k.arm(); interruption = k.offer(stopValue);
+      }
+    });
+    const stopped = await k.offer('accepted-disarm');
+    assert.equal((await interruption).accepted, true);
+    assert.equal(stopped.result.phase, 'stopped-estimated'); assert.equal(f.state.pulses, 2);
+    assert.equal(f.state.locked, false);
+    f.hook(() => {}); f.state.closeAt = f.state.now + 300; k.arm();
+    const closed = await k.offer(closeValue);
+    assert.equal(closed.result.phase, 'closed'); assert.equal(f.state.pulses, 3); assert.equal(f.state.locked, true);
+  });
+}
+
+for (const reverseValue of ['accepted-disarm', 'rejected']) test(`keypad ${reverseValue} reverses its closing operation without bolting`, async () => {
+  const f = fixture(); const k = keypadRouter(f); await f.engine.initialize(); k.arm();
+  assert.equal((await k.offer('accepted-disarm')).result.phase, 'open');
+  f.state.direction = null; // Physical full-open limit stops the motor.
+  const reverseAt = f.state.now + 200; let interruption; let requested = false;
+  f.hook((e, s) => {
+    if (!requested && e.interruptionAllowed && s.now >= reverseAt) {
+      requested = true; k.arm(); interruption = k.offer(reverseValue);
+    }
+  });
+  k.arm(); const result = await k.offer('accepted-disarm');
+  assert.equal((await interruption).accepted, true);
+  assert.equal(result.result.phase, 'open'); assert.equal(result.result.openEstimated, true);
+  assert.equal(f.state.pulses, 3); assert.equal(f.state.locked, false);
+  assert.equal(f.state.writes.some(([kind, value]) => kind === 'bolt' && value === true), false);
+});
+
+test('keypad interruption requires disarmed confirmation and cannot interrupt another owner', async () => {
+  const f = fixture(); const k = keypadRouter(f); await f.engine.initialize(); let checked = false; let denied;
+  f.hook(e => { if (!checked && e.interruptionAllowed) { checked = true; k.arm(); denied = k.offer('rejected'); } });
+  await f.engine.execute('open', f.options);
+  assert.equal((await denied).accepted, false); assert.equal(f.state.pulses, 1);
+  f.state.direction = null; checked = false;
+  f.hook(e => { if (!checked && e.interruptionAllowed) { checked = true; k.arm(); denied = k.offer('accepted-disarm', false); f.state.closeAt = f.state.now + 200; } });
+  k.arm(); assert.equal((await k.offer('rejected')).result.phase, 'closed');
+  assert.equal((await denied).accepted, false); assert.equal(f.state.pulses, 2);
 });

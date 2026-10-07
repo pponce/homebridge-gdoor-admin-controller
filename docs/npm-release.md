@@ -1,3 +1,9 @@
+# Release 0.4.19
+
+Devices now contains opener connections, bolt and opener relays. Controls replaces Inputs, with explanatory text and per-control selection. Device movement behavior applies to linked toggle controls, while keypad PIN behavior remains separate. Saved divergent control behavior is preserved until explicitly reconciled.
+
+Optional physical keypad stop/reverse on a compatible pulse relay. Either PIN outcome may interrupt movement started by that keypad; only a correct PIN opens a closed door. From open or its partial stop, either outcome closes. Default behavior remains Ignore new presses. Unavailable on the garage opener connection, including Tailwind, and on the virtual keypad. Validation pending.
+
 # Release 0.4.18
 
 Compact input selection with one detail panel, preserving draft edits and selecting newly added controls. Motor route labels now identify Garage opener (Tailwind/Homebridge) or Relay: name. Runtime behavior is unchanged. All five CI jobs passed in run 37698946893, including desktop/mobile input selection, draft preservation and add/remove checks. Source is ready for publication; installation remains an owner step.

@@ -142,6 +142,39 @@ try{
      assert.equal(x.applies(),0);assert.equal(x.commissions(),0);assert.equal(x.disables(),0);assert.equal(x.probes(),0);
      assert.deepEqual(x.errors,[]);await p.close();
    }
+   {
+     const x=await fixture(browser,{mobile,dark,mode:'enabled'});const p=x.page;
+     await p.locator('#garages-tab').click();await p.getByRole('button',{name:'02 Controls'}).click();
+     assert.equal(await p.getByLabel('During movement',{exact:true}).count(),0);
+     assert.equal(await p.getByRole('heading',{name:'Additional opener devices',exact:true}).count(),0);
+     await p.getByRole('button',{name:'01 Devices'}).click();
+     assert.equal(await p.getByRole('heading',{name:'Additional opener devices',exact:true}).count(),1);
+     await p.getByLabel('During movement',{exact:true}).selectOption('disabled');
+     await p.getByRole('button',{name:'02 Controls'}).click();
+     assert.match(await p.locator('.control-movement').textContent(),/ignore presses/);
+     await p.getByRole('button',{name:'01 Devices'}).click();
+     await p.getByLabel('During movement',{exact:true}).selectOption('stop-opening-reverse-closing');
+     await p.getByRole('button',{name:'02 Controls'}).click();
+     assert.match(await p.locator('.control-movement').textContent(),/stop opening/);
+     await p.locator('.input-choice[data-input-id="physical-keypad"]').click();
+     const behavior=p.getByLabel('PIN behavior',{exact:true});
+     assert.equal(await behavior.inputValue(),'drop');
+     assert.equal(await behavior.locator('option[value="interrupt"]').isEnabled(),true);
+     await behavior.selectOption('interrupt');
+     await p.locator('.input-choice').first().click();
+     await p.locator('.input-choice[data-input-id="physical-keypad"]').click();
+     assert.equal(await behavior.inputValue(),'interrupt');
+     await review(p);await p.getByRole('button',{name:'Save configuration',exact:true}).click();await saved(p);
+     assert.equal(x.configuration().controllers[0].inputs[1].busyBehavior,'interrupt');
+     assert.equal(x.probes(),0);assert.equal(x.commissions(),0);
+     await p.getByLabel('Operate garage through',{exact:true}).selectOption('primary');
+     assert.equal(await behavior.inputValue(),'drop');
+     assert.equal(await behavior.locator('option[value="interrupt"]').isDisabled(),true);
+     await review(p);await p.getByRole('button',{name:'Save configuration',exact:true}).click();await saved(p);
+     assert.equal(x.configuration().controllers[0].inputs[1].motorPath,'primary');
+     assert.equal(x.configuration().controllers[0].inputs[1].busyBehavior,'drop');
+     assert.deepEqual(x.errors,[]);await p.close();
+   }
    for(const mode of ['enabled','local-unavailable']){
      const x=await fixture(browser,{mobile,dark,mode}),p=x.page;
      await p.locator('#general-tab').click();await p.locator('#shared-type').selectOption('homebridge');
@@ -195,7 +228,7 @@ try{
    await page.getByLabel('Garage name',{exact:true}).fill('Test garage');
    assert.equal(await page.locator('#native-save').isDisabled(),true,'Typing must disable native Save before blur');
    assert.equal(await page.locator('#native-check').isVisible(),false);
-   await page.getByRole('button',{name:'02 Inputs'}).click();
+   await page.getByRole('button',{name:'02 Controls'}).click();
    assert.match(await page.locator('.route-note').first().textContent(),/HomeKit.*virtual keypad.*Tailwind/);
    assert.equal(await page.locator('.input-profile').count(),1);
    assert.equal(await page.locator('.input-choice').count(),2);
@@ -204,11 +237,11 @@ try{
    await page.getByLabel('Control name',{exact:true}).fill('Edited indoor button');
    await page.locator('.input-choice').nth(1).click();
    assert.equal(await page.locator('.input-profile').count(),1);
-   assert.equal(await page.getByLabel('Control door using',{exact:true}).locator('option[value="primary"]').textContent(),'Garage opener (Tailwind)');
+   assert.equal(await page.getByLabel('Operate garage through',{exact:true}).locator('option[value="primary"]').textContent(),'Garage opener (Tailwind)');
    await page.locator('.input-choice').nth(0).click();
    assert.equal(await page.getByLabel('Control name',{exact:true}).inputValue(),'Edited indoor button');
    await page.getByLabel('Control name',{exact:true}).fill(originalInputName);
-   await page.getByRole('button',{name:'Add a button or keypad',exact:true}).click();
+   await page.getByRole('button',{name:'Add control',exact:true}).click();
    assert.equal(await page.locator('.input-choice').count(),3);
    assert.equal(await page.locator('.input-choice').last().getAttribute('aria-pressed'),'true');
    await page.getByRole('button',{name:'Remove control',exact:true}).click();
@@ -226,7 +259,8 @@ try{
    await virtual.getByLabel('Virtual keypad alarm',{exact:true}).selectOption('physical:physical-keypad');
    assert.equal(await virtual.getByLabel('Alarm number',{exact:true}).inputValue(),'1');
    assert.equal(f.probes(),0);assert.equal(f.commissions(),0);
-   await page.locator('.device-block').filter({has:page.getByRole('heading',{name:'Additional motor path',exact:true})}).getByRole('button',{name:'Find devices',exact:true}).first().click();
+   await page.getByRole('button',{name:'01 Devices'}).click();
+   await page.locator('.device-block').filter({has:page.getByRole('heading',{name:'Additional opener devices',exact:true})}).getByRole('button',{name:'Find devices',exact:true}).first().click();
    await page.getByLabel('Discovered motor',{exact:true}).selectOption('0');
    await page.getByText('Selected: lumi.switch.acn047 · resource 2',{exact:true}).waitFor();
    await page.getByRole('button',{name:'03 Behavior'}).click();
@@ -461,8 +495,8 @@ try{
      assert.equal(x.configuration().connections.length,3);assert.deepEqual(x.configuration().controllers,original);
      await p.locator('#general-tab').click();await p.getByRole('button',{name:'Edit connection deCONZ 1',exact:true}).click();
      await p.locator('#shared-address').fill('192.0.2.56:8080');await p.getByRole('button',{name:'Update connection',exact:true}).click();
-     await p.locator('#garages-tab').click();await p.getByRole('button',{name:'02 Inputs'}).click();
-     const summaries=await p.locator('.connection-summary').allTextContents();assert.ok(summaries.length>=3);assert.ok(summaries.every(text=>text.includes('192.0.2.56:8080')));
+     await p.locator('#garages-tab').click();await p.getByRole('button',{name:'02 Controls'}).click();
+     const summaries=await p.locator('.connection-summary').allTextContents();assert.ok(summaries.length>=2);assert.ok(summaries.every(text=>text.includes('192.0.2.56:8080')));
      await review(p);await p.getByRole('button',{name:'Save configuration',exact:true}).click();await saved(p);
      assert.equal(await p.locator('.garage-card').getAttribute('data-state'),'disabled');
      assert.equal(x.configuration().controllers[0].bolt.baseUrl,'http://192.0.2.56:8080');
@@ -483,12 +517,12 @@ try{
        await p.getByRole('button',{name:'Check connections',exact:true}).click();
        await p.waitForFunction(()=>!document.getElementById('workspace').disabled);
        assert.deepEqual(x.probedIds,['second-garage']);
-       await p.getByRole('button',{name:'02 Inputs'}).click();
+       await p.getByRole('button',{name:'02 Controls'}).click();
        assert.equal(await p.locator('.garage-card .card-checks').count(),1);
        const select=p.getByLabel('Virtual keypad alarm',{exact:true});
        assert.equal(await select.locator('option').count(),2,'No physical-keypad choice without a configured keypad');
      }else if(mode==='no-keypad'){
-       await p.getByRole('button',{name:'02 Inputs'}).click();
+       await p.getByRole('button',{name:'02 Controls'}).click();
        const virtual=p.locator('[data-section=virtual-keypad]');
        assert.equal(await virtual.getByLabel('Virtual keypad alarm',{exact:true}).inputValue(),'off');
        assert.equal(await virtual.getByLabel('Alarm number',{exact:true}).count(),0);

@@ -90,10 +90,15 @@ export class InputRouter {
       profile.source.kind === 'switch' && (typeof value !== 'boolean' || profile.trigger !== 'either' && value !== (profile.trigger === 'on'))) {
       return { accepted: false, reason: 'input_trigger_mismatch' };
     }
+    if (profile.source.kind === 'keypad' && value === 'accepted-disarm' && alarmDisarmed !== true) return { accepted: false, reason: 'keypad_outcome_ineligible' };
     if (current.mode === 'interrupt') return { accepted: this.engine.requestInterruption() === true, reason: 'interruption_requested' };
     let command = profile.action;
     if (command === 'keypad') {
-      if (value === 'accepted-disarm' && alarmDisarmed === true) command = 'open';
+      if (profile.busyBehavior === 'interrupt') {
+        const phase = this.engine.snapshot().phase;
+        if (phase === 'closed' && value !== 'accepted-disarm') return { accepted: false, reason: 'keypad_pin_required' };
+        command = phase === 'closed' ? 'open' : 'close';
+      } else if (value === 'accepted-disarm' && alarmDisarmed === true) command = 'open';
       else if (value === 'rejected') command = 'close';
       else return { accepted: false, reason: 'keypad_outcome_ineligible' };
     }

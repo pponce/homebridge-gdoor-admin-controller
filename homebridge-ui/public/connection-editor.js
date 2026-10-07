@@ -5,7 +5,7 @@ const id=()=> 'connection-'+Array.from(crypto.getRandomValues(new Uint8Array(5))
 export class ConnectionEditor {
   constructor(root,{configuration,credentials,request,run,changed,refresh,message,keyCreated}){
     Object.assign(this,{root,configuration,credentials,request,run,changed,refresh,message,keyCreated});this.dirty=false;this.editing=null;
-    root.replaceChildren(el('h2','Device connections'),el('p','Configure each gateway, controller or accessory bridge here. When you add a garage door, choose these saved connections under Devices and Inputs.','subtle'));
+    root.replaceChildren(el('h2','Device connections'),el('p','Configure each gateway, controller or accessory bridge here. When you add a garage door, choose these saved connections under Devices and Controls.','subtle'));
     const purposes=el('ul',undefined,'connection-purposes');
     for(const text of ['deCONZ — connects your bolt, optional opener relay, buttons and keypads to their gateway.','Tailwind — connects the opener and its door-state feedback. Each garage selects its door on this controller.','Homebridge accessories — connects devices exposed by another plugin. This is separate from the web admin interface.'])purposes.append(el('li',text));root.append(purposes);
     this.fields=el('fieldset');root.append(this.fields);this.list=el('div');this.list.className='connection-list';this.fields.append(this.list);
