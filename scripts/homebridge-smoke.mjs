@@ -26,7 +26,10 @@ async function main() {
   assert.ok(process.env.HOMEBRIDGE_BIN, 'HOMEBRIDGE_BIN must point to the CI installation');
   const root = fileURLToPath(new URL('../', import.meta.url));
   const directory = await mkdtemp(path.join(os.tmpdir(), 'coordinator-homebridge-'));
-  const platform = JSON.parse(await readFile(path.join(root, 'examples/development-config.json'), 'utf8'));
+  const platform = JSON.parse(await readFile(path.join(root, 'examples/input-routing-config.json'), 'utf8'));
+  platform.controllers[0].inputs = platform.controllers[0].inputs.slice(0, 1);
+  const button = platform.controllers[0].inputs[0]; button.rearmSeconds = 0; button.timing = {};
+  platform.controllers[0].motorPaths[0].openPulseSeconds = platform.controllers[0].motorPaths[0].closePulseSeconds = .1;
   const hardware = await hardwareFixture(platform.controllers[0]);
   let child; let logs = ''; let identity; const subscriptions=[];let releaseRead;
   try {
@@ -79,13 +82,31 @@ async function main() {
     const lockCurrent=lock.characteristics.find(c=>serviceType(c,'1D'));
     const lockTargets=[];const subscription=new HapSubscription(hapOrigin,'031-45-154',bolt.aid,lockTarget.iid);
     subscriptions.push(subscription);subscription.on('value',value=>lockTargets.push(value));subscription.start();await until(async()=>subscription.ready);
+    const garageEvents=[];
+    for(const [name,characteristic]of [['current',current],['target',target]]){
+      const listener=new HapSubscription(hapOrigin,'031-45-154',garage.aid,characteristic.iid);
+      subscriptions.push(listener);listener.on('value',value=>garageEvents.push({name,value,at:Date.now()}));listener.start();await until(async()=>listener.ready);
+    }
     const readCharacteristics=async()=>{
-      const ids=garage.aid+'.'+current.iid+','+bolt.aid+'.'+lockCurrent.iid;
+      const ids=garage.aid+'.'+current.iid+','+garage.aid+'.'+target.iid+','+bolt.aid+'.'+lockCurrent.iid;
       const result=await fetch(hapOrigin+'/characteristics?id='+ids,{headers:{Authorization:'031-45-154'},signal:AbortSignal.timeout(3000)});
       const body=await result.json();assert.equal(result.status,200,JSON.stringify(body));
       assert.ok(body.characteristics.every(c=>c.status===undefined||c.status===0),JSON.stringify(body));
+      return body.characteristics;
+    };
+    const assertTerminalEvents=async(value,since)=>{
+      // A live client must receive both values, then receive the same terminal
+      // current value again without polling it or sending another motor command.
+      await until(async()=>['current','target'].every(name=>garageEvents.slice(since).some(e=>e.name===name&&e.value===value)),3000);
+      const first=garageEvents.slice(since).find(e=>e.name==='current'&&e.value===value);
+      const writes=structuredClone(hardware.state.writes);
+      await until(async()=>garageEvents.slice(since).some(e=>e.name==='current'&&e.value===value&&e.at>=first.at+1000),5000);
+      assert.deepEqual(hardware.state.writes,writes,'Reaffirmation must not operate hardware');
+      const rows=await readCharacteristics();
+      for(const iid of [current.iid,target.iid])assert.equal(rows.find(c=>c.aid===garage.aid&&c.iid===iid).value,value);
     };
     for(const [value,phase]of [[0,'open'],[1,'closed']]){
+      const since=garageEvents.length;
       let reading=false;const heldRead=new Promise(resolve=>{releaseRead=resolve;});
       hardware.state.beforeDoorRead=async()=>{hardware.state.beforeDoorRead=null;reading=true;await heldRead;};
       await until(async()=>reading);
@@ -95,13 +116,23 @@ async function main() {
       releaseRead();releaseRead=null;
       await until(async()=>{await readCharacteristics();const s=(await management(endpoint+'/state')).status.state;return s.phase===phase&&!s.busy;});
       await until(async()=>lockTargets.at(-1)===(value===0?0:1));
+      await assertTerminalEvents(value,since);
     }
     assert.deepEqual(hardware.state.writes,[['bolt',false],['door','open'],['bolt',false],['door','close'],['bolt',true]]);
+    for(const [value,phase]of [[0,'open'],[1,'closed']]){
+      await until(async()=>(await management(endpoint+'/state')).status.inputStates[button.id]==='ready');
+      // Allow the live-source context to settle after the previous worker ends.
+      await sleep(200);const since=garageEvents.length;
+      hardware.emit(button.source.resourceId,button.trigger);
+      await until(async()=>{const s=(await management(endpoint+'/state')).status.state;return s.phase===phase&&!s.busy;});
+      await assertTerminalEvents(value,since);
+    }
+    assert.deepEqual(hardware.state.writes.slice(5),[['bolt',false],['motor',true],['motor',false],['bolt',false],['motor',true],['motor',false],['bolt',true]]);
     assert.equal(logs.includes(identity.token), false);
     child.kill('SIGTERM');
     await until(async () => child.exitCode !== null || child.signalCode !== null, 10000);
     await assert.rejects(fetch(origin + '/v1/identity', { signal: AbortSignal.timeout(1000) }));
-    console.log('Actual Homebridge child bridge passed prompt HAP command acknowledgement during idle reads, healthy current-state reads during travel, lock-target event updates, ordered coordination and shutdown.');
+    console.log('Actual Homebridge child bridge passed prompt command acknowledgement, healthy reads, lock updates, terminal garage notifications and bounded reaffirmation after HomeKit and physical-button operations, ordered coordination and shutdown.');
   } catch (error) {
     // Synthetic logs only, with the generated management token still redacted.
     const safeLogs = logs.replaceAll(identity?.token || 'never-match-placeholder', '[redacted]');

@@ -1,6 +1,6 @@
 # Development status
 
-2026-10-06: owner testing has exposed HomeKit reporting and physical-input failures. Physical acceptance is not established. The owner has stopped the old services and enabled the new coordinator. The initial disabled-install instructions below describe the earlier cutover stage; the active work is the 0.4.3 correction and original-settings audit at the end of this document.
+2026-10-06: owner testing has exposed HomeKit reporting and physical-input failures. Physical acceptance is not established. The owner has stopped the old services and enabled the new coordinator. The initial disabled-install instructions below describe the earlier cutover stage; the active work is the 0.4.4 terminal-state notification correction at the end of this document.
 
 ## Validated source
 
@@ -67,3 +67,18 @@ The correction updates both current and target Lock characteristics when the sha
 Regression checks cover the original input routes and valid/invalid keypad semantics, a fresh event racing health polling, prompt HomeKit acknowledgement during observation, cached Lock target event notifications, healthy characteristic reads during travel, and prevention of overlapping actuation. Local validation passed 101 Node tests and all 16 Node/Python cross-repository checks. [CI run 37546238676](https://github.com/pponce/homebridge-gDoorAndBolt-coordinator/actions/runs/37546238676) passed on implementation revision `8075186d543095ed9153909b97693ea2b5ee1996`: Node 22/24, actual Homebridge child bridge with the new event/acknowledgement assertions, actual custom UI server, and desktop/mobile configuration flows. Later documentation-only changes preserve that implementation. Version 0.4.3 is prepared for maintainer publication and supervised retesting; these checks do not establish npm publication, installation or physical acceptance. The management API contract and companion administrator code are unchanged.
 
 The [complete field-name mapping](settings-mapping.md) records all 18 original page timers/reporting controls, the interruption checkbox, and new plugin fields. Five reporting settings have no equivalent. The separate behavior audit records changed defaults/ranges, two-pass idle recovery and exact Aqara event-gate parity as remaining gaps. The new controller did not import the old saved values. This patch does not resolve those other gaps or the setup UI backlog, and it must not be described as full original-controller parity.
+
+
+## Delayed Closed display — 0.4.4 preparation
+
+The owner confirmed 0.4.3 installation and, after enabling the saved profile again, completed an indoor-button open/close cycle through the motor relay. Bolt Lock status displayed Unlocked and Locked correctly. The garage remained Closing in Apple Home after the coordinator reported closed, locked, idle and fault-free in two fresh API samples; it eventually changed to Closed. This establishes delayed client reporting after internal completion, but does not identify exactly where the original notification was lost or delayed.
+
+The disabled status originally supplied was from before re-enablement. Later saved history contained an enablement record and a preceding settings apply, with no pending/unknown requests or restart-review event. The history does not identify a changed field, so it cannot prove reinstall cleared enablement. An isolated persistence check retained enablement across a clean restart and unchanged review/apply; a deliberately unfinished saved request correctly required review.
+
+The indoor control's effective closing retraction wait was confirmed as zero. Source inspection still found multiple sequential pre-command state/identity checks, including a read inside zero-duration hold. That latency is separate from the delayed Closed display. No movement timing, read reduction or routing change is included in 0.4.4.
+
+The accessory publisher now sends explicit current/target terminal notifications through Homebridge's sendEventNotification API, then repeats them twice at two-second intervals. Ordinary unchanged polls do not restart the repeat budget. Each delayed send checks current runtime state, actuation enablement, worker ownership and observation age; changes, faults, unavailable state, profile removal and shutdown cancel pending sends. Targets with no previous command agree with a known terminal state on startup. There are no fake intermediate values, characteristic SET calls, hardware writes or actuator retries in reaffirmation.
+
+This is a bounded reporting mitigation consistent with the original controller's terminal-state reaffirmation, not a claim that Apple Home must redraw immediately. The five original configurable notification/reconciliation fields are still not exposed; 0.4.4 uses a fixed garage notification policy. The companion administrator and API contract are unchanged, and saved controller configuration is not migrated or rehashed differently.
+
+Local validation passed all 105 Node tests, including cached-terminal reaffirmation, repeat limits, cancellation on direction/availability/ownership changes, stale observations, removed profiles and shutdown. Package dry-run and JavaScript syntax checks passed. Actual-Homebridge subscriber validation is pending in CI for this revision. Physical acceptance on the owner's host remains outstanding.

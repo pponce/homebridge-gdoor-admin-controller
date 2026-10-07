@@ -41,5 +41,5 @@ export class CoordinatorPlatform {
     if (this.stopped) { await closeServer(this.server); await this.runtime.stop(); return; }
     this.log.info('Coordinator ready. Each garage requires explicit commissioning before control is enabled.');
   }
-  async shutdown() { this.stopped = true; await this.starting; await this.runtime?.stop(); await closeServer(this.server); await this.releaseOwnership?.(); }
+  async shutdown() { this.stopped = true; await this.starting; this.accessories?.stop(); await this.runtime?.stop(); await closeServer(this.server); await this.releaseOwnership?.(); }
 }
