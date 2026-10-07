@@ -1,6 +1,6 @@
 import { HomebridgePluginUiServer, RequestError } from '@homebridge/plugin-ui-utils';
 import path from 'node:path';
-import { readFile } from 'node:fs/promises';
+import { readFile, lstat } from 'node:fs/promises';
 import { loadIdentity } from '../src/storage.js';
 import { readCredentials } from '../src/credentials.js';
 import { PrivateStore } from '../src/private-store.js';
@@ -8,6 +8,7 @@ import { requestJson } from '../src/transport.js';
 import { discoverHomebridge } from '../src/homebridge-devices.js';
 import { validateConfiguration } from '../src/config.js';
 import { withConnections } from './public/connections.js';
+import { LocalConnections } from '../src/local-connections.js';
 import { Diagnostics } from '../src/diagnostics.js';
 
 export class UiServer extends HomebridgePluginUiServer {
@@ -35,6 +36,17 @@ export class UiServer extends HomebridgePluginUiServer {
     });
     this.credentialWork=Promise.resolve();
     const credentialTask=fn=>{const next=this.credentialWork.then(fn);this.credentialWork=next.catch(()=>{});return next;};
+    this.localConnections=new LocalConnections({
+      readConfig:async()=>JSON.parse(await readFile(this.homebridgeConfigPath,'utf8')),
+      readKeys:async()=>{
+        try{await lstat(path.join(this.homebridgeStoragePath,'gdoorandbolt-coordinator','credentials.json'));}
+        catch(error){if(error.code==='ENOENT')return {};throw error;}
+        return readCredentials(this.homebridgeStoragePath);
+      },
+      saveKey:body=>this.saveCredential(body),inspect:discoverHomebridge
+    });
+    route('/local-connections',()=>this.localConnections.list());
+    route('/local-connections/import',body=>credentialTask(()=>this.localConnections.importPin(body.id)));
     route('/credentials', body => credentialTask(()=>this.saveCredential(body)));
     route('/credentials/delete', body => credentialTask(()=>this.deleteCredential(body)));
     route('/deconz', body => this.deconzDevices(body));

@@ -79,3 +79,17 @@ The merged 0.4.10 release also passed all five jobs in [CI run 37645305805](http
 All 142 tests passed locally and on Node 22/24 in [CI run 37642891710](https://github.com/pponce/homebridge-gDoorAndBolt-coordinator/actions/runs/37642891710), implementation `2b5876b8f2266c97a7db680501ad0766d1ed72a7`. Focused save-session tests cover reviewed snapshots, native acknowledgement, setup vs. managed persistence, bridge metadata, partial failure retry, uncertain apply reload and invalidated reviews. Desktop Chromium and mobile WebKit passed a model of the native footer/API contract, toasts, immediate dirty state, delayed/rejected saves, commissioning, draft-preserving credentials, theme changes and overflow. Actual custom UI server IPC and Homebridge 2.0.0/2.4.0 checks also passed. The browser harness models the parent controls; it does not run the Angular Homebridge modal itself. Screenshot artifacts accompany the run but have not been visually reviewed in this workspace. Live owner-host acceptance of the outer modal remains outstanding.
 
 Inline connection-key creation remains separate work; named keys are managed on General. The virtual-keypad selector is addressed by 0.4.11 above. This update does not change those configuration schemas or defaults.
+
+
+## Configured local connections — 0.4.15
+
+General offers a Configured connection dropdown for Homebridge accessories and deCONZ. It reads only the documented Homebridge config.json path, main bridge settings, child `_bridge` settings, and homebridge-deconz's published `hosts` setting. Listing performs no network request and means configured, not running. It excludes the coordinator child bridge, deduplicates shared child bridges using their first configuration, and keeps manual entry when the fixed port or PIN is absent, binding differs, or the target is remote.
+
+Choosing a Homebridge entry fills its loopback accessory address and offers Use configured pairing PIN. The browser receives an opaque selection ID and key reference, never a PIN. Add connection re-reads the documented configuration, rejects changed source identity/address/PIN, performs the existing read-only accessory inventory check and then saves/reuses a private coordinator key. It never patches the source plugin, enables insecure mode, pairs, changes Homebridge configuration or writes an accessory. Changing the proposed address detaches automatic PIN import. Configuration review/save and garage connection checks remain required.
+
+deCONZ imports addresses only. Its published schema does not expose its saved API key, so keys remain manually entered/selected. Dynamically discovered hosts absent from config.json remain manual as well. No plugin cache, persistence internals or pairing files are read.
+
+Documented sources checked October 7, 2026:
+- https://github.com/homebridge/plugin-ui-utils#thishomebridgeconfigpath
+- https://github.com/homebridge/homebridge/wiki/Child-Bridges
+- https://github.com/ebaauw/homebridge-deconz/blob/main/config.schema.json

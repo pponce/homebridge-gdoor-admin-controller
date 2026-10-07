@@ -262,3 +262,10 @@ Validation checkpoint: all 155 local tests pass, including startup bypass and la
 Combined 0.4.14 validation complete: all five CI jobs passed in run 37692549150 on e508ce0726037240adb757f0cb7721cb3217fe5a: 155 tests on Node 22/24, actual Homebridge 2.0.0/2.4.0, UI server IPC and desktop Chromium/mobile WebKit. All 16 cross-repository checks pass locally. Matching API documentation is committed in the administrator at 952db47fd58bb725cd8648dcb1dc8490c0d68de3; no admin runtime update is needed for this diagnostic-default change. Source is ready for owner npm publication and stop/add/start installation. Owner-host Home display acceptance remains outstanding.
 
 Setup follow-up raised by owner: discover local Homebridge/child-bridge connection candidates and PINs from Homebridge configuration, verify reachability/access mode, and retain manual entry for remote hosts. Investigate importing deCONZ gateway address and key from homebridge-deconz's persisted storage. No automatic import or credential access was implemented in 0.4.14.
+
+
+## Configured connection selection — 0.4.15 preparation
+
+The owner authorized setup simplification only through documented configuration/supported interfaces, with no patches to Homebridge or other plugins and no undocumented storage dependencies. Implemented local main/child bridge selection, private server-side PIN import after a read-only access check, and deCONZ address suggestions from documented hosts. Missing ports/PINs, unknown gateway addresses and deCONZ keys retain manual entry. List means configured, not known-running; no automatic probes occur. No controller, diagnostic default, notification or admin protocol changes. Owner installed 0.4.14 and is testing a normal indoor-button cycle with Home visible and diagnostics OFF from startup.
+
+All 159 local tests pass. New unit checks cover PIN confidentiality, source drift, missing configuration, key reuse/conflicts and access failures. Actual UI IPC and desktop/mobile selection/import/manual-fallback checks are being validated.

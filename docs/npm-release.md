@@ -1,3 +1,7 @@
+# Release 0.4.15 preparation
+
+Adds configured local Homebridge bridge selection with private PIN import, plus deCONZ addresses from documented hosts. No patches, private cache reads, movement/reporting changes or changes to the 0.4.14 diagnostic OFF startup default. Browser/runtime release checks are pending.
+
 # Maintainer npm publication
 
 Release 0.4.14 fixes the garage-card review route. After editing an existing garage, its Review changes action opens the configuration summary and Save configuration inside that card. The bottom review button accesses the same transaction. Name-only edits preserve the enabled/disabled color with a pending-changes label, while faults and control-setting changes retain attention styling. The review names the old and new garage names and states that all pending configuration changes will be saved. Native success toast and final Homebridge Save are retained. At the owner’s request, diagnostics now start OFF, with on-demand re-enablement retained. Notification methods, order and repeats, movement and saved settings are unchanged.

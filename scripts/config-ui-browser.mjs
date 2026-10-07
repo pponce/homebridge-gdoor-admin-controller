@@ -25,8 +25,19 @@ async function fixture(browser,{mobile,dark,mode='managed'}){
   if(['fault','moving','enabled'].includes(mode))enabled=true;
   let reviews=0,applies=0,nativeSaves=0,probes=0,commissions=0,disables=0,releaseNative;const probedIds=[],savedKeys=['example-tailwind-key','example-deconz-key'];
   let blocks=mode==='initial'?[]:[{platform:'GDoorAndBoltCoordinator',name:'Custom name',_bridge:{username:'synthetic-bridge',port:12345},controllers:configuration.controllers}];
+  let localImports=0;
   const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>{errors.push('Unexpected native dialog');void d.dismiss();});
   await page.exposeFunction('testRequest',async(name,body)=>{
+    if(name==='/local-connections')return {candidates:[
+      {id:'local-bridge',type:'homebridge',name:'Configured devices',baseUrl:'http://127.0.0.1:51001',canImportPin:true,credentialRef:'local-homebridge-test',detail:'Address and pairing PIN available. Access will be checked when added.'},
+      {id:'local-gateway',type:'deconz',name:'Configured deCONZ',baseUrl:'http://192.0.2.60:8080',canImportPin:false,credentialRef:null,detail:'Address from homebridge-deconz. Select a saved deCONZ API key or enter one.'}
+    ]};
+    if(name==='/local-connections/import'){
+      assert.equal(body.id,'local-bridge');localImports++;
+      if(mode==='local-unavailable')throw Error('bridge unavailable');
+      if(!savedKeys.includes('local-homebridge-test'))savedKeys.push('local-homebridge-test');
+      return {saved:true,reference:'local-homebridge-test'};
+    }
     if(name==='/load')return{connected:mode!=='initial',settings:{revision,configuration},credentials:savedKeys,adminConnection:mode==='initial'?null:{baseUrl:'http://127.0.0.1:27773',identityFile:'/synthetic/homebridge/gdoorandbolt-coordinator/identity.json'},
       controllers:mode==='initial'?[]:configuration.controllers.map(profile=>({id:profile.id,name:profile.name,status:{bootId:'synthetic-boot',actuationEnabled:enabled,held:enabled?null:'not-commissioned',state:{busy:mode==='moving',fault:mode==='fault'?'synthetic-fault':null}}}))};
     if(name==='/validate')return validateConfiguration(body.configuration,{allowEmpty:true});
@@ -81,7 +92,7 @@ async function fixture(browser,{mobile,dark,mode='managed'}){
   assert.equal(await page.locator('#saved-keys .saved-key').count(),2);
   assert.equal(await page.locator('#credential-secret').inputValue(),'');
   await page.locator('#garages-tab').click();await page.locator('.garage-card').first().waitFor();
-  return{page,errors,probedIds,reviews:()=>reviews,disables:()=>disables,configuration:()=>configuration,blocks:()=>blocks,applies:()=>applies,nativeSaves:()=>nativeSaves,probes:()=>probes,commissions:()=>commissions,release:()=>releaseNative?.()};
+  return{page,errors,probedIds,localImports:()=>localImports,reviews:()=>reviews,disables:()=>disables,configuration:()=>configuration,blocks:()=>blocks,applies:()=>applies,nativeSaves:()=>nativeSaves,probes:()=>probes,commissions:()=>commissions,release:()=>releaseNative?.()};
 }
 async function review(page){
   await page.getByRole('button',{name:'Review changes',exact:true}).click();
@@ -94,6 +105,41 @@ try{
  for(const [browserType,mobile,dark]of [[chromium,false,false],[webkit,true,true]]){
   const browser=await browserType.launch({headless:true});
   try{
+   for(const mode of ['enabled','local-unavailable']){
+     const x=await fixture(browser,{mobile,dark,mode}),p=x.page;
+     await p.locator('#general-tab').click();await p.locator('#shared-type').selectOption('homebridge');
+     await p.waitForFunction(()=>document.querySelector('#shared-source option[value="local-bridge"]'));
+     await p.locator('#shared-source').selectOption('local-bridge');
+     assert.equal(await p.locator('#shared-address').inputValue(),'http://127.0.0.1:51001');
+     assert.equal(await p.locator('#shared-key').inputValue(),'__configured__');
+     assert.equal(await p.locator('#shared-secret').isVisible(),false);
+     assert.equal(x.localImports(),0);
+     // Editing the destination must detach the private PIN import.
+     await p.locator('#shared-address').fill('http://192.0.2.99:51001');
+     assert.notEqual(await p.locator('#shared-key').inputValue(),'__configured__');
+     await p.locator('#shared-source').selectOption('');await p.locator('#shared-source').selectOption('local-bridge');
+     await p.getByRole('button',{name:'Add connection',exact:true}).click();
+     if(mode==='local-unavailable'){
+       await p.locator('#notice').filter({hasText:'Could not use this bridge'}).waitFor();
+       assert.equal(await p.locator('#shared-source').inputValue(),'local-bridge');
+       assert.equal(await p.locator('.shared-connection').filter({hasText:'Configured devices'}).count(),0);
+     }else{
+       await p.locator('.shared-connection').filter({hasText:'Configured devices'}).waitFor();
+       assert.equal(x.localImports(),1);assert.equal(x.applies(),0);
+       await review(p);await p.getByRole('button',{name:'Save configuration',exact:true}).click();await saved(p);
+       assert.equal(x.configuration().connections.find(c=>c.type==='homebridge').credentialRef,'local-homebridge-test');
+       assert.equal(x.blocks()[0].controllers[0].name,x.configuration().controllers[0].name);
+       await p.locator('#shared-type').selectOption('deconz');
+       await p.waitForFunction(()=>document.querySelector('#shared-source option[value="local-gateway"]'));
+       await p.locator('#shared-source').selectOption('local-gateway');
+       assert.equal(await p.locator('#shared-address').inputValue(),'http://192.0.2.60:8080');
+       assert.equal(await p.locator('#shared-key option[value="__configured__"]').count(),0);
+       if(process.env.PREVIEW_OUTPUT)await p.screenshot({path:path.join(process.env.PREVIEW_OUTPUT,mobile?'configured-connections-mobile.png':'configured-connections-desktop.png'),fullPage:true});
+     }
+     assert.equal(x.probes(),0);assert.equal(x.commissions(),0);assert.equal(x.disables(),0);
+     assert.equal(await p.locator('body').evaluate(b=>b.scrollWidth<=innerWidth+1),true);
+     assert.deepEqual(x.errors,[]);await p.close();
+   }
    const f=await fixture(browser,{mobile,dark}),{page}=f;
    assert.equal(f.probes(),0);assert.equal(f.nativeSaves(),0);
    assert.equal(await page.locator('#native-save').isEnabled(),true);

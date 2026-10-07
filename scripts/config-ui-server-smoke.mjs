@@ -1,3 +1,4 @@
+import {createServer} from 'node:http';
 import {fork} from 'node:child_process';
 import {mkdtemp,readFile,writeFile,rm} from 'node:fs/promises';
 import path from 'node:path';
@@ -16,7 +17,12 @@ example.controllers[0].inputs=example.controllers[0].inputs.slice(0,2);
 Object.assign(example.controllers[0].motorPaths[0].connection,{resourceType:'On/Off switch',modelId:'lumi.switch.acn047',manufacturer:'Aqara'});
 const hardware=await hardwareFixture(example.controllers[0]);example.controllers=[hardware.config];
 const runtime=new CoordinatorRuntime({storagePath,configuration:example});await runtime.start();const diagnostics=new Diagnostics(runtime.configuration,()=>runtime.credentials());const server=createManagementServer({identity,configuration:example,runtime,diagnostics});const port=await listenLocal(server,0);
-const configPath=path.join(storagePath,'config.json');await writeFile(configPath,JSON.stringify({platforms:[{...example,managementPort:port}]}),{mode:0o600});let logs='';let child;
+let localReads=0;const localPin='123-45-678';
+const localBridge=createServer((req,res)=>{
+ assert.equal(req.method,'GET');assert.equal(req.url,'/accessories');assert.equal(req.headers.authorization,localPin);localReads++;
+ res.setHeader('Content-Type','application/json');res.end(JSON.stringify({accessories:[{aid:1,services:[{type:'3E',characteristics:[{type:'30',value:'synthetic-local-bridge'}]}]}]}));
+});localBridge.listen(0,'127.0.0.1');await once(localBridge,'listening');
+const configPath=path.join(storagePath,'config.json');await writeFile(configPath,JSON.stringify({bridge:{name:'Main synthetic bridge',port:localBridge.address().port,pin:localPin},platforms:[{...example,managementPort:port}]}),{mode:0o600});let logs='';let child;
 try{
  child=fork(path.resolve('homebridge-ui/server.js'),[],{env:{...process.env,HOMEBRIDGE_STORAGE_PATH:storagePath,HOMEBRIDGE_CONFIG_PATH:configPath},stdio:['ignore','pipe','pipe','ipc']});
  child.stdout.on('data',data=>{logs+=data;});child.stderr.on('data',data=>{logs+=data;});
@@ -24,6 +30,11 @@ try{
  await wait(m=>m.action==='ready');
  const request=async(path,body={})=>{const requestId=randomUUID();const promise=wait(m=>m.action==='response'&&m.payload.requestId===requestId);child.send({action:'request',requestId,path,body});const m=await promise;assert.equal(m.payload.success,true,JSON.stringify(m.payload.data));return m.payload.data;};
  let loaded=await request('/load');assert.equal(loaded.connected,true);assert.equal(loaded.settings.configuration.connections.length,2);assert.deepEqual(hardware.state.requests,[]);
+ const localOptions=await request('/local-connections');assert.equal(localReads,0);assert.equal(JSON.stringify(localOptions).includes(localPin),false);
+ const localOption=localOptions.candidates.find(c=>c.name==='Main synthetic bridge');assert.equal(localOption.canImportPin,true);
+ const imported=await request('/local-connections/import',{id:localOption.id});assert.equal(imported.reference,localOption.credentialRef);assert.equal(localReads,1);
+ assert.equal(JSON.stringify(imported).includes(localPin),false);assert.deepEqual(hardware.state.writes,[]);
+ const sourceConfig=JSON.parse(await readFile(configPath,'utf8'));assert.equal(sourceConfig.bridge.pin,localPin);
  for(const[reference,secret]of Object.entries(hardware.credentials))await request('/credentials',{reference,secret});
  const discovered=await request('/deconz',{baseUrl:hardware.config.bolt.baseUrl,credentialRef:hardware.config.bolt.credentialRef});
  const motor=hardware.config.motorPaths[0].connection;
@@ -40,7 +51,7 @@ try{
  const review=await request('/review',{configuration,revision:loaded.settings.revision});await request('/apply',{token:review.review.token});
  loaded=await request('/load');assert.equal(loaded.settings.configuration.controllers[0].name,'IPC edited garage');assert.equal(loaded.settings.revision,2);
  const result=await request('/commission',{controller:hardware.config.id,revision:2,previousControllerStopped:true,physicalSetupReviewed:true,recover:false});assert.equal(result.status.actuationEnabled,true);assert.deepEqual(hardware.state.writes,[]);
- loaded=await request('/load');assert.deepEqual(loaded.credentials.sort(),Object.keys(hardware.credentials).sort());
+ loaded=await request('/load');assert.deepEqual(loaded.credentials.sort(),[...Object.keys(hardware.credentials),imported.reference].sort());
  const renamed=structuredClone(loaded.settings.configuration);renamed.controllers[0].name='Renamed enabled garage';renamed.connections[0].name='Saved device connection';
  const renameReview=await request('/review',{configuration:renamed,revision:loaded.settings.revision});
  assert.deepEqual(renameReview.review.requiresCommissioning,[]);await request('/apply',{token:renameReview.review.token});
@@ -60,6 +71,6 @@ try{
  assert.equal(disabled.status.actuationEnabled,false);assert.deepEqual(hardware.state.writes,[]);
  await request('/commission',{controller:hardware.config.id,revision:3,previousControllerStopped:true,physicalSetupReviewed:true,recover:false});
  const [reference,secret]=Object.entries(hardware.credentials)[0];await request('/credentials',{reference,secret});assert.equal(runtime.status(hardware.config.id).actuationEnabled,false);assert.deepEqual(hardware.state.writes,[]);
- for(const secret of [identity.token,...Object.values(hardware.credentials)])assert.equal(logs.includes(secret),false);
+ for(const secret of [identity.token,localPin,...Object.values(hardware.credentials)])assert.equal(logs.includes(secret),false);
  console.log('Real custom UI server IPC passed: discovery, complete control checks, public keypad membership, review/apply, commissioning, name-only enablement preservation, disabling and credential-change pause with no hardware writes.');
-}finally{if(child){const exited=once(child,'exit');child.kill('SIGTERM');await exited;}await runtime.stop();await closeServer(server);await hardware.close();await rm(storagePath,{recursive:true,force:true});}
+}finally{await new Promise(resolve=>localBridge.close(resolve));if(child){const exited=once(child,'exit');child.kill('SIGTERM');await exited;}await runtime.stop();await closeServer(server);await hardware.close();await rm(storagePath,{recursive:true,force:true});}

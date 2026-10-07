@@ -17,3 +17,5 @@
 - Owner update scripts use SSH Git and print npm's browser authentication URL without opening it, allowing up to ten minutes to verify publication. Complete source/publication checks before installation; install in this explicit order: sudo hb-service stop, sudo hb-service add the pinned plugin version, sudo hb-service start. Stop on installation failure and leave Homebridge stopped. Keep the old controller/web services stopped.
 
 - Retain HomeKit reporting diagnostics as an on-demand troubleshooting capability. The owner explicitly requested 0.4.14 start with diagnostics OFF while retaining live re-enablement, combined with the UI fix in one install. This is an investigation build, not a validated root-cause fix. Comparison scripts restore their starting modes; --restore-baseline selects OFF/inline and --restore-recording enables full recording. Keep notification behavior unchanged.
+
+- Connection simplification must use documented configuration and supported interfaces only. No Homebridge/other-plugin patches, private-cache scraping or undocumented storage dependencies. Keep manual entry where supported discovery cannot supply a value.
