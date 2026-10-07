@@ -1,5 +1,11 @@
 # Development status
 
+## Configuration UI release — 0.4.10
+
+The owner authorizes merging the tested `config-ui-save-preview` work and preparing it for installation. Version 0.4.10 combines the native configuration save/toast/footer flow and refreshed styling with main's 0.4.9 reporting experiments. The preview is four commits ahead of main with no divergence. No controller movement code, reporting defaults, API contract or standalone-admin runtime changes are included in this release.
+
+The preview passed all five CI jobs, including 142 tests on Node 22/24, actual Homebridge 2.0.0/2.4.0, custom UI server IPC and desktop/mobile browser checks. The final release revision is awaiting its main-branch CI gate. npm authentication is not available in this workspace, so publication requires the maintainer's existing browser-login release script. Merge, npm publication, host installation and live modal/Apple Home acceptance are separate milestones. See [release instructions](npm-release.md).
+
 ## Configuration UI save experience — separate development branch
 
 The owner requests starting the Roborock-inspired configuration UI work while reporting experiments continue. Prepared on `config-ui-save-preview`, version 0.4.10-dev.0, preserving main's 0.4.9 test release. [Implementation notes](config-ui-experience.md) pin the upstream UI and Homebridge modal references and explain the native Save/toast contract.
@@ -8,7 +14,7 @@ The plugin now awaits configuration persistence, shows a native success toast, a
 
 All 142 local tests and package dry-run pass. [CI run 37642891710](https://github.com/pponce/homebridge-gDoorAndBolt-coordinator/actions/runs/37642891710) passed on implementation revision `2b5876b8f2266c97a7db680501ad0766d1ed72a7`: Node 22/24, actual Homebridge 2.0.0/2.4.0, actual custom UI server IPC, desktop Chromium and mobile WebKit. Browser checks cover the modeled native footer/API contract, successful setup/managed saves, delayed and rejected native saves, uncertain apply reload, metadata preservation, explicit commissioning, draft-preserving private-key saves, live theme changes and overflow. The run includes desktop/mobile screenshot artifacts. Those screenshots have not been visually inspected in this workspace, and actual host-modal acceptance remains outstanding.
 
-Local browser binaries could not be downloaded under this workspace's network policy. GitHub PR creation returned internal errors, so the existing CI workflow also accepts this isolated preview branch directly, with the same read-only permissions and checks. The preview source is saved and tested, but no draft PR, merge, npm publication or owner installation has been completed. Main remains the reviewed 0.4.9 release for the ongoing Home display experiments. A later notes-only commit preserves the tested implementation.
+Local browser binaries could not be downloaded under this workspace's network policy. GitHub PR creation returned internal errors, so the existing CI workflow also accepts this isolated preview branch directly, with the same read-only permissions and checks. At the end of this preview stage, the source was saved and tested, but no draft PR, merge, npm publication or owner installation had been completed. Main still held the reviewed 0.4.9 release. A later notes-only commit preserved the tested implementation. The owner-requested 0.4.10 integration is recorded above.
 
 ## Next reporting experiments — 0.4.9 preparation
 

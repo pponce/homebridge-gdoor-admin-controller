@@ -1,6 +1,6 @@
 # Configuration save experience
 
-This work is prepared on `config-ui-save-preview` while the owner tests reporting experiments on main's 0.4.9 release. It does not change HomeKit publication, diagnostic defaults, movement behavior or the standalone administrator. The branch version is 0.4.10-dev.0; it is not an npm release or an installation instruction.
+Version 0.4.10 integrates the tested `config-ui-save-preview` work at the owner's request. It retains the reporting experiments from 0.4.9 and does not change HomeKit publication, diagnostic defaults, movement behavior or the standalone administrator. See [release instructions](npm-release.md) and [release validation and publication status](status.md).
 
 ## Reference and framework
 
