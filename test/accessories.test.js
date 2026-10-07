@@ -4,19 +4,21 @@ import { EventEmitter } from 'node:events';
 import { CoordinatorAccessories } from '../src/accessories.js';
 
 function fixture() {
-  const values = new Map(); const events = []; const pending = new Map(); const chars = new Map(); let serial = 0;
+  const values = new Map(); const events = []; const pending = new Map(); const immediates = new Map(); const chars = new Map(); let serial = 0;
   class HapStatusError extends Error {}
   const Characteristic = Object.fromEntries(['CurrentDoorState','TargetDoorState','ObstructionDetected','LockCurrentState','LockTargetState'].map(key => [key,key]));
   const api = { hap: { Characteristic, HapStatusError, HAPStatus: { SERVICE_COMMUNICATION_FAILURE: -70402, NOT_ALLOWED_IN_CURRENT_STATE: -70412 } } };
   const status = { actuationEnabled: true, state: {} };
   const entry = { engine: { observedAt: Date.now() }, profile: { timing: { idlePollSeconds: 2 } } };
   const runtime = { status: () => status, entry: () => entry, submit: async () => { throw Error('unexpected hardware command'); } };
-  const timers = { setTimeout(fn, ms) { const id = ++serial; pending.set(id, { fn, ms }); return id; }, clearTimeout(id) { pending.delete(id); } };
+  const timers = { setTimeout(fn, ms) { const id = ++serial; pending.set(id, { fn, ms }); return id; }, clearTimeout(id) { pending.delete(id); },
+    setImmediate(fn) { const id = ++serial; immediates.set(id, fn); return id; }, clearImmediate(id) { immediates.delete(id); } };
   const accessories = new CoordinatorAccessories(api, {}, runtime, [], timers);
   for (const kind of ['garage','bolt']) {
     const v = { kind, id: 'example', targetGeneration: 0, service: { getCharacteristic(key) {
       if (!chars.has(key)) {
         const c = new EventEmitter();
+        Object.defineProperty(c, 'value', { get: () => values.get(key) });
         c.removeOnGet = c.removeOnSet = () => {};
         c.updateValue = value => { values.set(key,value); };
         c.sendEventNotification = value => { values.set(key,value); events.push([key,value]); c.emit('reported',value); };
@@ -26,7 +28,8 @@ function fixture() {
     } } };
     accessories.active.set(kind, v); accessories.bind(v);
   }
-  return { values, events, pending, accessories, HapStatusError, status, entry, runtime, chars,
+  return { values, events, pending, immediates, accessories, HapStatusError, status, entry, runtime, chars,
+    flush() { const callbacks = [...immediates.values()]; immediates.clear(); for (const fn of callbacks) fn(); },
     publish(state) { status.state = structuredClone(state); accessories.update('example', status.state); },
     read(field) { let result; let failure; chars.get(field).emit('get', (error,value) => { failure = error; result = value; }); if (failure) throw failure; return result; },
     set(field, value) { return new Promise((resolve,reject) => chars.get(field).emit('set', value, error => error ? reject(error) : resolve())); },
@@ -182,4 +185,78 @@ test('garage completion matches the owner-verified legacy target-then-current no
   // The independently working bolt retains its current/target report contract.
   assert.deepEqual(boltEvents(f), Array(3).fill([['LockCurrentState',1],['LockTargetState',1]]).flat());
   assert.equal(f.read('TargetDoorState'),1);
+});
+
+test('deferred experiment yields only garage publication, commits GETs immediately and preserves terminal order and repeats', () => {
+  const f=fixture(); f.publish(open); f.events.length=0;
+  const before=[...f.values];
+  f.accessories.setReportingExperiment('off','deferred');
+  assert.deepEqual([...f.values],before); assert.deepEqual(f.events,[]);
+  f.accessories.reporting.record=()=>{throw Error('diagnostics must stay off');};
+  f.publish(closed);
+  assert.equal(f.values.get('CurrentDoorState'),0,'garage cache has not been published yet');
+  assert.equal(f.values.get('LockCurrentState'),1,'bolt remains immediate');
+  assert.equal(f.read('CurrentDoorState'),1,'GET returns the committed latest report synchronously');
+  assert.equal(f.immediates.size,1); assert.deepEqual(doorEvents(f),[]);
+  f.publish(closed); // identical poll must not discard the pending forced notification
+  assert.equal(f.immediates.size,1);
+  f.flush(); f.tick(); f.flush(); f.tick(); f.flush();
+  assert.deepEqual(doorEvents(f),Array(3).fill([['TargetDoorState',1],['CurrentDoorState',1]]).flat());
+  assert.deepEqual(boltEvents(f),Array(3).fill([['LockCurrentState',1],['LockTargetState',1]]).flat());
+  assert.equal(f.pending.size,0); assert.equal(f.immediates.size,0);
+});
+
+test('deferred publisher drops superseded terminal intent and coalesces to the latest complete report', () => {
+  const f=fixture(); f.publish(open); f.events.length=0;
+  f.accessories.setReportingExperiment('off','deferred');
+  f.publish(closed);
+  f.publish({...closed,phase:'opening',target:'open',bolt:'unlocked',busy:true});
+  f.flush();
+  assert.deepEqual(doorEvents(f),[],'obsolete forced Closed pair must not be emitted');
+  assert.equal(f.values.get('CurrentDoorState'),2); assert.equal(f.values.get('TargetDoorState'),0);
+  f.publish(closed); f.publish(open); f.flush();
+  assert.deepEqual(doorEvents(f),[['TargetDoorState',0],['CurrentDoorState',0]]);
+});
+
+test('deferred queue rejects changing modes while pending and cannot report after stop, removal or replacement', () => {
+  for(const change of [f=>f.accessories.stop(), f=>f.accessories.active.delete('garage'),
+    f=>f.accessories.active.set('garage',{...f.accessories.active.get('garage')})]) {
+    const f=fixture(); f.publish(open); f.events.length=0;
+    f.accessories.setReportingExperiment('off','deferred'); f.publish(closed);
+    assert.throws(()=>f.accessories.setReportingExperiment('full','inline'),/reporting_publication_pending/);
+    const callbacks=[...f.immediates.values()]; change(f);
+    for(const fn of callbacks)fn(); // even a previously captured/cancelled callback must be harmless
+    assert.deepEqual(doorEvents(f),[]);
+  }
+});
+
+test('deferred queue rechecks faults, holds, freshness and live direction before publishing', () => {
+  for(const change of [f=>{f.status.actuationEnabled=false;}, f=>{f.status.state.fault='feedback_lost';},
+    f=>{f.status.state.unavailable='door_read_failed';}, f=>{f.accessories.active.get('garage').report.observedAt=Date.now()-60000;},
+    f=>{f.runtime.entry=()=>{throw Error('controller_removed');};}]) {
+    const f=fixture(); f.publish(open); f.events.length=0;
+    f.accessories.setReportingExperiment('off','deferred'); f.publish(closed); change(f); f.flush();
+    assert.deepEqual(doorEvents(f),[]);
+    assert.ok(f.values.get('CurrentDoorState') instanceof f.HapStatusError);
+    assert.equal(f.accessories.active.get('garage').notificationTimer,null);
+  }
+  const f=fixture(); f.publish(open); f.events.length=0;
+  f.accessories.setReportingExperiment('off','deferred'); f.publish(closed);
+  f.status.state={...open}; f.flush(); assert.deepEqual(doorEvents(f),[]);
+  f.publish(closed); f.publish({...closed,fault:'feedback_lost'});
+  assert.equal(f.immediates.size,0,'errors cancel pending success and publish immediately');
+  assert.ok(f.values.get('CurrentDoorState') instanceof f.HapStatusError);
+});
+
+test('experiment validation and restoration neither replay notifications nor reset bindings', () => {
+  const f=fixture(); f.publish(closed); const before=f.events.length;
+  assert.throws(()=>f.accessories.setReportingExperiment('unknown','deferred'),/invalid_reporting_experiment/);
+  assert.equal(f.accessories.reporting.traceMode,'full'); assert.equal(f.accessories.publicationMode,'inline');
+  f.accessories.setReportingExperiment('events','inline');
+  const revision=f.accessories.reporting.recordingRevision;
+  f.accessories.setReportingExperiment('events','inline'); assert.equal(f.accessories.reporting.recordingRevision,revision);
+  f.accessories.setReportingExperiment('off','deferred');
+  f.accessories.setReportingExperiment('full','inline');
+  assert.equal(f.accessories.publicationRevision,2); assert.equal(f.events.length,before);
+  assert.equal(f.chars.get('TargetDoorState').listenerCount('set'),1);
 });

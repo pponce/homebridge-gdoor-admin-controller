@@ -84,7 +84,7 @@ async function main() {
     const lockCurrent=lock.characteristics.find(c=>serviceType(c,'1D'));
     // The owner diagnostic uses one event connection for all four fields and
     // reads only the management API afterwards. Exercise that exact script.
-    capture=spawn('python3',['-B','-u',path.join(root,'scripts/watch-homekit-events.py'),'--storage',directory,'--seconds','90'],{stdio:['ignore','pipe','pipe']});
+    capture=spawn('python3',['-B','-u',path.join(root,'scripts/watch-homekit-events.py'),'--storage',directory,'--seconds','180'],{stdio:['ignore','pipe','pipe']});
     let captureBuffer='';
     capture.stdout.on('data',data=>{
       captureOutput+=data;captureBuffer+=data;
@@ -167,6 +167,32 @@ async function main() {
     assert.equal(afterOff.events.at(-1).sequence,recordedSequence,'Off must bypass all internal event recording');
     assert.ok(subscriberIds.every(id=>afterOff.clients.some(c=>c.id===id&&c.subscriptions.length>=4)),'Existing subscribers survive recording switch');
     assert.equal((await management('/v1/homekit-reporting/recording',{recording:true})).recording,true);
+    for(const [traceMode,publicationMode]of [['events','inline'],['subscribers','inline'],['off','deferred']]) {
+      const before=(await management('/v1/homekit-reporting')).reporting;
+      const beforeSequence=before.events.at(-1).sequence;
+      const beforeWrites=hardware.state.writes.length;
+      const selected=await management('/v1/homekit-reporting/experiment',{traceMode,publicationMode});
+      assert.equal(selected.traceMode,traceMode); assert.equal(selected.publicationMode,publicationMode);
+      assert.equal(hardware.state.writes.length,beforeWrites,'Experiment selection cannot actuate');
+      for(const [value,phase]of [[0,'open'],[1,'closed']]) {
+        await until(async()=>(await management(endpoint+'/state')).status.inputStates[button.id]==='ready');
+        await sleep(200); const since=garageEvents.length; captureSince=captureEvents.length;
+        hardware.emit(button.source.resourceId,button.trigger);
+        await until(async()=>{const s=(await management(endpoint+'/state')).status.state;return s.phase===phase&&!s.busy;});
+        await assertTerminalEvents(value,since);
+      }
+      assert.deepEqual(hardware.state.writes.slice(beforeWrites),[['bolt',false],['motor',true],['motor',false],['motor',true],['motor',false],['bolt',true]]);
+      const after=(await management('/v1/homekit-reporting')).reporting;
+      assert.equal(after.bootId,before.bootId); assert.equal(after.traceMode,traceMode); assert.equal(after.publicationMode,publicationMode);
+      assert.ok(subscriberIds.every(id=>after.clients.some(c=>c.id===id&&c.subscriptions.length>=4)),'Experiments keep the same subscriber connections');
+      const newEvents=after.events.filter(e=>e.sequence>beforeSequence);
+      if(traceMode==='events') {
+        assert.ok(newEvents.some(e=>e.kind==='publish'&&e.field==='doorCurrent'&&e.value===1));
+        assert.ok(newEvents.filter(e=>e.kind==='publish').every(e=>e.subscribers===null));
+      } else assert.deepEqual(newEvents,[],'Inspection-only and diagnostics-OFF do not record events');
+    }
+    const restored=await management('/v1/homekit-reporting/experiment',{traceMode:'full',publicationMode:'inline'});
+    assert.equal(restored.traceMode,'full'); assert.equal(restored.publicationMode,'inline');
     const finalTrace=(await management('/v1/homekit-reporting')).reporting;
     assert.ok(finalTrace.events.some(e=>e.kind==='publish'&&e.field==='doorCurrent'&&e.value===1));
     assert.ok(finalTrace.events.some(e=>e.kind==='get'&&e.field==='doorCurrent'&&e.client?.paired===false));
@@ -178,7 +204,7 @@ async function main() {
     child.kill('SIGTERM');
     await until(async () => child.exitCode !== null || child.signalCode !== null, 10000);
     await assert.rejects(fetch(origin + '/v1/identity', { signal: AbortSignal.timeout(1000) }));
-    console.log('Actual Homebridge child bridge passed prompt acknowledgement, healthy reads, all four pushed states on one diagnostic connection, repeated terminal garage pairs and unchanged bolt reaffirmation after HomeKit and physical-button operations, ordered coordination and shutdown.');
+    console.log('Actual Homebridge child bridge passed HomeKit and physical-button cycles, unchanged coordination, notification pairs/repeats, stable subscribers in events/inspection/deferred experiments, restoration and shutdown.');
   } catch (error) {
     // Synthetic logs only, with the generated management token still redacted.
     const safeLogs = logs.replaceAll(identity?.token || 'never-match-placeholder', '[redacted]');

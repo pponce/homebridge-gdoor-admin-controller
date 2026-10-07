@@ -1,5 +1,13 @@
 # Development status
 
+## Next reporting experiments — 0.4.9 preparation
+
+The owner requests proceeding directly from 0.4.6 failures and 0.4.7 successes to the next experiments. No mandatory 0.4.8 ON/OFF/ON trial is required, and no same-process success/failure/success result is claimed. The cause of Home's lingering Closing display remains unconfirmed.
+
+Prepared independent event-only and subscriber-inspection-only tracing plus a garage-only setImmediate publisher with diagnostics off. Runtime switches preserve connections, profiles, commissioning and movement behavior. The deferred queue coalesces to the latest complete report and rejects obsolete direction, binding, freshness, fault/hold or shutdown state. Bolt reports remain inline; synchronous GET protection and legacy terminal pair order/repeats remain. Startup and cleanup retain full diagnostics/inline reporting; a future default-off release requires validation with diagnostics off.
+
+The guided --experiment command requests one owner-operated cycle with no polling while waiting, verifies boundary continuity and restores baseline on completion/interruption. The older ON/OFF script remains optional. API documentation is copied to the standalone admin; its runtime/install do not change. Regression coverage includes mode isolation, queue cancellation/races, API authorization/validation and script restoration; real Homebridge checks now exercise all three new modes. All 136 local Node tests and 16 cross-repository checks pass; npm package dry-run succeeds. Actual Homebridge/CI validation and publication are recorded below when complete. Source preparation does not establish npm publication, host installation or Apple Home acceptance.
+
 2026-10-06: owner testing has exposed HomeKit reporting and physical-input failures. Physical acceptance is not established. The owner has stopped the old services and enabled the new coordinator. The initial disabled-install instructions below describe the earlier cutover stage; the active work is the 0.4.8 controlled recording comparison at the end of this document.
 
 ## Validated source
@@ -162,7 +170,6 @@ The owner reports Closed displayed correctly in two cycles, one captured and one
 Version 0.4.8 provides authenticated process-local recording ON/OFF changes while idle, preserving the existing HomeKit connection, all report methods/order/repeats, movement, profile hashes and commissioning. Internal OFF bypasses per-event tracing/subscriber inspection; ON retains tracing and adds precise monotonic observation timestamps. A guided comparison uses boundary-only management snapshots and no HAP reads/subscriptions, no polling during each owner-operated cycle, and no hardware commands. It checks process/subscriber continuity, stops on a failed baseline or two successes, and asks for a third ON cycle only if OFF fails. Cleanup restores ON (or prints recovery instructions if a busy controller prevents restoration). The companion API document is synchronized; its runtime is unchanged.
 
 All 129 Node tests (including comparison-script Python checks), the package dry-run, and all 16 cross-repository checks pass. CI [37572136668](https://github.com/pponce/homebridge-gDoorAndBolt-coordinator/actions/runs/37572136668) passed for source cef0c299d192ed99164575350efbc0d515643454: all 129 tests on Node 22/24, actual Homebridge 2.0.0 and 2.4.0 child bridges, custom UI IPC, and desktop/mobile browser checks. The actual Homebridge comparison kept existing synthetic subscribers through recording OFF and ON, received garage/bolt terminal events and repeats while OFF, recorded no OFF events, and preserved the expected hardware-command sequence. These are source/runtime checks, not Apple Home rendering acceptance. At release preparation, npm publication and owner installation were still pending; see the later owner update below. This is a discriminating diagnostic, not a claimed root-cause fix. Configuration UX work remains deferred.
-
 
 ## Owner installed 0.4.8; diagnostics retained after resolution (2026-10-06 Pacific)
 

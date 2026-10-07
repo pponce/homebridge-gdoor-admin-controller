@@ -28,6 +28,7 @@ POST bodies are JSON, include the pinned `instanceId`, and contain exactly the f
 | GET /v1/activity | — | events |
 | GET /v1/homekit-reporting (optional, 0.4.7+) | — | reporting |
 | POST /v1/homekit-reporting/recording (optional, 0.4.8+) | recording (boolean) | recording, recordingRevision |
+| POST /v1/homekit-reporting/experiment (optional, 0.4.9+) | traceMode, publicationMode | traceMode, publicationMode, recording, recordingRevision, publicationRevision |
 | GET /v1/guard | — | ready |
 | GET /v1/maintenance | — | maintenance (null or transaction) |
 | POST /v1/maintenance/preflight,pause,verify,resume,complete | transactionId, physicalCheck, gateway | acknowledged |
@@ -76,3 +77,13 @@ The optional reporting snapshot adds bootId, recording (default true) and record
 POST /v1/homekit-reporting/recording accepts exactly {instanceId,recording}, with a boolean recording value and the ordinary local authentication/Host/Origin restrictions. Only POST is supported (405 otherwise). Invalid identity/shape is 409, malformed/oversized JSON is 400. A controller with state.busy rejects the change with 409 reporting_controller_busy. Successful responses contain recording and recordingRevision in the ordinary envelope. The check and switch are synchronous after body parsing.
 
 This is a process-local diagnostic switch, not saved configuration. It neither rebuilds accessories nor changes subscriptions, notification order/repeats, hardware state, commissioning or timers. It sends no HAP read/write/notification and replays no buffered events. Restart resets recording to true. Ordinary reporting inspection remains read-only even when recording is disabled. Unsupported older or fixture servers need not provide the switch; the administrator does not depend on it.
+
+### Reporting experiments (0.4.9+)
+
+POST /v1/homekit-reporting/experiment accepts exactly {instanceId,traceMode,publicationMode}. traceMode is full, events, subscribers or off; publicationMode is inline or deferred. Authentication, Host/Origin restrictions, JSON limits, method and idle-controller checks match the recording endpoint. Invalid values/identity are 409. A stopped publisher or pending deferred report rejects the switch with 409 reporting_publication_pending. All validation precedes mutation. The successful response includes both modes and their revisions; the reporting snapshot includes those fields too. recordingRevision increments when traceMode changes; publicationRevision increments when publicationMode changes. Selecting unchanged modes is idempotent.
+
+full retains all tracing; events records bounded event/timestamp history but omits per-publication subscriber inspection (event subscribers is null); subscribers performs publication subscriber inspection without recording events/timestamps or labelling GET clients; off bypasses both. The backward-compatible recording flag is true for any non-off trace mode, including subscribers, which does not append history. POST recording:true selects full; false selects off; neither changes publicationMode. Existing history is retained. Boundary GET inspection remains available in every mode.
+
+deferred schedules garage publication through setImmediate. It keeps the latest committed complete report, coalesces pending updates and checks report generation, binding, live state, enablement and freshness before sending. Reversal, removal/rebind, shutdown and invalid feedback cannot replay an obsolete success. Error publication and initial accessory seeding remain inline. Bolt publication stays inline. Committed synchronous GETs, HAP methods, terminal target/current order, two-second repeat schedule and all hardware behavior remain unchanged. This is an experimental scheduling change, not a guarantee of a separate HAP batch or a 250 ms delay.
+
+Modes are process-local, apply to all coordinator profiles, and restart as full/inline during the unresolved investigation. Changing modes sends no notification, hardware command, HAP subscription or configuration write; it does not reset commissioning or replay history. These endpoints are optional and are not used by the standalone administrator.

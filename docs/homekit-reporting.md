@@ -132,7 +132,39 @@ The script sends only local management reads and the recording flag change. It n
 
 No polling occurs while the script waits for an answer. Boundary snapshots inspect existing connections without HAP reads. Changed process, paired subscribers or recording revision invalidate the comparison. Matching boundary subscribers do not prove which Apple device rendered the tile or reveal transient subscription changes between snapshots. A success/failure/success pattern strengthens a recording-dependence hypothesis but does not identify a particular race or prove a durable fix. A failure trace with recording ON provides publication/read timing; OFF intentionally records no new events. Re-enabling recording does not replay or force-refresh the tile. Share the full output and keep Home visible throughout.
 
-
 ## Retained diagnostics and default after resolution
 
 The owner requests retaining this diagnostic capability for future troubleshooting. Internal event recording should default OFF after the underlying Home display issue is fixed and verified with recording disabled. Keep recording ON in the current 0.4.8 investigation; the owner installed it and plans the controlled comparison for the following morning. No current runtime default changes are authorized by this future preference. Retain authenticated inspection and on-demand recording, bounded history and existing privacy limits. When the default changes, adjust comparison cleanup and restoration instructions so normal use returns to OFF. Diagnostic overhead must not become a dependency of correct HomeKit reporting.
+
+## Next experiments — 0.4.9
+
+The owner wants to proceed from the repeated 0.4.6 failures and two 0.4.7 successes, without first repeating ON/OFF/ON on 0.4.8. That earlier version comparison is useful starting evidence; no same-process ON-success/OFF-failure/ON-success result has been supplied. Version 0.4.9 prepares the next experiments without claiming that recording is the cause or that a fix is established.
+
+| Script selection | Internal work during the cycle | Garage publication |
+| --- | --- | --- |
+| `--experiment events` | Event objects, timestamps and bounded history; no per-publication subscriber inspection | Inline, as before |
+| `--experiment subscribers` | Subscriber inspection; no new event history/timestamps or GET client labels | Inline, as before |
+| `--experiment deferred` | Diagnostics off | Next event-loop turn via setImmediate |
+| `--experiment off` | Diagnostics off | Inline control comparison, if needed later |
+| `--experiment baseline` | Full diagnostics | Inline control comparison, if needed later |
+
+After publishing/installing 0.4.9, start with events:
+
+```bash
+{
+  cd "$HOME/devProjects/homebridge-gDoorAndBolt-coordinator" &&
+  sudo python3 -B scripts/compare-homekit-reporting.py --experiment events
+}
+```
+
+Keep Home open and the separate capture script stopped. The script requires the garage enabled, idle, Closed/Locked, and an existing paired subscriber to both garage fields. It asks for just one indoor-button open/close cycle. Ten seconds after physical closure and locking, enter c if Home shows Closed, s if still Closing, or q to quit. Share the output before choosing another experiment; there is no mandatory initial ON/OFF comparison. Replace events with subscribers or deferred for those trials.
+
+The script changes only authenticated runtime reporting options and inspects state/connections at the boundaries. It performs no polling while waiting, creates no HAP subscriber, and sends no movement command. Mode, process or paired-subscriber changes invalidate the comparison. Matching endpoints cannot rule out transient changes or identify which Apple device rendered a value. All coordinator profiles share the selected mode; keep other controls idle during the test.
+
+Every trial restores full diagnostics and inline publication, including ordinary cancellation/interruption. If cleanup cannot be confirmed, once all controllers are idle run `sudo python3 -B scripts/compare-homekit-reporting.py --restore-baseline`. A coordinator restart also restores full/inline. Switching or restoring modes does not force a refresh or replay notifications. These settings are not saved, do not change commissioning, and have no effect on motor, bolt or retraction timing. The older --restore-recording enables full tracing but does not reset publication mode; use --restore-baseline for the new experiments.
+
+Event-only and inspection-only modes share the existing cached-value comparison and boolean branch; subscriber inspection still builds anonymous subscriber summaries. These isolate meaningful portions of instrumentation rather than being perfectly allocation-free controls. GET diagnostic snapshots inspect subscribers in every mode, which is why the script only takes boundary snapshots. No new trace events are expected in subscribers or off modes.
+
+Deferred mode yields only garage publication. Both values are committed immediately for synchronous GETs; the latest complete report is published on the next setImmediate callback. Newer direction/state supersedes queued data. Faults, holds, stale observations, removed/rebound accessories and shutdown cancel or reject old success reports. Startup seeding and error reporting remain immediate; bolt publication remains inline. Terminal garage order and bounded repeats remain unchanged. This does not intentionally wait 250 ms or guarantee a distinct HAP packet; it tests whether separating publication from the current engine callback helps with diagnostics off.
+
+Interpret results before adding another change: events-only success points toward event-recording work being sufficient in that trial; subscribers-only success points toward inspection work; neither identifies a root cause. Deferred/off success would support further validation of an explicit scheduling fix independent of diagnostics. A remaining failure calls for the corresponding trace/boundary evidence. Retain diagnostics, with a future default of off only after the correction is validated with diagnostics off.

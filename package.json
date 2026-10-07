@@ -1,6 +1,6 @@
 {
   "name": "homebridge-gdoorandbolt-coordinator",
-  "version": "0.4.8",
+  "version": "0.4.9",
   "description": "Coordinate a garage door and separate bolt through Homebridge",
   "type": "module",
   "main": "src/index.js",

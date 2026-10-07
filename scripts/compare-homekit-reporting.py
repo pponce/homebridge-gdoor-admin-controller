@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Compare internal recording on/off without reconnecting HAP or moving hardware.
+"""Run a reporting experiment without reconnecting HAP or commanding hardware.
 
-Only the authenticated, process-local diagnostic flag is changed. No polling
+Only authenticated, process-local reporting options are changed. No polling
 occurs while the owner performs a cycle; observations are taken at boundaries.
 """
 import argparse
@@ -61,6 +61,11 @@ class Client:
         if result.get("recording") is not enabled:
             raise Error("Recording change was not confirmed.")
 
+    def experiment(self, trace_mode, publication_mode):
+        result = self.request("/v1/homekit-reporting/experiment", {"traceMode": trace_mode, "publicationMode": publication_mode})
+        if (result.get("traceMode"), result.get("publicationMode")) != (trace_mode, publication_mode):
+            raise Error("Reporting experiment was not confirmed.")
+
     def stationary(self, controller):
         status = self.request("/v1/controllers/" + controller + "/state")["status"]
         state = status["state"]
@@ -79,11 +84,13 @@ def compare_boundary(before, after, controller):
     return (before.get("bootId") == after.get("bootId") and
             before.get("recording") == after.get("recording") and
             before.get("recordingRevision") == after.get("recordingRevision") and
+            all(before.get(key) == after.get(key) for key in ("traceMode", "publicationMode", "publicationRevision")) and
             bool(subscribers(before, controller)) and subscribers(before, controller) == subscribers(after, controller))
 
 
 def show(label, snapshot, controller, since=0):
     print(label, json.dumps({"recording": snapshot["recording"], "recordingRevision": snapshot["recordingRevision"],
+                            **{key: snapshot[key] for key in ("traceMode", "publicationMode", "publicationRevision") if key in snapshot},
                             **capture.reporting_view(snapshot, {controller: "Garage 1"})}), flush=True)
     for event in snapshot.get("events", []):
         if event.get("sequence", 0) <= since or event.get("controllerId") != controller:
@@ -120,6 +127,8 @@ def run_trial(client, controller, enabled, baseline, label, ask=input):
 
 def compare(client, controller, ask=input):
     baseline = client.snapshot()
+    if baseline.get("publicationMode", "inline") != "inline":
+        raise Error("Restore the inline baseline before an ON/OFF comparison (--restore-baseline on 0.4.9+).")
     if not subscribers(baseline, controller):
         raise Error("No paired client subscribes to both garage fields. Open Home before starting.")
     print("Runtime versions:", json.dumps({k: baseline.get(k) for k in ("homebridgeVersion", "hapVersion")}), flush=True)
@@ -149,10 +158,65 @@ def compare(client, controller, ask=input):
                   "This affects diagnostics only; garage control is unchanged.", flush=True)
 
 
+EXPERIMENTS = {
+    "events": ("events", "inline", "Event recording only; per-publication subscriber inspection disabled."),
+    "subscribers": ("subscribers", "inline", "Subscriber inspection only; no new event history or event timestamps."),
+    "deferred": ("off", "deferred", "Garage notifications deferred to setImmediate; internal diagnostics OFF. Bolt publication stays inline."),
+    "off": ("off", "inline", "Internal diagnostics OFF with the ordinary inline publisher."),
+    "baseline": ("full", "inline", "Full internal diagnostics with the ordinary inline publisher."),
+}
+
+
+def run_experiment(client, controller, name, ask=input):
+    trace, publication, description = EXPERIMENTS[name]
+    client.stationary(controller)
+    baseline = client.snapshot()
+    if not all(key in baseline for key in ("traceMode", "publicationMode", "publicationRevision")):
+        raise Error("The next experiments require coordinator 0.4.9 or newer.")
+    if not subscribers(baseline, controller):
+        raise Error("No paired subscriber to both garage fields. Open Home before starting.")
+    print("Runtime versions:", json.dumps({k: baseline.get(k) for k in ("homebridgeVersion", "hapVersion")}), flush=True)
+    try:
+        client.experiment(trace, publication)
+        before = client.snapshot()
+        if (before.get("traceMode"), before.get("publicationMode")) != (trace, publication) or \
+                before["bootId"] != baseline["bootId"] or subscribers(before, controller) != subscribers(baseline, controller):
+            raise Error("Process, paired connection or requested experiment changed before the trial.")
+        since = max([e.get("sequence", 0) for e in before.get("events", [])] or [0])
+        print("\nEXPERIMENT:", name, "—", description, flush=True)
+        print("Keep Home visible. Use the indoor button to open fully, then close.\n"
+              "After physical closure and bolt locking, watch the tile for 10 seconds.\n"
+              "No requests or polling occur while this script waits. No movement commands are sent.\n"
+              "Only this one cycle is requested; full diagnostics/inline reporting will be restored.", flush=True)
+        answer = ask("Enter c if Home showed Closed, s if still Closing, or q to stop: ").strip().lower()
+        if answer not in ("c", "s"):
+            raise Error("Trial stopped by owner.")
+        after = client.snapshot()
+        show(name, after, controller, since)
+        stable = compare_boundary(before, after, controller)
+        print("RESULT", json.dumps({"experiment": name, "home": "closed" if answer == "c" else "closing",
+              "traceMode": trace, "publicationMode": publication, "sameConnectionAtBoundaries": stable}), flush=True)
+        if not stable:
+            raise Error("Process, paired subscribers or experiment mode changed; comparison is inconclusive.")
+        client.stationary(controller)
+        print("Trial recorded. Share this output before selecting another experiment; this result alone does not establish a fix.", flush=True)
+    finally:
+        try:
+            client.experiment("full", "inline")
+            print("Baseline restored: full diagnostics ON, inline publication. No notifications replayed.", flush=True)
+        except Exception:
+            print("Could not confirm baseline restoration. When all controllers are idle, run:\n"
+                  "sudo python3 -B scripts/compare-homekit-reporting.py --restore-baseline\n"
+                  "A coordinator restart also restores the baseline.", flush=True)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--storage", type=Path)
-    parser.add_argument("--restore-recording", action="store_true")
+    action = parser.add_mutually_exclusive_group()
+    action.add_argument("--restore-recording", action="store_true")
+    action.add_argument("--restore-baseline", action="store_true")
+    action.add_argument("--experiment", choices=EXPERIMENTS, help="Run one selected follow-up experiment (0.4.9+), then restore baseline")
     args = parser.parse_args()
     try:
         if args.storage:
@@ -166,6 +230,10 @@ def main():
         client = Client(storage)
         info = client.request("/v1/identity")
         print("Running version:", info.get("pluginVersion", "unknown"), flush=True)
+        if args.restore_baseline:
+            client.experiment("full", "inline")
+            print("Baseline restored: full diagnostics ON, inline publication.")
+            return 0
         if args.restore_recording:
             client.recording(True)
             print("Internal recording is ON.")
@@ -179,7 +247,10 @@ def main():
             if not 1 <= choice <= len(client.controllers):
                 raise Error("Invalid garage selection.")
             controller = client.controllers[choice - 1]["id"]
-        compare(client, controller)
+        if args.experiment:
+            run_experiment(client, controller, args.experiment)
+        else:
+            compare(client, controller)
         return 0
     except (KeyboardInterrupt, EOFError):
         print("Comparison stopped.")

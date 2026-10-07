@@ -4,17 +4,22 @@ const fieldName = (kind, field) => field === 'obstruction' ? 'obstruction' :
   (kind === 'garage' ? 'door' : 'bolt') + (field === 'current' ? 'Current' : 'Target');
 const scalar = value => typeof value === 'boolean' || Number.isInteger(value) && value >= 0 && value <= 4 ? value : null;
 const version = value => typeof value === 'string' && /^[0-9][0-9A-Za-z.+-]{0,63}$/.test(value) ? value : null;
+export const TRACE_MODES = Object.freeze(['full', 'events', 'subscribers', 'off']);
 
 export class HomekitReporting {
   constructor(publisher) {
     this.publisher = publisher; this.events = []; this.sequence = 0;
     this.clients = new WeakMap(); this.nextClient = 0;
-    this.recording = true; this.recordingRevision = 0;
+    this.recording = true; this.recordingRevision = 0; this.traceMode = 'full';
   }
   setRecording(enabled) {
     if (typeof enabled !== 'boolean') throw new TypeError('invalid_recording');
-    if (this.recording !== enabled) { this.recording = enabled; this.recordingRevision++; }
+    this.setMode(enabled ? 'full' : 'off');
     return { recording: this.recording, recordingRevision: this.recordingRevision };
+  }
+  setMode(mode) {
+    if (!TRACE_MODES.includes(mode)) throw new TypeError('invalid_trace_mode');
+    if (this.traceMode !== mode) { this.traceMode = mode; this.recording = mode !== 'off'; this.recordingRevision++; }
   }
   client(connection) {
     if (!connection || typeof connection !== 'object') return null;
@@ -40,9 +45,13 @@ export class HomekitReporting {
     if (!this.recording) return;
     // Diagnostic failures must never change a HAP callback/publication result.
     try {
+      if (this.traceMode === 'subscribers') {
+        if (kind === 'publish') this.subscribers(tile, field);
+        return; // No timestamps, event objects, history or GET-client labelling.
+      }
       this.events.push({ sequence: ++this.sequence, at: Date.now(), monotonicMs: performance.now(), kind,
         controllerId: tile.id, field: fieldName(tile.kind, field), value: scalar(value),
-        ...(kind === 'publish' ? { explicit, subscribers: this.subscribers(tile, field) } : { client: this.client(connection) }) });
+        ...(kind === 'publish' ? { explicit, subscribers: this.traceMode === 'full' ? this.subscribers(tile, field) : null } : { client: this.client(connection) }) });
       if (this.events.length > 200) this.events.shift();
     } catch { /* Observation only. */ }
   }
@@ -105,6 +114,8 @@ export class HomekitReporting {
     try { hapVersion = version(this.publisher.api.hap.HAPLibraryVersion?.()); } catch { /* Optional metadata. */ }
     return { schema: 1, bootId: this.publisher.runtime?.bootId ?? null,
       recording: this.recording, recordingRevision: this.recordingRevision,
+      traceMode: this.traceMode, publicationMode: this.publisher.publicationMode ?? 'inline',
+      publicationRevision: this.publisher.publicationRevision ?? 0,
       homebridgeVersion: version(this.publisher.api.serverVersion), hapVersion,
       connectionInspection, truncated, tiles, clients: [...inspected.values()], events: this.events.map(e => ({ ...e })) };
   }

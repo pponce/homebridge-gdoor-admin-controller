@@ -104,3 +104,29 @@ test('recording switch requires identity, exact boolean payload and idle control
   assert.equal((await request(port,path,{...options,body:{instanceId,recording:true}})).body.recording,true);
   assert.deepEqual(changes,[false,true]);
 });
+
+test('reporting experiment requires authenticated identity, exact supported modes and idle controllers', async t => {
+  let busy=false; const changes=[];
+  const runtime={configuration,status:()=>({state:{busy}})};
+  const server=createManagementServer({identity:{token,instanceId},configuration,runtime,
+    setReportingExperiment:(traceMode,publicationMode)=>{changes.push([traceMode,publicationMode]);return {traceMode,publicationMode};}});
+  const port=await listenLocal(server,0); t.after(()=>closeServer(server));
+  const path='/v1/homekit-reporting/experiment';
+  const body={instanceId,traceMode:'off',publicationMode:'deferred'};
+  const options={method:'POST',headers:{'Content-Type':'application/json'},body};
+  for(const headers of [{Authorization:'wrong'},{Origin:'https://example.invalid'},{Host:'example.invalid'}])
+    assert.ok([401,403].includes((await request(port,path,{...options,headers:{...options.headers,...headers}})).status));
+  assert.equal((await request(port,path)).status,405);
+  assert.equal((await request(port,path,{...options,headers:{}})).status,409);
+  for(const bad of [{...body,instanceId:'wrong'},{...body,traceMode:'unknown'},{...body,publicationMode:'unknown'},
+    {...body,command:'close'},{instanceId,traceMode:'off'}])
+    assert.equal((await request(port,path,{...options,body:bad})).status,409);
+  busy=true; assert.equal((await request(port,path,options)).body.error,'reporting_controller_busy');
+  assert.deepEqual(changes,[]); busy=false;
+  for(const traceMode of ['full','events','subscribers','off'])
+    for(const publicationMode of ['inline','deferred']) {
+      const result=await request(port,path,{...options,body:{instanceId,traceMode,publicationMode}});
+      assert.equal(result.status,200); assert.equal(result.body.traceMode,traceMode); assert.equal(result.body.publicationMode,publicationMode);
+    }
+  assert.equal(changes.length,8);
+});

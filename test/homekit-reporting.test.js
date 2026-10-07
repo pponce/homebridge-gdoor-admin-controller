@@ -86,3 +86,24 @@ test('recording can be disabled without inspecting subscribers or altering the c
   assert.equal(f.trace.snapshot().recording,true); assert.equal(f.paired.queuedEvents.length,2);
   assert.throws(()=>f.trace.setRecording('false'));
 });
+
+test('event-only and subscriber-only experiments isolate their respective observation work', () => {
+  const f=fixture(); let inspected=0; const original=f.trace.subscribers.bind(f.trace);
+  f.trace.subscribers=(...args)=>{inspected++;return original(...args);};
+  f.trace.setMode('events');
+  f.trace.record('publish',f.tile,'current',1,null,true);
+  assert.equal(inspected,0); assert.equal(f.trace.events.length,1);
+  assert.equal(f.trace.events[0].subscribers,null); assert.ok(Number.isFinite(f.trace.events[0].monotonicMs));
+  f.trace.setMode('subscribers');
+  f.trace.record('publish',f.tile,'current',1,null,true);
+  f.trace.record('get',f.tile,'current',1,{username:'PRIVATE-NEW-CLIENT'});
+  assert.equal(inspected,1); assert.equal(f.trace.events.length,1); assert.equal(f.trace.sequence,1);
+  assert.equal(f.trace.nextClient,2,'GET did not label another client');
+  f.trace.setMode('off'); f.trace.record('publish',f.tile,'current',0,null,true);
+  assert.equal(inspected,1); assert.equal(f.trace.events.length,1);
+  const snapshot=f.trace.snapshot();
+  assert.equal(snapshot.traceMode,'off'); assert.equal(snapshot.publicationMode,'inline');
+  assert.equal(snapshot.tiles[0].fields[0].subscribers.length,2,'boundary inspection remains available');
+  f.trace.setRecording(true); assert.equal(f.trace.traceMode,'full');
+  assert.throws(()=>f.trace.setMode('unknown')); assert.equal(f.trace.traceMode,'full');
+});

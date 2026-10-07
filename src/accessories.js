@@ -1,14 +1,19 @@
 import { randomUUID } from 'node:crypto';
-import { HomekitReporting } from './homekit-reporting.js';
+import { HomekitReporting, TRACE_MODES } from './homekit-reporting.js';
+import { requireValue } from './fault.js';
+
+const sameReport = (a, b) => a && b && ['available','current','target','obstruction','notificationKey'].every(key => a[key] === b[key]);
 
 export class CoordinatorAccessories {
   constructor(api, identity, runtime, cached = [], timers = { setTimeout, clearTimeout }) {
     this.api = api; this.runtime = runtime; this.identity = identity;
     this.cached = new Map(cached.map(a => [a.UUID, a])); this.active = new Map(); this.timers = timers;
     this.reporting = new HomekitReporting(this);
+    this.publicationMode = 'inline'; this.publicationRevision = 0; this.stopped = false;
+    this.immediates = { set: timers.setImmediate ?? setImmediate, clear: timers.clearImmediate ?? clearImmediate };
   }
   sync() {
-    this.stop();
+    this.stop(); this.stopped = false;
     const { Service: S, Characteristic: C } = this.api.hap; const retained = new Set();
     for (const p of this.runtime.configuration.controllers) {
       for (const kind of ['garage', ...(p.exposeBoltLock ? ['bolt'] : [])]) {
@@ -21,13 +26,14 @@ export class CoordinatorAccessories {
         const type = kind === 'garage' ? S.GarageDoorOpener : S.LockMechanism;
         const service = a.getService(type) ?? a.addService(type, a.displayName);
         service.setCharacteristic(C.Name, a.displayName);
-        const v = { accessory: a, service, kind, id: p.id, targetGeneration: 0 };
+        const v = { accessory: a, service, kind, id: p.id, targetGeneration: 0, initializing: true };
         this.active.set(uuid, v); this.bind(v);
         // Seed cached and new accessories from one report, before registration.
         // Reading runtime memory here never reads or operates hardware.
         this.commit(v, this.report(v, this.runtime.status(p.id).state)); this.publish(v);
         if (fresh) this.api.registerPlatformAccessories('homebridge-gdoorandbolt-coordinator', 'GDoorAndBoltCoordinator', [a]);
         else this.api.updatePlatformAccessories([a]);
+        v.initializing = false;
       }
     }
     const removed = new Map([...this.cached, ...[...this.active].map(([id,v]) => [id,v.accessory])]);
@@ -118,14 +124,59 @@ export class CoordinatorAccessories {
   }
   commit(v, report) {
     if (v.report?.target !== report.target) v.targetGeneration = (v.targetGeneration ?? 0) + 1;
-    v.report = report;
+    v.report = report; v.reportRevision = (v.reportRevision ?? 0) + 1;
+  }
+  setReportingExperiment(traceMode, publicationMode) {
+    requireValue(TRACE_MODES.includes(traceMode) && ['inline','deferred'].includes(publicationMode), 'invalid_reporting_experiment');
+    requireValue(!this.stopped && ![...this.active.values()].some(v => v.pendingReport), 'reporting_publication_pending');
+    this.reporting.setMode(traceMode);
+    if (this.publicationMode !== publicationMode) { this.publicationMode = publicationMode; this.publicationRevision++; }
+    return { traceMode: this.reporting.traceMode, publicationMode: this.publicationMode,
+      recording: this.reporting.recording, recordingRevision: this.reporting.recordingRevision, publicationRevision: this.publicationRevision };
+  }
+  cancelPending(v) {
+    if (v.pendingReport) this.immediates.clear(v.pendingReport.handle);
+    v.pendingReport = null;
   }
   cancelNotification(v) {
     this.timers.clearTimeout(v.notificationTimer); v.notificationTimer = null; v.notificationKey = null;
   }
-  stop() { for (const v of this.active.values()) this.cancelNotification(v); }
+  stop() {
+    this.stopped = true;
+    for (const v of this.active.values()) { this.cancelNotification(v); this.cancelPending(v); }
+  }
   send(v, explicit) {
-    const report = v.report;
+    if (this.stopped) return;
+    if (v.kind !== 'garage' || this.publicationMode === 'inline' || v.initializing || !v.report.available) {
+      this.cancelPending(v); this.writeReport(v, explicit); return;
+    }
+    // Only the experimental garage path yields. One pending ticket owns the
+    // latest complete pair; replaced snapshots cannot replay after a new state.
+    if (v.pendingReport) {
+      const pending = v.pendingReport;
+      pending.explicit = explicit || pending.explicit && sameReport(pending.report, v.report);
+      pending.report = v.report; pending.revision = v.reportRevision;
+      return;
+    }
+    const pending = { report: v.report, revision: v.reportRevision, explicit, publicationRevision: this.publicationRevision };
+    v.pendingReport = pending;
+    pending.handle = this.immediates.set(() => {
+      if (v.pendingReport !== pending) return;
+      v.pendingReport = null;
+      if (this.stopped || this.publicationMode !== 'deferred' || pending.publicationRevision !== this.publicationRevision ||
+          v.reportRevision !== pending.revision || ![...this.active.values()].includes(v)) return;
+      let live;
+      try { live = this.report(v, this.runtime.status(v.id).state); }
+      catch { live = { ...pending.report, available: false }; }
+      if (!live.available || !this.fresh(v.id, pending.report.observedAt)) {
+        this.cancelNotification(v); this.writeReport(v, false, { ...pending.report, available: false }); return;
+      }
+      if (!sameReport(live, pending.report)) return;
+      this.writeReport(v, pending.explicit, pending.report);
+    });
+    pending.handle.unref?.();
+  }
+  writeReport(v, explicit, report = v.report) {
     const fields = this.fields(v);
     // Match the owner-verified legacy garage patch's explicit terminal pair:
     // TargetDoorState first, then CurrentDoorState. Ordinary reports and bolt

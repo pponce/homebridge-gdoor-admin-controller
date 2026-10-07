@@ -58,6 +58,32 @@ export async function verifyHapReporting() {
   report({phase:'closed',bolt:'locked',busy:false});
   assert.deepEqual(completion,[['target',1],['current',1]],'Match the legacy terminal notification order using actual HAP');
   assert.equal(current.value,1); assert.equal(target.value,1);
+  publisher.setReportingExperiment('off','deferred');
+  report({phase:'closing',bolt:'unlocked',busy:true});
+  await new Promise(setImmediate);
+  assert.equal(current.value,3); assert.equal(lock.value,0);
+  const deferredRead=current.handleGetRequest();
+  completion.length=0;
+  report({phase:'closed',bolt:'locked',busy:false});
+  assert.equal(current.value,3,'Garage publication must yield');
+  assert.equal(lock.value,1,'Bolt publication must remain inline');
+  assert.equal(await deferredRead,3);
+  await new Promise(setImmediate);
+  assert.deepEqual(completion,[['target',1],['current',1]]);
+  assert.equal(current.value,1,'Old GET cannot overwrite deferred completion');
+  // Queued close is superseded by a new opening before the next event-loop turn.
+  report({phase:'open',target:'open',bolt:'unlocked'}); await new Promise(setImmediate);
+  completion.length=0;
+  report({phase:'closed',target:'closed',bolt:'locked'});
+  report({phase:'opening',target:'open',bolt:'unlocked',busy:true});
+  await new Promise(setImmediate);
+  assert.equal(current.value,2); assert.equal(target.value,0);
+  assert.ok(!completion.some(([,value])=>value===1),'No obsolete Closed notification');
+  report({phase:'closed',target:'closed',bolt:'locked',busy:false});
+  publisher.sync(); // Rebinding cancels the pending callback; startup seeds inline.
+  const count=completion.length; await new Promise(setImmediate);
+  assert.equal(completion.length,count); assert.equal(current.value,1);
+  publisher.setReportingExperiment('full','inline');
   publisher.stop();
-  console.log('Actual HAP reproduces the previous GET race and passes synchronous reporting, lock/garage cache preservation, legacy garage terminal notification order, restored accessories and superseded SET checks.');
+  console.log('Actual HAP passes synchronous GET/cache protection, legacy terminal order, superseded SET, deferred garage publication, inline bolt updates, reversal coalescing and rebind cancellation.');
 }

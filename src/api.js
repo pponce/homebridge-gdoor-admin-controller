@@ -6,7 +6,7 @@ import { Fault, requireValue } from './fault.js';
 
 export const PLUGIN_VERSION = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
 export const CAPABILITIES = Object.freeze({ inventory: true, routingInventory: true, diagnostics: false, settingsWrite: false, motion: false, maintenance: false, keypad: false });
-export function createManagementServer({ identity, configuration, diagnostics, runtime, reporting, setReporting }) {
+export function createManagementServer({ identity, configuration, diagnostics, runtime, reporting, setReporting, setReportingExperiment }) {
   const expectedAuthorization = Buffer.from(`Bearer ${identity.token}`);
   const envelope = { apiVersion: 1, instanceId: identity.instanceId };
   const controllers = () => runtime ? runtime.inventory() : inventory(configuration);
@@ -20,6 +20,17 @@ export function createManagementServer({ identity, configuration, diagnostics, r
       if (given.length !== expectedAuthorization.length || !timingSafeEqual(given, expectedAuthorization)) return send(401, { error: 'unauthorized' });
       if (request.headers.origin !== undefined) return send(403, { error: 'origin_not_allowed' });
       if (request.headers.host !== `127.0.0.1:${server.address().port}`) return send(403, { error: 'host_not_allowed' });
+      if (request.url === '/v1/homekit-reporting/experiment' && setReportingExperiment && runtime) {
+        if (request.method !== 'POST') return send(405, { error: 'post_required' });
+        requireValue(request.headers['content-type'] === 'application/json', 'invalid_request');
+        let body;
+        try { body = await readBody(request); } catch { return send(400, { error: 'invalid_request' }); }
+        requireValue(body && !Array.isArray(body) && body.instanceId === identity.instanceId, 'instance_mismatch');
+        requireValue(Object.keys(body).sort().join() === 'instanceId,publicationMode,traceMode' &&
+          ['full','events','subscribers','off'].includes(body.traceMode) && ['inline','deferred'].includes(body.publicationMode), 'invalid_request');
+        requireValue(runtime.configuration.controllers.every(p => !runtime.status(p.id).state.busy), 'reporting_controller_busy');
+        return send(200, { ...envelope, ...setReportingExperiment(body.traceMode, body.publicationMode) });
+      }
       if (request.url === '/v1/homekit-reporting/recording' && setReporting && runtime) {
         if (request.method !== 'POST') return send(405, { error: 'post_required' });
         requireValue(request.headers['content-type'] === 'application/json', 'invalid_request');
