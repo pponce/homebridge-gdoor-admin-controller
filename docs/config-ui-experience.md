@@ -10,6 +10,16 @@ The [Homebridge custom modal implementation](https://github.com/homebridge/homeb
 
 This implementation uses those supported APIs and a local stylesheet with the reference's teal/slate light palette, warm dark surfaces, solid primary buttons, secondary borders, rounded panels and system fonts. It preserves Devices, Inputs and Behavior, uses a prominent Add a garage door button, and asks for the opener connection type before its API fields. It does not import upstream application code, assets, fonts or new runtime dependencies.
 
+## General and garage pages (0.4.11 preview)
+
+General is the landing page for garage readiness, saved connection-key names/replacement and optional web admin setup. Masks are placeholders, not secret values or secret lengths. Replacement starts with an empty password field, keeps the same name, clears the entered value after saving and preserves configuration drafts. Existing credential replacement policy still pauses controls until re-enabled.
+
+Garage doors retains Devices, Inputs and Behavior and adds Check & Enable for the selected garage. Garage cards show enabled (light green), disabled (light red), or needs-attention/setup (amber), with descriptive text. Enable takes the user to explicit checks; Disable persists immediately without movement and is refused during an operation. These immediate actions do not require another configuration save. The General overview links to the same selected-garage checks.
+
+Virtual keypad setup belongs to the optional standalone web admin's on-screen keypad. Physical keypads, buttons and HomeKit do not require it. A dropdown replaces the two ambiguous buttons and hides alarm details when Not used is selected. It offers configured physical keypad alarms by name and a manual option when there is no physical keypad. Existing settings are never hidden or cleared based on connection availability. Selecting a physical keypad copies its alarm scope; it does not create a live reference or send an alarm command. The current API has no admin-presence handshake; a displayed coordinator API address does not claim the administrator is installed.
+
+Reviewed name-only changes preserve current valid garage enablement and the stable controller/accessory IDs. Disabled garages are not enabled by renaming; all other control-setting changes retain the existing re-check policy. This does not migrate or weaken the stored commissioning hash.
+
 ## User flow
 
 1. Open existing saved settings: the native bottom Save is available. It can close the modal without reviewing unchanged settings.
@@ -36,4 +46,4 @@ The merged 0.4.10 release also passed all five jobs in [CI run 37645305805](http
 
 All 142 tests passed locally and on Node 22/24 in [CI run 37642891710](https://github.com/pponce/homebridge-gDoorAndBolt-coordinator/actions/runs/37642891710), implementation `2b5876b8f2266c97a7db680501ad0766d1ed72a7`. Focused save-session tests cover reviewed snapshots, native acknowledgement, setup vs. managed persistence, bridge metadata, partial failure retry, uncertain apply reload and invalidated reviews. Desktop Chromium and mobile WebKit passed a model of the native footer/API contract, toasts, immediate dirty state, delayed/rejected saves, commissioning, draft-preserving credentials, theme changes and overflow. Actual custom UI server IPC and Homebridge 2.0.0/2.4.0 checks also passed. The browser harness models the parent controls; it does not run the Angular Homebridge modal itself. Screenshot artifacts accompany the run but have not been visually reviewed in this workspace. Live owner-host acceptance of the outer modal remains outstanding.
 
-Other setup feedback, including inline connection-key creation and a clearer virtual-keypad selector, remains separate work. This update does not change those configuration schemas or defaults.
+Inline connection-key creation remains separate work; named keys are managed on General. The virtual-keypad selector is addressed by the 0.4.11 preview above. This update does not change those configuration schemas or defaults.

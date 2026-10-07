@@ -9,10 +9,12 @@ import { loadIdentity } from '../src/storage.js';
 import { createManagementServer, listenLocal, closeServer } from '../src/api.js';
 import { hardwareFixture } from './support/hardware.mjs';
 const example = JSON.parse(await readFile(new URL('../examples/development-config.json', import.meta.url), 'utf8'));
-async function fixture(t) {
+async function fixture(t, multiple = false) {
   const storagePath = await mkdtemp(path.join(os.tmpdir(), 'coordinator-runtime-')); const identity = await loadIdentity(storagePath);
   const hardware = await hardwareFixture(example.controllers[0]);
-  const config = { ...example, controllers: [hardware.config] };
+  const other = multiple ? await hardwareFixture({ ...example.controllers[0], id: 'second-garage', name: 'Second garage',
+    bolt: { ...example.controllers[0].bolt, gatewayId: '8899aabbccddeeff', uniqueId: 'second-bolt-endpoint' } }) : null;
+  const config = { ...example, controllers: [hardware.config, ...(other ? [other.config] : [])] };
   config.controllers[0].timing = { idlePollSeconds: 30, openRetractSettleSeconds: 0, closeRetractSettleSeconds: 0 };
   config.controllers[0].feedback.openingSeconds = 1; config.controllers[0].feedback.closedStableSeconds = 0; config.controllers[0].feedback.boltSettleSeconds = 0;
   let now = 0; const clock = { now: () => now, wall: () => Date.now(), sleep: async ms => { now += ms; } };
@@ -23,11 +25,11 @@ async function fixture(t) {
       ...(body ? { body: JSON.stringify({ instanceId: identity.instanceId, ...body }) } : {}) });
     return { status: r.status, value: await r.json() };
   }
-  t.after(async () => { await runtime.stop(); await closeServer(server); await hardware.close(); await rm(storagePath, { recursive: true, force: true }); });
+  t.after(async () => { await runtime.stop(); await closeServer(server); await hardware.close(); await other?.close(); await rm(storagePath, { recursive: true, force: true }); });
   const id = config.controllers[0].id;
   const command = name => ({ command: name, requestId: randomUUID(), issuedAt: Date.now(), bootId: runtime.bootId });
   const commission = () => runtime.commission(id, { revision: runtime.state.revision, previousControllerStopped: true, physicalSetupReviewed: true });
-  return { runtime, hardware, call, id, command, commission, storagePath, config, clock };
+  return { runtime, hardware, other, call, id, command, commission, storagePath, config, clock };
 }
 test('production runtime begins non-actuating, commissions through read-only checks, then coordinates real driver commands', async t => {
   const f = await fixture(t); assert.deepEqual(f.hardware.state.requests, []);
@@ -72,4 +74,71 @@ test('ambiguous commands hold the garage and restart does not replay them', asyn
   const second = new CoordinatorRuntime({ storagePath: f.storagePath, configuration: f.config, credentials: async () => f.hardware.credentials });
   t.after(() => second.stop()); await second.start(); assert.equal(second.status(f.id).actuationEnabled, false);
   await assert.rejects(second.submit(f.id, body), /request_invalid/); assert.deepEqual(f.hardware.state.writes, writes);
+});
+
+test('name-only edits preserve valid enablement through apply and restart without hardware writes', async t => {
+  const f = await fixture(t); await f.commission();
+  const renamed = f.runtime.settings(); renamed.configuration.controllers[0].name = 'Renamed garage';
+  const review = await f.runtime.review(renamed.configuration, renamed.revision);
+  assert.deepEqual(review.requiresCommissioning, []);
+  await f.runtime.apply(review.token);
+  assert.equal(f.runtime.status(f.id).actuationEnabled, true);
+  assert.equal(f.runtime.configuration.controllers[0].id, f.id);
+  await f.runtime.stop();
+  const second = new CoordinatorRuntime({ storagePath: f.storagePath, configuration: f.config, credentials: async () => f.hardware.credentials, clock: f.clock });
+  t.after(() => second.stop()); await second.start();
+  assert.equal(second.status(f.id).actuationEnabled, true);
+  assert.equal(second.configuration.controllers[0].name, 'Renamed garage');
+  assert.deepEqual(f.hardware.state.writes, []);
+});
+test('renaming never enables a disabled garage or preserves changed hardware/behavior', async t => {
+  const f = await fixture(t);
+  let draft = f.runtime.settings(); draft.configuration.controllers[0].name = 'Disabled rename';
+  let review = await f.runtime.review(draft.configuration, draft.revision);
+  assert.deepEqual(review.requiresCommissioning, [f.id]); await f.runtime.apply(review.token);
+  assert.equal(f.runtime.status(f.id).actuationEnabled, false);
+  await f.commission();
+  draft = f.runtime.settings(); draft.configuration.controllers[0].name = 'Changed behavior';
+  draft.configuration.controllers[0].timing.closeRetractSettleSeconds = 1;
+  review = await f.runtime.review(draft.configuration, draft.revision);
+  assert.deepEqual(review.requiresCommissioning, [f.id]); await f.runtime.apply(review.token);
+  assert.equal(f.runtime.status(f.id).actuationEnabled, false);
+  assert.deepEqual(f.hardware.state.writes, []);
+});
+test('disable is durable, rejects stale or busy requests, sends no commands and preserves another controller', async t => {
+  const f = await fixture(t, true); await f.commission();
+  await f.runtime.commission('second-garage', { revision: f.runtime.state.revision, previousControllerStopped: true, physicalSetupReviewed: true });
+  const otherEntry = f.runtime.entry('second-garage'), otherEngine = otherEntry.engine;
+  const body = { revision: f.runtime.state.revision, bootId: f.runtime.bootId };
+  const endpoint = '/v1/controllers/' + f.id + '/disable';
+  assert.equal((await f.call(endpoint, { ...body, bootId: 'stale' })).status, 409);
+  assert.equal((await f.call(endpoint, { ...body, revision: 0 })).status, 409);
+  assert.equal((await f.call(endpoint, { ...body, unexpected: true })).status, 409);
+  const entry = f.runtime.entry(f.id);
+  for (const pending of ['job', 'observation', 'input']) {
+    if (pending === 'job') entry.job = true;
+    if (pending === 'observation') entry.engine.observation = Promise.resolve();
+    if (pending === 'input') entry.router.activeInput = 'synthetic-input';
+    assert.equal((await f.call(endpoint, body)).status, 409);
+    assert.equal(f.runtime.status(f.id).actuationEnabled, true);
+    entry.job = null; entry.engine.observation = null; entry.router.activeInput = null;
+  }
+  f.runtime.tickets.set('selected-ticket', { id: f.id });
+  f.runtime.tickets.set('other-ticket', { id: 'second-garage' });
+  const response = await f.call(endpoint, body);
+  assert.equal(response.status, 200); assert.equal(response.value.status.actuationEnabled, false);
+  assert.equal(response.value.status.commissioned, false);
+  assert.equal(f.runtime.entry('second-garage'), otherEntry);
+  assert.equal(otherEntry.engine, otherEngine); assert.equal(otherEngine.stopped, false);
+  assert.equal(f.runtime.status('second-garage').actuationEnabled, true);
+  assert.equal(f.runtime.tickets.has('selected-ticket'), false);
+  assert.equal(f.runtime.tickets.has('other-ticket'), true);
+  await assert.rejects(f.runtime.submit(f.id, f.command('open')), /controller_held/);
+  assert.deepEqual(f.hardware.state.writes, []); assert.deepEqual(f.other.state.writes, []);
+  await f.runtime.stop();
+  const second = new CoordinatorRuntime({ storagePath: f.storagePath, configuration: f.config, credentials: async () => f.hardware.credentials, clock: f.clock });
+  t.after(() => second.stop()); await second.start();
+  assert.equal(second.status(f.id).actuationEnabled, false);
+  assert.equal(second.status('second-garage').actuationEnabled, true);
+  assert.deepEqual(f.hardware.state.writes, []); assert.deepEqual(f.other.state.writes, []);
 });

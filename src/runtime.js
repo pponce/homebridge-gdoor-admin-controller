@@ -115,11 +115,18 @@ export class CoordinatorRuntime {
   inventory() { return inventory(this.configuration).map(row => ({ ...row, status: this.status(row.id) })); }
   routing(id) { const e = this.entry(id); return { ...routingInventory(e.profile), runtimeEnabled: this.status(id).actuationEnabled }; }
   settings() { return { revision: this.state.revision, configuration: structuredClone(this.configuration) }; }
+  retainsCommissioning(profile) {
+    const current = this.configuration.controllers.find(p => p.id === profile.id);
+    // Keep the stored full-profile hash format. Only an explicitly reviewed
+    // name-only edit may carry a currently valid enablement record forward.
+    return Boolean(current && this.state.commissioned[profile.id] === hash(current) &&
+      hash({ ...current, name: profile.name }) === hash(profile));
+  }
   async review(value, revision) {
     requireValue(revision === this.state.revision, 'settings_revision_conflict'); const configuration = normalize(value);
     const token = randomBytes(24).toString('hex'); this.reviews.clear();
     this.reviews.set(token, { revision, configuration, expires: performance.now() + 300000 });
-    return { token, revision, configuration, requiresCommissioning: configuration.controllers.filter(p => this.state.commissioned[p.id] !== hash(p)).map(p => p.id) };
+    return { token, revision, configuration, requiresCommissioning: configuration.controllers.filter(p => !this.retainsCommissioning(p)).map(p => p.id) };
   }
   assertIdle() { requireValue(!this.stopped && !this.storageFault && !this.changing && [...this.entries.values()].every(e => !e.job && !e.engine?.busy && !e.engine?.observation), 'controller_busy'); }
   cancelReview(token) { this.reviews.delete(token); return { cancelled: true }; }
@@ -129,8 +136,9 @@ export class CoordinatorRuntime {
     this.assertIdle(); requireValue(!this.state.maintenance, 'maintenance_held'); this.changing = true;
     this.reviews.delete(token);
     try {
+      const retained = review.configuration.controllers.filter(p => this.retainsCommissioning(p));
+      this.state.commissioned = Object.fromEntries(retained.map(p => [p.id, hash(p)]));
       this.state.configuration = review.configuration; this.state.revision++; this.tickets.clear();
-      for (const id of Object.keys(this.state.commissioned)) if (!review.configuration.controllers.some(p => p.id === id && hash(p) === this.state.commissioned[id])) delete this.state.commissioned[id];
       this.event(null, 'settings-applied'); await this.save(); await this.build(); return this.settings();
     } finally { this.changing = false; this.publishStates(); }
   }
@@ -138,6 +146,22 @@ export class CoordinatorRuntime {
     this.assertIdle(); requireValue(!this.state.maintenance, 'maintenance_held'); this.changing = true;
     try { this.state.commissioned = {}; this.tickets.clear(); this.event(null, 'credentials-change-review'); await this.save(); await this.build(); return { reset: true }; }
     finally { this.changing = false; this.publishStates(); }
+  }
+  async disable(id, { revision, bootId }) {
+    this.assertIdle(); requireValue(!this.state.maintenance, 'maintenance_held');
+    requireValue(revision === this.state.revision && bootId === this.bootId, 'settings_revision_conflict');
+    const e = this.entry(id);
+    requireValue(e.router?.activeInput == null, 'controller_busy');
+    this.changing = true;
+    try {
+      delete this.state.commissioned[id];
+      for (const [token, ticket] of this.tickets) if (ticket.id === id) this.tickets.delete(token);
+      e.enabled = false; e.held = 'not-commissioned'; clearTimeout(e.timer);
+      e.engine?.stop(); for (const listener of e.listeners) listener.stop();
+      e.listeners = []; e.inputStates = {};
+      this.event(id, 'controller-disabled'); await this.save();
+      this.changing = false; return this.status(id);
+    } finally { this.changing = false; this.publishStates(); }
   }
   async commission(id, { revision, previousControllerStopped, physicalSetupReviewed, recover = false }) {
     this.assertIdle(); requireValue(!this.state.maintenance, 'maintenance_held');

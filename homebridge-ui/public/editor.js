@@ -10,8 +10,10 @@ export function newGarage() {
     motorPaths:[], inputs:[], keypad:null };
 }
 export class ProfileEditor {
-  constructor(root, { configuration, credentials = [], discover, discoverHomebridge, changed = () => {}, error = () => {} }) {
+  constructor(root, { configuration, credentials = [], discover, discoverHomebridge, changed = () => {}, error = () => {}, renderCheckEnable, viewChanged = () => {}, getStatus, cardAction }) {
     this.root=root; this.configuration=structuredClone(configuration); this.credentials=credentials; this.discover=discover; this.discoverHomebridge=discoverHomebridge; this.changed=changed; this.error=error;
+    this.renderCheckEnable=renderCheckEnable;this.viewChanged=viewChanged;this.getStatus=getStatus;this.cardAction=cardAction;
+    this.manualKeypad=new Set();
     this.selected=0; this.step=0; this.render();
   }
   change() { this.changed(this.configuration); }
@@ -30,7 +32,7 @@ export class ProfileEditor {
   }
   grid(parent){const g=el('div',undefined,'field-grid');parent.append(g);return g;}
   panel(parent,title,subtitle){const p=el('section',undefined,'device-block');p.append(el('h3',title));if(subtitle)p.append(el('p',subtitle,'subtle small'));parent.append(p);return p;}
-  credential(grid,connection){const input=this.input(grid,'Saved connection key',connection,'credentialRef',{help:'Use the connection name you saved below. The key itself stays private.'});if(this.credentials.length){const list=el('datalist');list.id=freshId('keys');for(const key of this.credentials)list.append(Object.assign(el('option'),{value:key}));input.setAttribute('list',list.id);grid.append(list);}}
+  credential(grid,connection){const input=this.input(grid,'Saved connection key',connection,'credentialRef',{help:'Choose a name saved under General → Connection keys. The key itself stays private.'});if(this.credentials.length){const list=el('datalist');list.id=freshId('keys');for(const key of this.credentials)list.append(Object.assign(el('option'),{value:key}));input.setAttribute('list',list.id);grid.append(list);}}
   connection(parent, obj, key, kind) {
     const current=obj[key];const types=kind==='garage'?[['tailwind','Tailwind local API'],['homebridge','Existing Homebridge garage']]:[['deconz','deCONZ directly'],['homebridge','Existing Homebridge device']];
     const choice=this.input(this.grid(parent),'Connection',current,'type',{options:types});
@@ -80,15 +82,32 @@ export class ProfileEditor {
     for(const [key,label] of [['gatewayId','Gateway identity'],['resourceId','Resource number'],['uniqueId','Endpoint identity'],['resourceType','Resource type'],['modelId','Model'],['manufacturer','Manufacturer']])this.input(fields,label,connection,key);
     parent.append(detail);
   }
+  garageList(){
+    const list=el('div',undefined,'garage-list');
+    this.configuration.controllers.forEach((p,index)=>{
+      const card=el('div',undefined,'garage-card');card.dataset.selected=String(index===this.selected);
+      const select=this.button('',()=>{this.selected=index;this.render();},'garage-select');select.setAttribute('aria-pressed',String(index===this.selected));
+      select.append(el('strong',p.name),el('span',(p.inputs?.length??0)+' physical controls · '+(p.exposeBoltLock?'Garage + lock tiles':'Garage tile')));card.append(select);
+      const state=this.getStatus?.(p);
+      if(state){card.dataset.state=state.tone;const footer=el('div',undefined,'garage-card-footer');
+        footer.append(el('span',state.label,'garage-status'));
+        const action=this.button(state.action,()=>this.cardAction(p,state),'card-action');action.disabled=state.disabled;action.setAttribute('aria-label',state.action+' '+p.name);
+        footer.append(action);card.append(footer);if(state.detail)card.append(el('p',state.detail,'help card-help'));
+      }list.append(card);
+    });
+    list.append(this.button('Add a garage door',()=>{this.configuration.controllers.push(newGarage());this.selected=this.configuration.controllers.length-1;this.step=0;this.change();this.render();},'add-garage'));
+    return list;
+  }
+  refreshCards(){const current=this.root.querySelector('.garage-list');if(current)current.replaceWith(this.garageList());}
   render(){
-    this.root.replaceChildren();const list=el('div',undefined,'garage-list');
-    this.configuration.controllers.forEach((p,index)=>{const b=this.button('',()=>{this.selected=index;this.render();},'garage-card');b.setAttribute('aria-pressed',String(index===this.selected));b.append(el('strong',p.name),el('span',(p.inputs?.length??0)+' physical controls · '+(p.exposeBoltLock?'Garage + lock tiles':'Garage tile')));list.append(b);});
-    list.append(this.button('Add a garage door',()=>{this.configuration.controllers.push(newGarage());this.selected=this.configuration.controllers.length-1;this.change();this.render();},'add-garage'));this.root.append(list);
-    const p=this.configuration.controllers[this.selected];if(!p){const empty=el('section',undefined,'panel empty');empty.append(el('h2','No garage doors yet'),el('p','Use Add a garage door to connect an opener and its separate bolt.','subtle'));this.root.append(empty);return;}
+    this.root.replaceChildren();this.root.append(this.garageList());
+    const p=this.configuration.controllers[this.selected];if(!p){const empty=el('section',undefined,'panel empty');empty.append(el('h2','No garage doors yet'),el('p','Use Add a garage door to connect an opener and its separate bolt.','subtle'));this.root.append(empty);this.viewChanged();return;}
     p.motorPaths??=[];p.inputs??=[];p.timing??={};
-    const steps=el('nav',undefined,'steps');steps.setAttribute('aria-label','Garage setup');['Devices','Inputs','Behavior'].forEach((name,index)=>{const b=this.button(String(index+1).padStart(2,'0')+'  '+name,()=>{this.step=index;this.render();});if(index===this.step)b.setAttribute('aria-current','step');steps.append(b);});this.root.append(steps);
+    const names=['Devices','Inputs','Behavior'];if(this.renderCheckEnable)names.push('Check & Enable');
+    const steps=el('nav',undefined,'steps');steps.setAttribute('aria-label','Garage setup');names.forEach((name,index)=>{const b=this.button(String(index+1).padStart(2,'0')+'  '+name,()=>{this.step=index;this.render();});if(index===this.step)b.setAttribute('aria-current','step');steps.append(b);});this.root.append(steps);
     const content=el('div',undefined,'step-content');this.root.append(content);
-    if(this.step===0)this.devices(content,p);else if(this.step===1)this.inputs(content,p);else this.behavior(content,p);
+    if(this.step===0)this.devices(content,p);else if(this.step===1)this.inputs(content,p);else if(this.step===3&&this.renderCheckEnable)this.renderCheckEnable(content,p);else this.behavior(content,p);
+    this.viewChanged();
   }
   devices(root,p){
     const identity=this.panel(root,'Garage details');const grid=this.grid(identity);this.input(grid,'Garage name',p,'name');identity.append(el('p','Controller ID: '+p.id+' · Use this to link the standalone administrator.','help'));this.input(grid,'Show a separate bolt Lock tile',p,'exposeBoltLock',{type:'checkbox'});
@@ -133,10 +152,30 @@ export class ProfileEditor {
       }card.append(advanced);card.append(this.button('Remove control',()=>{p.inputs.splice(index,1);this.change();this.render();},'danger'));
     });
     inputs.append(this.button('Add a button or keypad',()=>{p.inputs.push({id:freshId('input'),name:'Indoor button',enabled:true,source:{type:'deconz',kind:'button',baseUrl:p.bolt.baseUrl,gatewayId:p.bolt.gatewayId,resourceId:'',uniqueId:'',resourceType:'ZHASwitch',modelId:'',manufacturer:'',credentialRef:p.bolt.credentialRef},trigger:1002,action:'toggle',motorPath:p.motorPaths[0]?.id??'primary',busyBehavior:'drop',rearmSeconds:1.5,timing:{}});this.change();this.render();}));
-    const virtual=this.panel(root,'Virtual keypad','Keep deCONZ authorization and the Tailwind motor route.');
-    virtual.append(this.button(p.keypad?'Use first physical keypad’s alarm':'Link virtual keypad to physical keypad',()=>{const key=p.inputs.find(i=>i.source.kind==='keypad')?.source;if(!key)return this.error('Add a physical keypad first, then link its alarm.');p.keypad={baseUrl:key.baseUrl,gatewayId:key.gatewayId,alarmId:key.alarmId,credentialRef:key.credentialRef};this.change();this.render();}));
-    virtual.append(this.button('Set an alarm directly',()=>{p.keypad={baseUrl:p.bolt.type==='deconz'?p.bolt.baseUrl:'',gatewayId:p.bolt.type==='deconz'?p.bolt.gatewayId:'',credentialRef:p.bolt.type==='deconz'?p.bolt.credentialRef:'garage-deconz',alarmId:1};this.change();this.render();}));
-    if(p.keypad){const g=this.grid(virtual);this.input(g,'deCONZ address',p.keypad,'baseUrl');this.input(g,'Gateway identity',p.keypad,'gatewayId');this.credential(g,p.keypad);this.input(g,'Alarm number',p.keypad,'alarmId',{type:'number',min:1,max:255,step:1});virtual.append(this.button('Unlink virtual keypad',()=>{p.keypad=null;this.change();this.render();}));}
+    this.virtualKeypad(root,p);
+  }
+  virtualKeypad(root,p){
+    const virtual=this.panel(root,'Web admin virtual keypad','Optional. Requires the separate web admin interface. Your physical keypad works without this.');virtual.dataset.section='virtual-keypad';
+    const keys=['baseUrl','gatewayId','credentialRef','alarmId'];
+    const physical=p.inputs.filter(input=>input.source.type==='deconz'&&input.source.kind==='keypad');
+    const matched=p.keypad&&physical.find(input=>keys.every(key=>input.source[key]===p.keypad[key]));
+    const choice={alarm:!p.keypad?'off':matched&&!this.manualKeypad.has(p.id)?'physical:'+matched.id:'manual'};
+    const select=this.input(this.grid(virtual),'Virtual keypad alarm',choice,'alarm',{options:[['off','Not used'],
+      ...physical.map(input=>['physical:'+input.id,'Use alarm from '+input.name]),['manual','Enter alarm details manually']],
+      help:'Choose the deCONZ alarm used by the web admin keypad. This does not arm or disarm it.'});
+    select.addEventListener('change',()=>{
+      if(choice.alarm==='manual')this.manualKeypad.add(p.id);else this.manualKeypad.delete(p.id);
+      if(choice.alarm==='off')p.keypad=null;
+      else if(choice.alarm==='manual')p.keypad??={baseUrl:p.bolt.type==='deconz'?p.bolt.baseUrl:'',gatewayId:p.bolt.type==='deconz'?p.bolt.gatewayId:'',credentialRef:p.bolt.type==='deconz'?p.bolt.credentialRef:'garage-deconz',alarmId:1};
+      else{const source=physical.find(input=>'physical:'+input.id===choice.alarm)?.source;if(!source)return;p.keypad=Object.fromEntries(keys.map(key=>[key,source[key]]));}
+      this.change();this.render();
+    });
+    if(!p.keypad)return;
+    const note=el('p','Use the same gateway and alarm when linking this garage in the web admin interface. Opening and closing use '+(p.door.type==='tailwind'?'Tailwind':'the primary Homebridge opener')+'.','help');virtual.append(note);
+    // A physical selection copies the alarm scope. It is not a live binding to
+    // the physical input, and rendering must never rewrite an existing scope.
+    const g=this.grid(virtual);this.input(g,'deCONZ address',p.keypad,'baseUrl');this.input(g,'Gateway identity',p.keypad,'gatewayId');this.credential(g,p.keypad);this.input(g,'Alarm number',p.keypad,'alarmId',{type:'number',min:1,max:255,step:1});
+    virtual.append(el('p','Selecting a physical keypad copies its alarm details. Later changes to that physical control do not change this saved connection.','help'));
   }
   behavior(root,p){
     const feedback=this.panel(root,'What does your hardware actually report?','The coordinator uses this to decide when it may move or bolt the door.');const g=this.grid(feedback);

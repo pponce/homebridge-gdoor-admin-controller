@@ -24,6 +24,7 @@ POST bodies are JSON, include the pinned `instanceId`, and contain exactly the f
 | POST /v1/settings/apply | token | settings |
 | POST /v1/commissioning/reset | — | result: {reset:true} |
 | POST /v1/controllers/{id}/commission | revision, previousControllerStopped, physicalSetupReviewed, recover | status |
+| POST /v1/controllers/{id}/disable (optional, 0.4.11+) | revision, bootId | status |
 | POST /v1/controllers/{id}/commands | command, requestId, issuedAt, bootId | operation |
 | GET /v1/activity | — | events |
 | GET /v1/homekit-reporting (optional, 0.4.7+) | — | reporting |
@@ -49,9 +50,11 @@ An explicit probe reads devices but never writes. Its result contains controller
 
 ## Settings, commissioning and commands
 
-Homebridge config supplies the initial profiles. After first start, private profiles.json is authoritative for both configuration UIs; neither UI edits the other's files. Settings is {revision,configuration}. Review returns a random token, normalized configuration, revision and requiresCommissioning IDs, expiring after five minutes. Apply consumes the token and compares revisions; changing hardware or behavior removes commissioning for those garages. Cancel invalidates the review. Credential replacement resets commissioning before storing a private key. Credentials themselves are not in settings.
+Homebridge config supplies the initial profiles. After first start, private profiles.json is authoritative for both configuration UIs; neither UI edits the other's files. Settings is {revision,configuration}. Review returns a random token, normalized configuration, revision and requiresCommissioning IDs, expiring after five minutes. Apply consumes the token and compares revisions; changing hardware or behavior removes commissioning for those garages. In 0.4.11+, a name-only change preserves a currently valid commissioning record and the stable controller/accessory identity. Renaming a disabled garage never enables it; other configuration changes retain the existing re-check policy. Cancel invalidates the review. Credential replacement resets commissioning before storing a private key. Credentials themselves are not in settings.
 
 Commissioning requires explicit confirmation that the previous controller is stopped and the physical setup checked, then fresh read-only hardware/identity/relay checks. `recover:true` also acknowledges the interrupted/faulted journal. Commissioning does not move hardware. Timed closing still requires physical closed confirmation; an estimated closure alone cannot prove it.
+
+Disabling a controller is a durable, non-actuating operation. It requires the current revision and bootId and idle runtime operations, rejects maintenance holds, stops only the selected controller’s listeners/polling, removes its enablement record and invalidates its pending keypad receipts. It does not rebuild other controllers or send a stop, open, close or bolt command. Saved device/settings profiles remain intact. Re-enabling requires commissioning again. The endpoint is optional on older releases; missing support is an error, not a successful disable.
 
 Commands are open, close, lock or unlock. requestId is 16–64 alphanumeric/hyphen characters, issuedAt is epoch milliseconds within 15 seconds, and bootId must match the current runtime. Persist pending intent before executing. Repeated IDs return duplicate:true and never repeat movement; changed payloads conflict. Retain recent requests for at least their validity window and all pending requests. A new boot rejects old boot IDs; interrupted work becomes unknown/held. No waiting command queue, automatic movement retry or route fallback. The combined garage always goes through the shared worker, including an optional bolt Lock tile.
 

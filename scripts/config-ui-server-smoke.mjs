@@ -40,7 +40,15 @@ try{
  const review=await request('/review',{configuration,revision:loaded.settings.revision});await request('/apply',{token:review.review.token});
  loaded=await request('/load');assert.equal(loaded.settings.configuration.controllers[0].name,'IPC edited garage');assert.equal(loaded.settings.revision,2);
  const result=await request('/commission',{controller:hardware.config.id,revision:2,previousControllerStopped:true,physicalSetupReviewed:true,recover:false});assert.equal(result.status.actuationEnabled,true);assert.deepEqual(hardware.state.writes,[]);
+ loaded=await request('/load');assert.deepEqual(loaded.credentials.sort(),Object.keys(hardware.credentials).sort());
+ const renamed=structuredClone(loaded.settings.configuration);renamed.controllers[0].name='Renamed enabled garage';
+ const renameReview=await request('/review',{configuration:renamed,revision:loaded.settings.revision});
+ assert.deepEqual(renameReview.review.requiresCommissioning,[]);await request('/apply',{token:renameReview.review.token});
+ assert.equal(runtime.status(hardware.config.id).actuationEnabled,true);
+ const disabled=await request('/disable',{controller:hardware.config.id,revision:3,bootId:runtime.bootId});
+ assert.equal(disabled.status.actuationEnabled,false);assert.deepEqual(hardware.state.writes,[]);
+ await request('/commission',{controller:hardware.config.id,revision:3,previousControllerStopped:true,physicalSetupReviewed:true,recover:false});
  const [reference,secret]=Object.entries(hardware.credentials)[0];await request('/credentials',{reference,secret});assert.equal(runtime.status(hardware.config.id).actuationEnabled,false);assert.deepEqual(hardware.state.writes,[]);
  for(const secret of [identity.token,...Object.values(hardware.credentials)])assert.equal(logs.includes(secret),false);
- console.log('Real custom UI server IPC passed: discovery, complete control checks, public keypad membership, review/apply, commissioning and credential-change pause with no hardware writes.');
+ console.log('Real custom UI server IPC passed: discovery, complete control checks, public keypad membership, review/apply, commissioning, name-only enablement preservation, disabling and credential-change pause with no hardware writes.');
 }finally{if(child){const exited=once(child,'exit');child.kill('SIGTERM');await exited;}await runtime.stop();await closeServer(server);await hardware.close();await rm(storagePath,{recursive:true,force:true});}

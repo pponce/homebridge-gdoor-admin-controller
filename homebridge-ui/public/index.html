@@ -12,13 +12,48 @@
   <header class="hero">
     <div class="brand">
       <svg class="brand-mark" viewBox="0 0 48 48" aria-hidden="true"><path d="M7 40V18L24 7l17 11v22M15 40V22h18v18M15 28h18M15 34h18M5 40h38"/></svg>
-      <div><p class="eyebrow">HOMEBRIDGE</p><h1>Garage &amp; bolt coordinator</h1><p class="subtle">Set up your devices, controls and garage behavior.</p></div>
+      <div><p class="eyebrow">HOMEBRIDGE</p><h1>Garage &amp; Bolt Coordinator</h1><p class="subtle">Set up your devices, controls and garage behavior.</p></div>
     </div>
     <span id="connection" class="badge">Connecting</span>
   </header>
   <div id="notice" role="status" aria-live="polite"></div>
   <fieldset id="workspace">
+    <nav class="page-tabs" aria-label="Settings pages">
+      <button id="general-tab" type="button" aria-current="page">General</button>
+      <button id="garages-tab" type="button">Garage doors</button>
+    </nav>
+    <div id="general-page">
+      <section class="panel">
+        <div class="section-heading"><div><h2>Garage doors</h2><p class="subtle">Check connections and enable each garage door when you are ready.</p></div><button id="configure-garages" type="button" class="secondary">Configure garage doors</button></div>
+        <p id="no-garages" class="subtle small">No garage doors configured yet. Save your connection keys, then add a garage door.</p>
+        <div id="garage-overview"></div>
+      </section>
+    <section class="panel connection-panel">
+      <div class="section-heading"><div><h2>Connection keys</h2><p class="subtle">Give each key a name, then select it when connecting a device.</p></div><span class="badge neutral">Private</span></div>
+      <div id="saved-keys" aria-label="Saved connection keys"></div>
+      <p id="no-keys" class="subtle small">No connection keys saved yet.</p>
+      <form id="credential-form" class="field-grid">
+        <label>Connection name<input id="credential-reference" required pattern="[a-z][a-z0-9-]{0,47}" placeholder="garage-tailwind" autocomplete="off"><span class="help">A short name such as garage-tailwind or garage-deconz.</span></label>
+        <label>API key or local control key<input id="credential-secret" type="password" required autocomplete="new-password"><span class="help">Stored privately in Homebridge. Saved keys are never displayed.</span></label>
+        <div class="wide actions"><button id="credential-save" type="submit" class="secondary">Save connection key</button><button id="credential-cancel" type="button" class="secondary" hidden>Cancel replacement</button></div>
+      </form>
+      <p class="help">Replacing a key pauses configured controls until you check and enable them again.</p>
+    </section>
+      <section id="admin-setup" class="panel">
+        <h2>Web admin interface</h2>
+        <p class="subtle">Optional. Install the separate web admin application on this host for its on-screen keypad and deCONZ alarm administration.</p>
+        <p class="help">HomeKit and physical controls work without it. Set up its virtual keypad under Garage doors → Inputs when you connect the web admin.</p>
+        <p id="admin-unavailable" class="help">Save your setup and start the coordinator child bridge to view connection details.</p>
+        <details id="admin-connection-details" hidden>
+          <summary>Connection details for web admin setup</summary>
+          <p class="help">These identify the coordinator API; they do not confirm the web admin is installed. The web admin preparer reads the private identity file directly. Never share its contents.</p>
+          <div class="field-grid"><label>Coordinator API address<input id="admin-address" readonly></label><label>Private identity file<input id="admin-identity-file" readonly></label></div>
+        </details>
+      </section>
+    </div>
+    <div id="garages-page" hidden>
     <fieldset id="editor-fields"><div id="editor"></div></fieldset>
+    </div>
     <section id="review" class="panel review-panel" hidden></section>
     <div class="savebar">
       <div><strong id="save-state" role="status" data-state="loading">Loading settings</strong><p id="save-hint">Please wait.</p></div>
@@ -28,24 +63,6 @@
         <button id="retry-save" class="primary" type="button" hidden>Retry Homebridge save</button>
       </div>
     </div>
-    <section class="panel connection-panel">
-      <div class="section-heading"><div><h2>Connection keys</h2><p class="subtle">Give each key a name, then select it when connecting a device.</p></div><span class="badge neutral">Private</span></div>
-      <form id="credential-form" class="field-grid">
-        <label>Connection name<input id="credential-reference" required pattern="[a-z][a-z0-9-]{0,47}" placeholder="garage-tailwind" autocomplete="off"><span class="help">A short name such as garage-tailwind or garage-deconz.</span></label>
-        <label>API key or local control key<input id="credential-secret" type="password" required autocomplete="new-password"><span class="help">Stored privately in Homebridge. Saved keys are never displayed.</span></label>
-        <div class="wide"><button type="submit" class="secondary">Save connection key</button></div>
-      </form>
-      <p class="help">Replacing a key pauses configured controls until you check and enable them again.</p>
-    </section>
-    <section id="commissioning" class="panel" hidden>
-      <h2>Check and enable</h2><p id="commissioning-hint" class="subtle"></p>
-      <fieldset id="commissioning-fields"><div id="commissioning-rows"></div></fieldset>
-    </section>
-    <details id="admin-setup" class="panel" hidden>
-      <summary>Connect the standalone web administrator</summary>
-      <p class="subtle">Install it on this same host. The preparer reads the private identity file directly; never share its contents.</p>
-      <div class="field-grid"><label>Coordinator API address<input id="admin-address" readonly></label><label>Private identity file<input id="admin-identity-file" readonly></label></div>
-    </details>
   </fieldset>
 </main>
 </body>

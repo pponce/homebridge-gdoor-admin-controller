@@ -21,6 +21,7 @@ export class UiServer extends HomebridgePluginUiServer {
       const data = await discoverHomebridge(baseUrl, keys[credentialRef]); return { bridgeId: data.bridgeId, services: data.services.map(({service,aid,...row}) => row) }; });
     route('/apply', body => this.api('/v1/settings/apply', body));
     route('/commission', ({ controller, ...body }) => { this.id(controller); return this.api('/v1/controllers/' + controller + '/commission', body); });
+    route('/disable', ({ controller, ...body }) => { this.id(controller); return this.api('/v1/controllers/' + controller + '/disable', body); });
     route('/probe', async ({ controller }) => {
       this.id(controller);
       const [value, settings] = await Promise.all([

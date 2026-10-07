@@ -1,5 +1,17 @@
 # Development status
 
+## General settings and garage status cards — 0.4.11 preview
+
+The owner reports that the new UI looks good and requests a General page, named private-key inventory/replacement, web admin setup, selected-garage Check & Enable, colored card states and enable/disable actions. The title is Garage & Bolt Coordinator. Work is prepared on config-ui-save-preview; main remains the installable 0.4.10 source.
+
+General groups garage readiness, connection-key names with fixed masks and explicit replacement, and optional standalone-admin connection details. It never loads credential values. Garage cards use light green for enabled, light red for disabled and amber for unsaved/incomplete setup or reported issues, with text labels as well as color. Enable opens existing explicit commissioning checks for the selected garage. Disable is immediate and durable but idle-only; it sends no hardware commands and leaves other controller instances intact. The optional authenticated disable endpoint requires current revision and boot identity. API documentation is synchronized with the companion administrator.
+
+The web admin virtual keypad is independent of physical inputs. Its old two buttons are replaced by one dropdown: Not used, use a named physical keypad's alarm, or enter alarm details. Not used hides the alarm fields. Existing scopes remain visible/preserved; selecting a physical source copies its scope, with no live rebinding or alarm command. No admin-online detector is claimed: coordinator API availability is not evidence that the web admin is installed.
+
+The owner also asks whether renaming is safe. 0.4.10 uses the full profile hash, so any rename previously removed commissioning. The preview preserves an already-valid enablement record through a reviewed name-only edit and restart, without changing the stored hash format or accessory IDs. Disabled profiles remain disabled, and device/behavior edits still require checks. HomeKit publication/timing/diagnostic defaults and the standalone-admin runtime are unchanged.
+
+Focused runtime tests pass for name-only persistence, disabled/behavior-change exceptions, and durable disabling with stale/busy rejection, no hardware writes and preservation of another controller. All 145 unit tests and 16 cross-repository checks pass locally. Browser/custom-server CI validation is in progress. This is source preparation, not npm publication, owner installation or physical acceptance.
+
 ## Configuration UI release — 0.4.10
 
 At the owner's request, the tested `config-ui-save-preview` work was fast-forward merged into main as version 0.4.10. It combines the native configuration save/toast/footer flow and refreshed styling with main's 0.4.9 reporting experiments. The preview was four commits ahead of main with no divergence. No controller movement code, reporting defaults, API contract or standalone-admin runtime changes are included in this release.

@@ -70,6 +70,8 @@ export function createManagementServer({ identity, configuration, diagnostics, r
           if (command) { exact(['command','requestId','issuedAt','bootId']); return send(202, { ...envelope, operation: await runtime.submit(command[1], body) }); }
           const commission = /^\/v1\/controllers\/([a-z][a-z0-9-]{0,47})\/commission$/.exec(request.url);
           if (commission) { exact(['revision','previousControllerStopped','physicalSetupReviewed','recover']); return send(200, { ...envelope, status: await runtime.commission(commission[1], body) }); }
+          const disable = /^\/v1\/controllers\/([a-z][a-z0-9-]{0,47})\/disable$/.exec(request.url);
+          if (disable) { exact(['revision','bootId']); return send(200, { ...envelope, status: await runtime.disable(disable[1], body) }); }
           const maintenance = /^\/v1\/maintenance\/(preflight|pause|verify|resume|complete)$/.exec(request.url);
           if (maintenance) { exact(['transactionId','physicalCheck','gateway']); requireValue(typeof body.physicalCheck === 'boolean', 'invalid_request'); return send(200, { ...envelope, acknowledged: await runtime.maintenance(maintenance[1], body.transactionId, body) }); }
           if (request.url === '/v1/maintenance/prepare') { exact(['gateway','confirmedClosed']); return send(200, { ...envelope, result: await runtime.prepareMaintenance(body.gateway, body.confirmedClosed) }); }
