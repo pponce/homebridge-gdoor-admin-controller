@@ -1,6 +1,6 @@
 # Release 0.4.18
 
-Compact input selection with one detail panel, preserving draft edits and selecting newly added controls. Motor route labels now identify Garage opener (Tailwind/Homebridge) or Relay: name. Runtime behavior is unchanged. Validation pending.
+Compact input selection with one detail panel, preserving draft edits and selecting newly added controls. Motor route labels now identify Garage opener (Tailwind/Homebridge) or Relay: name. Runtime behavior is unchanged. All five CI jobs passed in run 37698946893, including desktop/mobile input selection, draft preservation and add/remove checks. Source is ready for publication; installation remains an owner step.
 
 # Release 0.4.17
 
