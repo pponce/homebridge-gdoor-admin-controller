@@ -19,12 +19,12 @@ export class ProfileEditor {
   change() { this.changed(this.configuration); }
   button(text, action, cls='secondary') { const b=el('button',text,cls);b.type='button';b.addEventListener('click',action);return b; }
   input(grid, label, obj, key, { type='text', help, min, max, step, options, rerender=false }={}) {
-    const wrap=el('label',label); const field=el(options?'select':'input'); field.dataset.field=key;
+    const wrap=el('label',label); const field=el(options?'select':'input'); field.dataset.field=key;field.setAttribute('aria-label',label);
     if(options) for(const [value,label,disabled] of options){ const o=el('option',label);o.value=String(value);o.disabled=!!disabled;field.append(o); }
     else { field.type=type; if(min!==undefined)field.min=min;if(max!==undefined)field.max=max;if(step!==undefined)field.step=step; }
     if(type==='checkbox'){wrap.className='check';field.checked=!!obj[key];wrap.prepend(field);}
     else {field.value=obj[key]??'';wrap.append(field);}
-    if(help)wrap.append(el('span',help,'help'));
+    if(help){const description=el('span',help,'help');description.id=freshId('help');field.setAttribute('aria-describedby',description.id);wrap.append(description);}
     const update=()=>{obj[key]=type==='checkbox'?field.checked:type==='number'?Number(field.value):field.value;this.change();};
     if(!options&&type!=='checkbox')field.addEventListener('input',update);
     field.addEventListener('change',()=>{update();if(rerender)this.render();});

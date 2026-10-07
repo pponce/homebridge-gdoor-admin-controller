@@ -33,7 +33,7 @@ async function fixture(browser,{mobile,dark,mode='managed'}){
     if(name==='/review'){assert.equal(body.revision,revision);reviewed=validateConfiguration(body.configuration);return{review:{token:'review-test',configuration:reviewed,requiresCommissioning:[base.id]}};}
     if(name==='/cancel'){reviewed=null;return{};}
     if(name==='/apply'){assert.equal(body.token,'review-test');configuration=reviewed;revision++;applies++;if(mode==='uncertain')throw Error('response lost');return{settings:{revision,configuration}};}
-    if(name==='/probe'){probes++;probedIds.push(body.controller);return{probe:{compatible:probes>1,door:{state:'closed',feedback:'closed-sensor'},bolt:{state:'locked',feedback:'relay'},limitations:[],
+    if(name==='/probe'){probes++;probedIds.push(body.controller);if(mode==='probe-unavailable')throw Error('synthetic unavailable');return{probe:{compatible:probes>1,door:{state:'closed',feedback:'closed-sensor'},bolt:{state:'locked',feedback:'relay'},limitations:[],
       controls:[{id:'physical-keypad',name:'Physical keypad',kind:'input',error:probes===1?'input_alarm_mapping_changed':null}]}};}
     if(name==='/commission'){assert.equal(body.previousControllerStopped,true);assert.equal(body.physicalSetupReviewed,true);enabled=true;commissions++;return{};}
     if(name==='/disable'){assert.equal(body.revision,revision);assert.equal(body.bootId,'synthetic-boot');enabled=false;disables++;return{};}
@@ -212,7 +212,7 @@ try{
    assert.equal(f.nativeSaves(),2);assert.equal(f.applies(),1,'Native bottom Save must not reapply managed settings');
    await page.close();
 
-   for(const mode of ['multiple','no-keypad','fault','moving']){
+   for(const mode of ['multiple','no-keypad','fault','moving','probe-unavailable']){
      const x=await fixture(browser,{mobile,dark,mode}),p=x.page;
      if(mode==='multiple'){
        await p.locator('#general-tab').click();
@@ -237,6 +237,11 @@ try{
        assert.equal(x.configuration().controllers[0].keypad.alarmId,2);
        assert.equal(x.configuration().controllers[0].inputs.length,2);
        assert.equal(x.probes(),0);assert.equal(x.commissions(),0);
+     }else if(mode==='probe-unavailable'){
+       await p.getByRole('button',{name:'04 Check & Enable'}).click();
+       await p.getByRole('button',{name:'Check connections',exact:true}).click();
+       await p.locator('.commission-result').filter({hasText:'Connection check could not complete'}).waitFor();
+       assert.equal(await p.locator('.garage-card').getAttribute('data-state'),'attention');
      }else if(mode==='fault'){
        assert.equal(await p.locator('.garage-card').getAttribute('data-state'),'attention');
        assert.equal(await p.locator('.garage-status').filter({hasText:'Needs attention'}).count(),2);

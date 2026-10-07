@@ -1,8 +1,8 @@
 # Development status
 
-## General settings and garage status cards — 0.4.11 preview
+## General settings and garage status cards — 0.4.11 release preparation
 
-The owner reports that the new UI looks good and requests a General page, named private-key inventory/replacement, web admin setup, selected-garage Check & Enable, colored card states and enable/disable actions. The title is Garage & Bolt Coordinator. Work is prepared on config-ui-save-preview; main remains the installable 0.4.10 source.
+The owner reports that the new UI looks good and requests a General page, named private-key inventory/replacement, web admin setup, selected-garage Check & Enable, colored card states and enable/disable actions. The title is Garage & Bolt Coordinator. Work was prepared on config-ui-save-preview. The owner now requests the next git/publish/install script when ready, so 0.4.11 release metadata is prepared pending the browser gate and merge.
 
 General groups garage readiness, connection-key names with fixed masks and explicit replacement, and optional standalone-admin connection details. It never loads credential values. Garage cards use light green for enabled, light red for disabled and amber for unsaved/incomplete setup or reported issues, with text labels as well as color. Enable opens existing explicit commissioning checks for the selected garage. Disable is immediate and durable but idle-only; it sends no hardware commands and leaves other controller instances intact. The optional authenticated disable endpoint requires current revision and boot identity. API documentation is synchronized with the companion administrator.
 
@@ -10,7 +10,7 @@ The web admin virtual keypad is independent of physical inputs. Its old two butt
 
 The owner also asks whether renaming is safe. 0.4.10 uses the full profile hash, so any rename previously removed commissioning. The preview preserves an already-valid enablement record through a reviewed name-only edit and restart, without changing the stored hash format or accessory IDs. Disabled profiles remain disabled, and device/behavior edits still require checks. HomeKit publication/timing/diagnostic defaults and the standalone-admin runtime are unchanged.
 
-Focused runtime tests pass for name-only persistence, disabled/behavior-change exceptions, and durable disabling with stale/busy rejection, no hardware writes and preservation of another controller. All 145 unit tests and 16 cross-repository checks pass locally. The initial CI run passed Node 22/24, Homebridge 2.0.0/2.4.0 and actual custom UI server IPC, but the ten-minute browser dependency installation timed out before running browser tests. The browser job now uses the matching official Playwright 1.58.2 Noble image with preinstalled browsers/system libraries; its desktop/mobile gate is being rerun. This is source preparation, not npm publication, owner installation or physical acceptance.
+Focused runtime tests pass for name-only persistence, disabled/behavior-change exceptions, and durable disabling with stale/busy rejection, no hardware writes and preservation of another controller. All 145 unit tests and 16 cross-repository checks pass locally. The initial CI run passed Node 22/24, Homebridge 2.0.0/2.4.0 and actual custom UI server IPC, but the ten-minute browser dependency installation timed out before running browser tests. The browser job now uses the matching official Playwright 1.58.2 Noble image with preinstalled browsers/system libraries; The browser run then caught an accessible-label mismatch in the new keypad selector. Controls now expose their concise labels separately from help descriptions. Failed probe requests also mark the garage amber. The combined desktop/mobile gate is being rerun. This is source preparation, not npm publication, owner installation or physical acceptance.
 
 ## Configuration UI release — 0.4.10
 
