@@ -32,6 +32,8 @@ Private-key saving clears the secret field and preserves unsaved configuration a
 
 ## Validation
 
+The merged 0.4.10 release also passed all five jobs in [CI run 37645305805](https://github.com/pponce/homebridge-gDoorAndBolt-coordinator/actions/runs/37645305805), revision `53027491e867f43addadf60ecb5f9870e39cb2a8`. A subsequent documentation-only commit records those results.
+
 All 142 tests passed locally and on Node 22/24 in [CI run 37642891710](https://github.com/pponce/homebridge-gDoorAndBolt-coordinator/actions/runs/37642891710), implementation `2b5876b8f2266c97a7db680501ad0766d1ed72a7`. Focused save-session tests cover reviewed snapshots, native acknowledgement, setup vs. managed persistence, bridge metadata, partial failure retry, uncertain apply reload and invalidated reviews. Desktop Chromium and mobile WebKit passed a model of the native footer/API contract, toasts, immediate dirty state, delayed/rejected saves, commissioning, draft-preserving credentials, theme changes and overflow. Actual custom UI server IPC and Homebridge 2.0.0/2.4.0 checks also passed. The browser harness models the parent controls; it does not run the Angular Homebridge modal itself. Screenshot artifacts accompany the run but have not been visually reviewed in this workspace. Live owner-host acceptance of the outer modal remains outstanding.
 
 Other setup feedback, including inline connection-key creation and a clearer virtual-keypad selector, remains separate work. This update does not change those configuration schemas or defaults.
