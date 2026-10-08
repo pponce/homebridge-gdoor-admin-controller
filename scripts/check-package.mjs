@@ -27,7 +27,7 @@ const tracked = new Set(execFileSync('git', ['ls-files', '-z'], { encoding: 'utf
 const packed = new Set();
 for (const file of pack.files) {
   assert.ok(tracked.has(file.path), 'Untracked package file: ' + file.path);
-  assert.ok(/^(?:package\.json|README\.md|config\.schema\.json|src\/[\w-]+\.js|src\/web-admin-homebridge-sources\.json|homebridge-ui\/(?:server\.js|public\/[\w-]+\.(?:js|css|html))|web-admin\/public\/[\w-]+\.(?:js|css|html|svg|png|webmanifest)|docs\/web-admin-assets\.json|docs\/[\w-]+\.md|examples\/[\w-]+\.json)$/.test(file.path), 'Unexpected package file: ' + file.path);
+  assert.ok(/^(?:package\.json|README\.md|config\.schema\.json|src\/[\w-]+\.js|src\/web-admin-homebridge-sources\.json|homebridge-ui\/(?:server\.js|public\/[\w-]+\.(?:js|css|html))|web-admin\/public\/[\w-]+\.(?:js|css|html|svg|png|webmanifest)|docs\/web-admin-assets\.json|docs\/[\w-]+\.md|docs\/images\/xfinity-keypad\/quick-start-(?:overview|status-controls)\.jpg|examples\/[\w-]+\.json)$/.test(file.path), 'Unexpected package file: ' + file.path);
   assert.equal(packed.has(file.path), false, 'Duplicate package file');
   packed.add(file.path);
 }

@@ -4,12 +4,16 @@ These notes record observations from an Xfinity/Comcast URC4450BC0-X-R keypad us
 
 **A digit press, a submitted keypad request, a deCONZ access decision and a garage movement are different events.** The green light alone does not establish which of those happened.
 
-## The green entry light
+## The green light: manual terminology and observed entry behavior
+
+The supplied Xfinity Home Security Keypad Quick Start Guide identifies the bottom light as the **Status LED/Proximity Sensor**. In its original security-system context, green means Ready/Not Armed, red means Armed, and amber means Not Ready. The guide also says proximity within six inches can wake and illuminate the keypad. See the [manual scans below](#manual-scans).
+
+The light therefore is not documented as a dedicated PIN-entry indicator. Calling it the green entry light in the observations below describes its association with typing during these tests; it does not establish that an input buffer remains active whenever the light is on. The supplied pages do not specify PIN-buffer handling, extra-digit submissions, or whether a successful acceptance resets an entry. Those questions remain separate from the manual's status descriptions.
 
 Observed in physical testing:
 
 - The light comes on with the first digit. Further presses can extend the illuminated period.
-- It is an entry indicator, not confirmation that a PIN was accepted, that the controller is ready, or that lockout protection is clear.
+- Illumination alone does not confirm that a PIN was accepted, that the garage controller is ready, or that deCONZ keypad lockout protection is clear.
 - An exact four-digit correct code can be accepted before the light goes out.
 - In earlier tests, a correct first four digits followed by extra digits still opened the door. A correct code preceded by extra digits did not. Opening proves an accepted request occurred; it does not establish what any later digits transmitted.
 - Waiting for the light to go out separated entries reliably in the earlier wrong-code tests. The light remaining on after success does not prove the keypad will continue submitting requests.
@@ -87,3 +91,19 @@ Remaining questions are whether the accepted-versus-rejected entry difference is
 - The 2026-10-08 supervised physical test and sanitized capture summarized above; private identities, PINs and raw household records are not included.
 - Reviewed deCONZ [authorization and counting](https://github.com/pponce/deconz-rest-plugin/blob/2b1c75f1de1b4f3fe2085d70364605bd8916f177/alarm_user_store.cpp), [IAS ACE duplicate handling](https://github.com/pponce/deconz-rest-plugin/blob/2b1c75f1de1b4f3fe2085d70364605bd8916f177/ias_ace.cpp) and [access-event projection](https://github.com/pponce/deconz-rest-plugin/blob/2b1c75f1de1b4f3fe2085d70364605bd8916f177/alarm_user_event.h). A source review does not independently verify the binary installed on a particular gateway.
 - This plugin's [physical input listener](../src/deconz-input.js), [input routing](../src/input-routing.js), [sanitized debug capture](../src/web-admin-events.js) and [activity grouping](../src/web-admin-history.js).
+
+## Manual scans
+
+Two supplied scans of the Xfinity Home Security Keypad Quick Start Guide, added 2026-10-08. The images preserve the scanned pages, including the original diagrams, text and print identifier. They describe the original Xfinity security system; they do not establish support for every feature through deCONZ or this Homebridge plugin.
+
+### Device overview and pairing
+
+[Open full-size overview scan](images/xfinity-keypad/quick-start-overview.jpg).
+
+![Xfinity Home Security Keypad Quick Start Guide: keypad front and back, status LED/proximity sensor, network and low-battery indicators, and powering-up and pairing instructions.](images/xfinity-keypad/quick-start-overview.jpg)
+
+### Status, arming and controls
+
+[Open full-size status and controls scan](images/xfinity-keypad/quick-start-status-controls.jpg).
+
+![Xfinity keypad manual: mounting, LED status colors, arming buttons, battery replacement, volume and chime controls, proximity detection, weekly testing and approvals.](images/xfinity-keypad/quick-start-status-controls.jpg)
