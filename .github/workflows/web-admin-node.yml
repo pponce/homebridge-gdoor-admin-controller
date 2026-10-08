@@ -19,7 +19,8 @@ jobs:
           node-version: ${{ matrix.node }}
       - name: Install runtime dependencies
         run: npm install --ignore-scripts --no-audit --no-fund
-      - run: node --test test/web-admin*.test.js
+      - name: Controller and web admin regression tests
+        run: npm test
       - name: Verify development package assets
         run: |
           npm pack --ignore-scripts --json --pack-destination "$RUNNER_TEMP" > "$RUNNER_TEMP/admin-pack.json"

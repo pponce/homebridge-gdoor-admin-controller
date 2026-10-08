@@ -17,6 +17,8 @@ export class UiServer extends HomebridgePluginUiServer {
     super();
     const route = (name, fn) => this.onRequest(name, async body => { try { return await fn(body ?? {}); } catch { throw new RequestError('The request could not be completed. Check the connection and saved settings.'); } });
     route('/load', () => this.load());
+    route('/web-admin', () => this.api('/v1/web-admin'));
+    route('/web-admin/configure', body => this.api('/v1/web-admin/configure', body));
     route('/debug',()=>this.debug());
     route('/debug/recording',body=>{
       if(Object.keys(body).join()!=='recording'||typeof body.recording!=='boolean')throw Error('invalid_recording');

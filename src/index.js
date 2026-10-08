@@ -6,6 +6,7 @@ import { Diagnostics } from './diagnostics.js';
 import { CoordinatorRuntime } from './runtime.js';
 import { acquireOwnership } from './ownership.js';
 import { CoordinatorAccessories } from './accessories.js';
+import { WebAdminManager } from './web-admin-manager.js';
 
 export const PLUGIN_NAME = 'homebridge-gdoor-admin-controller';
 export const PLATFORM_NAME = 'GDoorAndBoltCoordinator';
@@ -18,7 +19,7 @@ export class CoordinatorPlatform {
     try { this.configuration = validateConfiguration({ ...config, controllers: config.controllers ?? [] }, { allowEmpty: true }); }
     catch { log.error('Coordinator configuration is invalid; control remains disabled.'); return; }
     api.on('didFinishLaunching', () => {
-      this.starting = this.start().catch(async () => { log.error('Coordinator startup failed; control remains disabled.'); await this.runtime?.stop(); await this.releaseOwnership?.(); });
+      this.starting = this.start().catch(async () => { log.error('Coordinator startup failed; control remains disabled.'); await this.webAdmin?.close(); await closeServer(this.server); await this.runtime?.stop(); await this.releaseOwnership?.(); });
     });
   }
   configureAccessory(accessory) { this.cached.push(accessory); }
@@ -35,14 +36,18 @@ export class CoordinatorPlatform {
     }
     const diagnostics = new Diagnostics(this.runtime.configuration, () => readCredentials(storagePath));
     const probe = diagnostics.probe.bind(diagnostics); diagnostics.probe = id => { diagnostics.configuration = this.runtime.configuration; return probe(id); };
+    this.webAdmin = new WebAdminManager({ storagePath, runtime: this.runtime });
     this.server = createManagementServer({ identity, configuration: this.configuration, diagnostics, runtime: this.runtime,
+      webAdmin: this.webAdmin,
       ...(this.accessories ? { setReporting: enabled => this.accessories.reporting.setRecording(enabled),
         setReportingExperiment: (trace, publication) => this.accessories.setReportingExperiment(trace, publication) } : {}),
       reporting: () => this.accessories?.reporting.snapshot() ?? { schema: 1, connectionInspection: 'unavailable', tiles: [], clients: [], events: [] } });
     this.server.on('error', () => this.log.error('Coordinator management API error.'));
     await listenLocal(this.server, this.configuration.managementPort);
     if (this.stopped) { await closeServer(this.server); await this.runtime.stop(); return; }
+    await this.webAdmin.start();
+    if (this.webAdmin.error) this.log.warn('Optional web admin could not start. Open the plugin settings to review its status.');
     this.log.info('Coordinator ready. Each garage requires explicit commissioning before control is enabled.');
   }
-  async shutdown() { this.stopped = true; await this.starting; this.accessories?.stop(); await this.runtime?.stop(); await closeServer(this.server); await this.releaseOwnership?.(); }
+  async shutdown() { this.stopped = true; await this.starting; await closeServer(this.server); await this.webAdmin?.close(); this.accessories?.stop(); await this.runtime?.stop(); await this.releaseOwnership?.(); }
 }

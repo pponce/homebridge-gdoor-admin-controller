@@ -20,6 +20,7 @@ export class WebAdminAccountStore {
       return record;
     });
   }
+  configured() { return this.serial(async () => !!await this.privateStore.read()); }
   initialize(username, password) {
     return this.serial(async () => {
       if (await this.privateStore.read()) throw new WebAdminError('web_account_already_configured');

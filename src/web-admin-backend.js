@@ -19,10 +19,10 @@ function limitedTransaction(value) {
 }
 
 export class WebAdminBackend {
-  constructor({ registrations = [], accessMode = 'observe', setup, transactions, history, backup, integration, keypadHook, requestDiscovery = () => {}, connected = new Map(), hiddenUsers = async () => [], gatewayFactory = (row, options) => new WebAdminGateway(row, options) }) {
+  constructor({ registrations = [], accessMode = 'observe', setup, transactions, history, backup, integration, keypadHook, assertCurrent = async () => {}, requestDiscovery = () => {}, connected = new Map(), hiddenUsers = async () => [], gatewayFactory = (row, options) => new WebAdminGateway(row, options) }) {
     this.registrations = new Map(validateWebGateways(registrations).map(row => [row.id, row]));
     requireWeb(['observe', 'manage'].includes(accessMode), 'candidate_read_only_required');
-    Object.assign(this, { accessMode, setup, transactions, history, backup, integration, keypadHook, requestDiscovery, hiddenUsers, gatewayFactory });
+    Object.assign(this, { accessMode, setup, transactions, history, backup, integration, keypadHook, assertCurrent, requestDiscovery, hiddenUsers, gatewayFactory });
     // Only the activity collector may set connection state. A successful REST
     // read does not establish that the live event stream is connected.
     this.connected = connected; this.catalog = new Map(); this.pending = Promise.resolve();
@@ -31,7 +31,7 @@ export class WebAdminBackend {
   }
   dispatch(session, operation, body) {
     const principal = structuredClone(session), payload = structuredClone(body);
-    const result = this.pending.then(() => this.execute(principal, operation, payload));
+    const result = this.pending.then(async () => { await this.assertCurrent(); return this.execute(principal, operation, payload); });
     this.pending = result.catch(() => {}); return result;
   }
   unavailable() { throw new WebAdminError('operation_not_implemented'); }
@@ -53,6 +53,11 @@ export class WebAdminBackend {
       requireWeb(!regular, 'forbidden'); requireWeb(exact(body, []), 'invalid_request');
       const result = await this.execute(session, 'setup', {});
       return { ...result, homebridge_details: null };
+    }
+    if (operation === 'setup_application') {
+      requireWeb(!regular, 'forbidden'); requireWeb(this.accessMode === 'manage', 'candidate_read_only_required');
+      if (!this.setup?.application) return this.unavailable();
+      return this.setup.application(body);
     }
     if (operation === 'activity_options') {
       requireWeb(exact(body, []), 'invalid_request');

@@ -42,7 +42,10 @@ test('launch event starts the authenticated API and shutdown releases its socket
   });
   assert.equal(response.status, 200);
   assert.equal((await response.json()).instanceId, identity.instanceId);
+  assert.equal(platform.webAdmin.active, null);
+  assert.equal((await platform.webAdmin.status()).settings.enabled, false);
   await platform.shutdown();
   assert.equal(platform.server.listening, false);
   assert.equal(messages.some(message => message.includes(identity.token)), false);
 });
+

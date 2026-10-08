@@ -39,7 +39,7 @@ async function readBody(request) {
   return body;
 }
 
-export function createWebAdminHandler({ origin, auth, assets = new Map(), backend, web }) {
+export function createWebAdminHandler({ origin, auth, assets = new Map(), backend, web, available = () => true }) {
   const publicUrl = new URL(origin);
   requireValue(publicUrl.protocol === 'https:' && publicUrl.origin === origin && !publicUrl.username && !publicUrl.password, 'web_origin_invalid');
   return async (request, response) => {
@@ -55,6 +55,7 @@ export function createWebAdminHandler({ origin, auth, assets = new Map(), backen
       response.end(bytes);
     }
     try {
+      requireValue(available(), 'web_admin_stopping');
       requireValue(headerCount(request, 'host') === 1 && request.headers.host === publicUrl.host, 'host_rejected');
       requireValue(!request.url.includes('?') && !request.url.includes('#'), 'query_not_allowed');
       requireValue(headerCount(request, 'origin') <= 1 &&
@@ -66,6 +67,7 @@ export function createWebAdminHandler({ origin, auth, assets = new Map(), backen
         requireValue(request.headers.origin === origin, 'origin_required');
         body = await readBody(request);
       }
+      requireValue(available(), 'web_admin_stopping');
       if (request.method === 'GET' && assets.has(request.url)) {
         const asset = assets.get(request.url); return send(200, asset.content, { type: asset.type });
       }
@@ -109,6 +111,7 @@ export function createWebAdminServer({ tls, ...options }) {
   requireValue(tls?.key && tls?.cert, 'tls_configuration_required');
   // Caller must explicitly listen; this factory cannot activate itself.
   const server = https.createServer({ ...tls, maxHeaderSize: 16384, requestTimeout: 10000, headersTimeout: 10000 }, createWebAdminHandler(options));
+  server.maxConnections = 32;
   server.on('close', () => { void options.auth.close(); });
   return server;
 }

@@ -4,10 +4,24 @@ import http from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { createManagementServer, listenLocal, closeServer } from '../src/api.js';
 import { validateConfiguration } from '../src/config.js';
+import { WebAdminError } from '../src/web-admin-auth.js';
 
 const token = 'synthetic-test-token-never-a-live-credential';
 const instanceId = '00000000-0000-4000-8000-000000000001';
 const configuration = validateConfiguration(JSON.parse(await readFile(new URL('../examples/development-config.json', import.meta.url), 'utf8')));
+test('optional web setup stays on the authenticated local API and returns explicit save results', async t => {
+  const calls = [];
+  const webAdmin = { status: async () => ({ running: false }), configure: async body => { calls.push(body); throw new WebAdminError('web_settings_changed'); } };
+  const server = createManagementServer({ identity: { token, instanceId }, configuration, runtime: { configuration }, webAdmin });
+  const port = await listenLocal(server, 0); t.after(() => closeServer(server));
+  assert.equal((await request(port, '/v1/web-admin', { headers: { Authorization: 'wrong' } })).status, 401);
+  assert.equal((await request(port, '/v1/web-admin')).body.webAdmin.running, false);
+  const options = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: { instanceId, expectedRevision: 0, settings: {}, admin: null } };
+  assert.equal((await request(port, '/v1/web-admin/configure', { ...options, body: { ...options.body, command: 'open' } })).status, 409);
+  assert.equal((await request(port, '/v1/web-admin/configure', { ...options, headers: { ...options.headers, Origin: 'https://example.test' } })).status, 403);
+  const result = await request(port, '/v1/web-admin/configure', options);
+  assert.equal(result.status, 200); assert.equal(result.body.configured, false); assert.equal(result.body.error, 'web_settings_changed'); assert.equal(calls.length, 1);
+});
 async function fixture(t) {
   const server = createManagementServer({ identity: { token, instanceId }, configuration });
   const port = await listenLocal(server, 0);
@@ -130,3 +144,4 @@ test('reporting experiment requires authenticated identity, exact supported mode
     }
   assert.equal(changes.length,8);
 });
+

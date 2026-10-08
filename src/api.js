@@ -3,10 +3,11 @@ import http from 'node:http';
 import { readFileSync } from 'node:fs';
 import { inventory, routingInventory, ConfigurationError } from './config.js';
 import { Fault, requireValue } from './fault.js';
+import { WebAdminError } from './web-admin-auth.js';
 
 export const PLUGIN_VERSION = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
 export const CAPABILITIES = Object.freeze({ inventory: true, routingInventory: true, diagnostics: false, settingsWrite: false, motion: false, maintenance: false, keypad: false });
-export function createManagementServer({ identity, configuration, diagnostics, runtime, reporting, setReporting, setReportingExperiment }) {
+export function createManagementServer({ identity, configuration, diagnostics, runtime, reporting, setReporting, setReportingExperiment, webAdmin }) {
   const expectedAuthorization = Buffer.from(`Bearer ${identity.token}`);
   const envelope = { apiVersion: 1, instanceId: identity.instanceId };
   const controllers = () => runtime ? runtime.inventory() : inventory(configuration);
@@ -50,6 +51,7 @@ export function createManagementServer({ identity, configuration, diagnostics, r
       }
       if (runtime && request.url?.startsWith('/v1/')) {
         if (request.method === 'GET') {
+          if (request.url === '/v1/web-admin' && webAdmin) return send(200, { ...envelope, webAdmin: await webAdmin.status() });
           if (request.url === '/v1/settings') return send(200, { ...envelope, settings: runtime.settings() });
           if (request.url === '/v1/activity') return send(200, { ...envelope, events: runtime.state.events });
           if (request.url === '/v1/maintenance') return send(200, { ...envelope, maintenance: runtime.state.maintenance });
@@ -62,6 +64,15 @@ export function createManagementServer({ identity, configuration, diagnostics, r
           const body = await readBody(request, 262144);
           requireValue(body && !Array.isArray(body) && body.instanceId === identity.instanceId, 'instance_mismatch');
           const exact = keys => requireValue(Object.keys(body).sort().join() === ['instanceId', ...keys].sort().join(), 'invalid_request');
+          if (request.url === '/v1/web-admin/configure' && webAdmin) {
+            exact(['expectedRevision', 'settings', 'admin']);
+            try { return send(200, { ...envelope, configured: true, webAdmin: await webAdmin.configure({ expectedRevision: body.expectedRevision, settings: body.settings, admin: body.admin }) }); }
+            catch (error) {
+              // A result envelope lets the UI explain safe validation failures
+              // without changing the existing transport or retrying a save.
+              return send(200, { ...envelope, configured: false, error: error instanceof WebAdminError ? error.message : 'web_setup_failed' });
+            }
+          }
           if (request.url === '/v1/commissioning/reset') { exact([]); return send(200, { ...envelope, result: await runtime.resetCommissioning() }); }
           if (request.url === '/v1/settings/review') { exact(['configuration', 'revision']); return send(200, { ...envelope, review: await runtime.review(body.configuration, body.revision) }); }
           if (request.url === '/v1/settings/cancel') { exact(['token']); return send(200, { ...envelope, review: runtime.cancelReview(body.token) }); }

@@ -1,4 +1,5 @@
 import { DebugPanel } from './debug.js';
+import { WebAdminPanel } from './web-admin.js';
 import { ConnectionEditor } from './connection-editor.js';
 import { withConnections } from './connections.js';
 import { ProfileEditor } from './editor.js';
@@ -7,6 +8,7 @@ const hb=window.homebridge;
 const $=id=>document.getElementById(id);
 const save=new ConfigurationSave(hb);
 const debug=new DebugPanel($('debug-page'),(path,body)=>hb.request(path,body));
+const webAdmin=new WebAdminPanel($('admin-setup'),{request:(path,body)=>hb.request(path,body),changed:refresh,run:action});
 // Keep one review and one save transaction when its panel moves into a card.
 const reviewPanel=$('review');
 let reviewControllerId=null;
@@ -20,7 +22,7 @@ function toast(message,type='success'){hb?.toast?.[type]?.(message);}
 function refresh(){
   if(pendingKeyDeletes.size&&save.phase==='saved')save.phase='dirty';
   const formDirty=!!connectionEditor?.dirty;
-  const clean=save.canClose&&!busy&&!formDirty;
+  const clean=save.canClose&&!busy&&!formDirty&&!webAdmin.dirty;
   if(clean)hb?.enableSaveButton?.();else hb?.disableSaveButton?.();
   $('workspace').disabled=busy;$('coordinator-ui').setAttribute('aria-busy',String(busy));
   $('editor-fields').disabled=!save.canEdit;if(connectionEditor)connectionEditor.fields.disabled=!save.canEdit;
@@ -33,6 +35,7 @@ function refresh(){
   $('save-state').textContent=busy?'Working…':title;$('save-state').dataset.state=save.phase;
   $('save-hint').textContent=formDirty?'Click Add connection or Update connection, or cancel the connection edit.':hint;
   if(formDirty&&!busy)$('save-state').textContent='Finish the connection form';
+  if(webAdmin.dirty&&!busy){$('save-state').textContent='Unsaved web settings';$('save-hint').textContent='Use Save web settings in General to apply the web interface settings.';}
   $('review-button').hidden=['sync-pending','save-uncertain'].includes(save.phase);
   if(save.phase!=='review')reviewPanel.hidden=true;
   $('review-button').disabled=save.phase==='saved'||!editor||formDirty;
@@ -140,9 +143,7 @@ async function load(keepPendingKeys=false){
   // sync after an administrator edit or an uncertain apply response.
   if(loaded.connected)await save.stage(loaded.settings.configuration);
   save.load({...loaded.settings,connected:loaded.connected,saved});
-  $('admin-connection-details').hidden=!loaded.adminConnection;
-  $('admin-unavailable').hidden=!!loaded.adminConnection;
-  if(loaded.adminConnection){$('admin-address').value=loaded.adminConnection.baseUrl;$('admin-identity-file').value=loaded.adminConnection.identityFile;}
+  await webAdmin.load(loaded.connected);
   $('connection').textContent=loaded.connected?'Coordinator connected':'Initial setup';
   $('connection').dataset.state=loaded.connected?'connected':'setup';
   if(!keepPendingKeys){pendingKeyDeletes.clear();deletingKey=null;}

@@ -1,3 +1,9 @@
+# Web admin Node port: optional lifecycle and Homebridge setup checkpoint
+
+Development branch only. Added OFF-by-default server settings, first-administrator setup, private backend certificate generation, listener lifecycle, saved deCONZ connection selection, an independent Save web settings action in General, and durable application preferences. Browser URL and strict backend Host/Origin are separate so an existing HTTPS reverse proxy can retain its own public certificate. Port conflicts fail without stopping another service; disabling keeps accounts/history and works without gateway access. Production composition uses the existing coordinator maintenance/keypad ports, durable transactions/backups/history, and read-only collection.
+
+Twenty-six focused auth/storage/settings/lifecycle checks pass locally. Added production HTTPS/save/restart and management API tests; full controller regression, package, and browser validation are queued in CI. The supported homebridge-deconz alarm PIN adapter and full save/recovery browser acceptance remain required. This is not yet an owner-install release. No npm publication, host changes, other-plugin patch, or device command occurred; standalone remains untouched.
+
 # Web admin Node port: protected writes and recovery checkpoint
 
 Development only. Added private transaction persistence, one-delivery recovery, 20-policy-backup retention, original user/grant/PIN/alarm/protection plans and authenticated write dispatch. Runtime history, coordinator integration, setup/lifecycle and virtual keypad work remain. Fourteen new persistence/recovery/retention tests pass locally; full write-plan/schedule and existing browser validation is queued in CI because local npm dependency download was denied. The server remains disconnected from Homebridge startup and defaults OFF when integrated. No publication, install or physical operation occurred.
