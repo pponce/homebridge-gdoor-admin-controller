@@ -11,6 +11,7 @@ const debug=new DebugPanel($('debug-page'),(path,body)=>hb.request(path,body));
 const reviewPanel=$('review');
 let reviewControllerId=null;
 let editor, connectionEditor, loaded, blocks=[], busy=false, themeChoice, currentPage='general';
+let localBridgeCache=null;
 const connectionChecks=new Map();
 const checkForms=new Map();let deletingKey=null;const pendingKeyDeletes=new Set();
 
@@ -64,11 +65,23 @@ function changed(configuration){
 function buildEditor(configuration,position){
   editor=null;connectionEditor=null;
   editor=new ProfileEditor($('editor'),{configuration,credentials:loaded.credentials,changed,
+    localBridges:async(force=false)=>{if(force||!localBridgeCache)localBridgeCache=hb.request('/local-connections',{}).catch(error=>{localBridgeCache=null;throw error;});return (await localBridgeCache).candidates.filter(row=>row.type==='homebridge');},
+    useLocalBridge:async candidate=>{
+      const fresh=(await hb.request('/local-connections',{})).candidates.find(row=>row.type==='homebridge'&&row.baseUrl===candidate.baseUrl&&row.name===candidate.name);
+      if(!fresh?.canImportPin)throw Error('local_bridge_unavailable');
+      const imported=await hb.request('/local-connections/import',{id:fresh.id});if(!imported.saved||imported.reference!==fresh.credentialRef)throw Error('local_bridge_unavailable');
+      if(!loaded.credentials.includes(imported.reference))loaded.credentials.push(imported.reference);
+      editor.credentials=loaded.credentials;connectionKeys();connectionEditor?.refreshKeys();
+      let shared=editor.configuration.connections.find(row=>row.type==='homebridge'&&row.baseUrl===fresh.baseUrl&&row.credentialRef===imported.reference);
+      if(!shared){shared={id:'connection-'+crypto.randomUUID().replaceAll('-','').slice(0,16),name:fresh.name,type:'homebridge',baseUrl:fresh.baseUrl,credentialRef:imported.reference};editor.configuration.connections.push(shared);}
+      return shared;
+    },
     discoverHomebridge:body=>hb.request('/homebridge',body),discover:body=>hb.request('/deconz',body),error:message=>notice(message,true),
     saveConfiguration:()=>persist(true),renderCheckEnable:commissioning,viewChanged:refresh,getStatus:garageStatus,cardAction:garageAction,manageConnections:type=>{showPage('general');connectionEditor?.focus(type);}});
   if(position){editor.selected=Math.min(position.selected,Math.max(0,configuration.controllers.length-1));editor.step=position.step;editor.expandedGarage=position.expandedGarage;editor.selectedInputs=new Map(position.selectedInputs??[]);editor.render();}
   connectionEditor=new ConnectionEditor($('shared-connections'),{configuration:()=>editor.configuration,credentials:()=>loaded.credentials,
     request:(path,body)=>hb.request(path,body),run:action,changed:configuration=>{changed(configuration);editor.render();},refresh:()=>{if(connectionEditor?.dirty&&save.phase==='review')save.changed(editor.configuration);refresh();},message:notice,
+    keyRetired:reference=>{if(!usesKey(editor.configuration,reference))pendingKeyDeletes.add(reference);},
     keyCreated:reference=>{if(!loaded.credentials.includes(reference))loaded.credentials.push(reference);editor.credentials=loaded.credentials;connectionKeys();}});
 
 }

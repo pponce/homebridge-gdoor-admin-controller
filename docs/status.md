@@ -1,3 +1,11 @@
+# Release 0.4.22: connection-owned credentials and direct local Homebridge selection
+
+Local Homebridge device/control setup now offers a bridge picker directly, with private PIN import through the existing supported local discovery API and Other Homebridge instance for manual setup. Accessory discovery remains filtered by role. No upstream patches, private cache access, native pairing or hardware commands are introduced.
+
+New connections accept their credential directly with an internal generated reference. Existing connections show Key saved and Replace key; replacement creates a separate credential and switches references on configuration save, preserving the old credential until saved configuration no longer uses it. Removing a connection queues unused credential deletion after successful configuration save. Existing reference sharing remains supported and server-protected. The legacy credential maintenance panel is collapsed under Advanced credential maintenance for recovery/cleanup, outside the normal setup flow. Refresh uses a compact icon throughout. Existing settings and pairing are preserved.
+
+The earlier pending deletion implementation passed all five checks in run 37714261200, including Undo, Discard and native-save failure protection. The combined connection flow has expanded browser coverage and awaits its own run. Source, npm publication, installation and owner acceptance remain distinct.
+
 # Release 0.4.22: compact refresh and deferred key deletion
 
 Configured-connection refresh is a compact circular-arrow icon beside the dropdown for deCONZ and Homebridge. Keys removed from draft usage but still referenced by saved settings can be marked Pending deletion with Undo. They are deleted only after both the coordinator and Homebridge configuration saves succeed, with the server still checking both saved sources. Discard/reload cancels pending deletion; failed configuration saves leave keys intact. Failed key deletion retains a pending marker and supports retry without reporting deletion success. Existing fully unused keys retain immediate confirmed deletion. No movement or protocol changes. Publication, installation and validation are tracked separately.

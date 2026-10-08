@@ -11,10 +11,10 @@ export function newGarage() {
     motorPaths:[], inputs:[], keypad:null };
 }
 export class ProfileEditor {
-  constructor(root, { configuration, credentials = [], discover, discoverHomebridge, changed = () => {}, error = () => {}, renderCheckEnable, viewChanged = () => {}, getStatus, cardAction, manageConnections, saveConfiguration }) {
+  constructor(root, { configuration, credentials = [], discover, discoverHomebridge, changed = () => {}, error = () => {}, renderCheckEnable, viewChanged = () => {}, getStatus, cardAction, manageConnections, saveConfiguration, localBridges, useLocalBridge }) {
     this.root=root; this.configuration=withConnections(configuration); this.credentials=credentials; this.discover=discover; this.discoverHomebridge=discoverHomebridge; this.changed=changed; this.error=error;
     this.renderCheckEnable=renderCheckEnable;this.viewChanged=viewChanged;this.getStatus=getStatus;this.cardAction=cardAction;
-    this.saveConfiguration=saveConfiguration;this.manageConnections=manageConnections;this.manualKeypad=new Set();this.expandedGarage=null;
+    this.localBridges=localBridges;this.useLocalBridge=useLocalBridge;this.saveConfiguration=saveConfiguration;this.manageConnections=manageConnections;this.manualKeypad=new Set();this.expandedGarage=null;
     this.selectedInputs=new Map();this.selected=0; this.step=0; this.render();
   }
   change() { this.changed(this.configuration); }
@@ -40,6 +40,7 @@ export class ProfileEditor {
   grid(parent){const g=el('div',undefined,'field-grid');parent.append(g);return g;}
   panel(parent,title,subtitle){const p=el('section',undefined,'device-block');p.append(el('h3',title));if(subtitle)p.append(el('p',subtitle,'subtle small'));parent.append(p);return p;}
   sharedConnection(parent,connection){
+    if(connection.type==='homebridge'&&this.localBridges)return this.homebridgeConnection(parent,connection);
     const type=connection.type??'deconz';const choices=this.configuration.connections.filter(row=>row.type===type);
     const matched=choices.find(row=>sameConnection(row,connection));
     const label=el('label',connectionTypes[type]+' connection');const select=el('select');select.setAttribute('aria-label',connectionTypes[type]+' connection');select.required=true;
@@ -47,8 +48,40 @@ export class ProfileEditor {
     for(const row of choices)select.append(Object.assign(el('option',row.name),{value:row.id}));select.value=matched?.id??'';label.append(select);const row=this.grid(parent);row.classList.add('connection-picker-row');row.append(label);
     if(this.manageConnections)row.append(this.button('Manage connections',()=>this.manageConnections(type)));
     select.onchange=()=>{const shared=choices.find(row=>row.id===select.value);if(!shared)return;selectConnection(connection,shared);this.change();this.render();};
-    if(matched)parent.append(el('p',matched.baseUrl+' · Saved key: '+matched.credentialRef,'help connection-summary'));
+    if(matched)parent.append(el('p',matched.baseUrl,'help connection-summary'));
     else parent.append(el('p','Create a '+connectionTypes[type]+' connection in General, then select it here.','help'));
+    return matched;
+  }
+  homebridgeConnection(parent,connection){
+    const saved=this.configuration.connections.filter(row=>row.type==='homebridge'),matched=saved.find(row=>sameConnection(row,connection));
+    const row=this.grid(parent);row.classList.add('connection-picker-row');
+    const label=el('label','Homebridge bridge'),select=el('select');select.setAttribute('aria-label','Homebridge bridge');label.append(select);row.append(label);
+    const hint=el('p','Loading local bridges…','help');parent.append(hint);
+    const refresh=this.button('↻',()=>void populate(true),'secondary connection-refresh');refresh.title='Refresh configured connections';refresh.setAttribute('aria-label','Refresh configured connections');row.append(refresh);
+    let candidates=[];
+    const populate=async(force=false)=>{
+      select.replaceChildren(Object.assign(el('option','Choose a bridge'),{value:'',disabled:true}));
+      for(const item of saved)select.append(Object.assign(el('option',item.name),{value:'saved:'+item.id}));
+      select.value=matched?'saved:'+matched.id:'';
+      refresh.disabled=true;
+      try{
+        candidates=await this.localBridges(force);
+        for(const item of candidates)select.append(Object.assign(el('option',item.name+(item.canImportPin?'':' — manual setup needed')),{value:'local:'+item.id,disabled:!item.canImportPin}));
+        hint.textContent='Choose the bridge exposing your accessory. Its pairing PIN is handled privately.';
+      }catch{hint.textContent='Local bridges could not be read. Refresh or use another Homebridge connection.';}
+      finally{select.append(Object.assign(el('option','Other Homebridge instance…'),{value:'manual'}));refresh.disabled=false;}
+    };
+    select.onchange=async()=>{
+      if(select.value==='manual'){this.manageConnections?.('homebridge');return;}
+      const value=select.value;select.disabled=true;
+      try{
+        const shared=value.startsWith('saved:')?saved.find(row=>'saved:'+row.id===value):await this.useLocalBridge(candidates.find(row=>'local:'+row.id===value));
+        if(!row.isConnected)return;
+        if(!shared)throw Error('missing_bridge');selectConnection(connection,shared);this.change();this.render();
+      }catch{hint.textContent='Could not access this bridge. Check that it is running and allows accessory control, then refresh.';}
+      finally{select.disabled=false;}
+    };
+    void populate();
     return matched;
   }
   connection(parent, obj, key, kind) {

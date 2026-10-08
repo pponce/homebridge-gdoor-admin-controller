@@ -46,6 +46,7 @@ async function fixture(browser,{mobile,dark,mode='managed'}){
       if(!savedKeys.includes('local-homebridge-test'))savedKeys.push('local-homebridge-test');
       return {saved:true,reference:'local-homebridge-test'};
     }
+    if(name==='/homebridge')return {services:['button','switch','garage','lock','light'].map((kind,index)=>({kind,name:'Fixture '+kind,bridgeId:'fixture-bridge',serviceId:'2.'+(10+index),accessoryIdentity:'a'.repeat(64)}))};
     if(name==='/load')return{connected:mode!=='initial',settings:{revision,configuration},credentials:savedKeys,adminConnection:mode==='initial'?null:{baseUrl:'http://127.0.0.1:27773',identityFile:'/synthetic/homebridge/gdoorandbolt-coordinator/identity.json'},
       controllers:mode==='initial'?[]:configuration.controllers.map(profile=>({id:profile.id,name:profile.name,status:{bootId:'synthetic-boot',actuationEnabled:enabled,held:enabled?null:'not-commissioned',state:{busy:mode==='moving',fault:mode==='fault'?'synthetic-fault':null}}}))};
     if(name==='/validate')return validateConfiguration(body.configuration,{allowEmpty:true});
@@ -307,6 +308,7 @@ try{
    await page.getByLabel('Garage name',{exact:true}).fill('Unsaved garage name');
    await page.locator('#general-tab').click();
    assert.equal(await page.locator('#garage-overview .overview-row').getAttribute('data-state'),'disabled');
+   await page.locator('#advanced-keys > summary').click();
    await page.locator('#credential-reference').fill('private-key');
    await page.locator('#credential-secret').fill('private-browser-test-key');
    await page.getByRole('button',{name:'Create connection key'}).click();
@@ -484,7 +486,7 @@ try{
      assert.match(await p.locator('.connection-form .hint,.connection-form .help').last().textContent(),/accessory port/);
      await p.locator('#shared-type').selectOption('deconz');
      await p.locator('#shared-name').fill('Other gateway');await p.locator('#shared-address').fill('192.0.2.55:8080');
-     await p.locator('#shared-key').selectOption('__new__');await p.locator('#shared-new-key-name').fill('other-gateway-key');
+     assert.equal(await p.locator('#shared-key').isVisible(),false);assert.equal(await p.locator('#shared-new-key-name').isVisible(),false);
      await p.locator('#shared-secret').fill('private-browser-test-key');
      await p.getByRole('button',{name:'Add connection',exact:true}).click();
      await p.locator('.shared-connection').filter({hasText:'Other gateway'}).waitFor();
@@ -552,13 +554,33 @@ try{
      assert.equal(await p.locator('body').evaluate(b=>b.scrollWidth<=innerWidth+1),true);
      assert.deepEqual(x.errors,[]);await p.close();
    }
+   {
+     const x=await fixture(browser,{mobile,dark}),p=x.page;
+     await p.getByRole('button',{name:'02 Controls'}).click();
+     await p.getByLabel('Control source',{exact:true}).selectOption('homebridge');
+     await p.waitForFunction(()=>document.querySelector('select[aria-label="Homebridge bridge"] option[value="local:local-bridge"]'));
+     await p.getByLabel('Homebridge bridge',{exact:true}).selectOption('local:local-bridge');
+     await p.waitForFunction(()=>document.querySelector('select[aria-label="Homebridge bridge"]')?.value.startsWith('saved:'));
+     assert.equal(x.localImports(),1);
+     await p.getByRole('button',{name:'Find Homebridge devices',exact:true}).click();
+     const pick=p.getByLabel('Discovered Homebridge button',{exact:true});
+     await pick.waitFor();
+     assert.equal(await pick.locator('option').count(),3,'Only buttons and switches are offered as controls');
+     await pick.selectOption('0');
+     await p.locator('[data-control-save]').click();await saved(p);
+     assert.equal(x.configuration().controllers[0].inputs[0].source.type,'homebridge');
+     assert.equal(x.configuration().controllers[0].inputs[0].source.serviceId,'2.10');
+     assert.equal(x.configuration().connections.some(row=>row.type==='homebridge'),true);
+     assert.equal(x.probes(),0);assert.equal(x.commissions(),0);assert.deepEqual(x.errors,[]);
+     assert.equal(await p.locator('body').evaluate(b=>b.scrollWidth<=innerWidth+1),true);
+     await p.close();
+   }
    for(const mode of ['key-delete','key-delete-native-failure']){
      const x=await fixture(browser,{mobile,dark,mode}),p=x.page;
      await p.locator('#general-tab').click();
+     await p.locator('#advanced-keys > summary').click();
      const mark=async()=>{
        await p.getByRole('button',{name:'Remove connection Unused bridge',exact:true}).click();
-       await p.getByRole('button',{name:'Delete key unused-key',exact:true}).click();
-       await p.getByRole('button',{name:'Delete saved key',exact:true}).click();
        await p.getByRole('button',{name:'Undo deletion unused-key',exact:true}).waitFor();
        assert.equal(x.keyDeletes(),0);
        assert.ok(x.savedKeys().includes('unused-key'));
