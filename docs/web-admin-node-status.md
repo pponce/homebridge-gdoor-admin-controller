@@ -3,6 +3,8 @@
 ## Optional product boundary
 The integrated web interface must be optional and disabled by default. Enabling it will require an explicit owner choice after its setup and runtime are ready. No listener is connected to Homebridge startup in this milestone. The validated main-branch 0.4.23 UI release does not include this development work.
 
+The owner reconfirmed the architecture: the controller already built into this plugin is the sole movement controller. Reuse the non-controller web application through existing coordinator interfaces. Exclude the old controller runtime, controller extension and HTTP Webhooks adapter from this build. Preserve the standalone project separately. The updated implementation-plan.md supersedes the earlier two-product/deferred-web-server plan.
+
 The Homebridge deCONZ alarm-user/PIN synchronization feature remains required. It supplies the existing alarm tile's Away/Home/Night/Disarm credential, independently of HTTP Webhooks. See [web-admin-alarm-pin.md](web-admin-alarm-pin.md) for the clarified requirement, upstream API findings and remaining validation. This adapter is not yet implemented in the Node runtime.
 
 ## Implemented foundations

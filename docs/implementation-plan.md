@@ -1,6 +1,6 @@
 # Implementation plan
 
-Decision date: 2026-10-06. Development is authorized; live migration is a later owner-run operation.
+Initial decision: 2026-10-06. Updated by the owner on 2026-10-07 to one combined Homebridge plugin. Development is authorized; installation and live migration remain owner-run operations.
 
 ## Product and repository boundaries
 
@@ -8,7 +8,9 @@ This is a combined garage-door/bolt coordinator. Every configured controller req
 
 No native HomeKit pairing, Apple Home automation backend, door-only or bolt-only mode. Additional manufacturer APIs can be added later behind the same driver contract. Excluding native HomeKit control does not require removing an existing Tailwind native tile; this plugin uses the local API.
 
-The current standalone installation stays separate. The new admin repository initially contains a standalone web application, with its own URL and accounts. Converting that application into a Homebridge plugin is deferred. Development here must not silently redirect the current installation or migrate private state.
+The product is homebridge-gdoor-admin-controller: the existing working Homebridge coordinator plus an optional Node.js web administrator with its own URL and accounts, disabled by default. The earlier plan for two separately installed products is superseded. Reuse the original non-controller web pages, look/feel and administration behavior; connect them to the coordinator already implemented in this plugin. Do not port the old Python movement controller, its controller extension or HTTP Webhooks adapter into this product.
+
+Preserve garageDoorController and its standalone web application as a working alternative for installations without Homebridge. Excluding the old controller from the combined build does not authorize deleting the standalone source, modifying its installed services or migrating private state. See standalone-preservation.md.
 
 ## Architecture
 
@@ -58,28 +60,31 @@ M1 does not publish accessories, operate hardware or replace the admin extension
 - Implement settings revisions, command request IDs, expiring input events, sanitized event history, and persistent pause/maintenance state.
 - Verify stop/restart while moving, conflicting inputs, lost gateway/HB connections, interrupted changes, stale state and feedback loops. Hardware timing parity is assessed separately.
 
-### M4 — New standalone administrator integration
+### M4 — Optional web administration inside the existing plugin
 
-- Preserve the complete existing web UI in the companion repository, with its own URL, accounts and roles. Adapt controller settings, virtual keypad, activity and maintenance to this API.
-- The owner has chosen to stop the existing administrator and switch to the new one when ready. Supporting simultaneous admins or adapting the old installation is not a phase-1 requirement.
-- Bind requests to the expected plugin, gateway, alarm and controller. Do not forward raw keypad PINs to the coordinator.
-- Preserve review/apply/cancel/confirmation behavior, protected identities, fresh outcome delivery and durable maintenance holds. A missing plugin cannot count as successful maintenance.
-- Validate the two new projects together before owner installation/testing. Generic UI extraction or read-only API success does not establish operational readiness.
+- Reuse the complete non-controller web UI and behavior: gateways, users/PINs, access grants and schedules, keypad protection, alarms, virtual keypad, history, accounts, settings and diagnostics. Keep Admin/Regular permissions and the original desktop/mobile experience.
+- Port the administration backend to Node.js and store its private state beneath Homebridge storage. The old controller runtime and HTTP Webhooks integration are excluded.
+- The existing CoordinatorRuntime, movement engine, device drivers, input routing, accessory publication and profile store remain the controller authority. The optional administrator uses narrow in-process adapters; external administration uses the existing authenticated API. Do not create another movement loop or independently subscribe physical garage inputs.
+- Bind requests to the saved gateway/alarm and existing coordinator. Virtual-keypad authorization goes through deCONZ; its result enters the existing coordinator begin/after API. Never forward raw keypad PINs into the movement engine.
+- Use existing coordinator maintenance, settings/recovery and activity interfaces. Preserve review/apply/cancel, protected identities, fresh result delivery and durable interrupted-change handling. An unavailable required component cannot count as successful maintenance.
+- Retain the separate homebridge-deconz alarm PIN feature: its existing Security System tile uses that credential for Away/Home/Night/Disarm. Removing HTTP Webhooks does not remove alarm credential synchronization. See web-admin-alarm-pin.md.
+- Add explicit Homebridge setup for the optional server, HTTPS and first administrator, using saved connections where appropriate. OFF means no web listener or admin event collector. No systemd helper, other-plugin patch or alternate movement coordinator.
+- Web enable/disable must not replace or recommission the existing controller. A web-server failure must not silently stop normal controller operation; recorded maintenance holds remain effective.
+- Complete save/recovery and account/browser flows before advertising an owner-test release. Passing read pages alone is not full parity.
 
-### M5 — Release and owner migration
+### M5 — Combined release and optional owner enablement
 
-- Pass supported Node/Homebridge checks and simulated behavioral parity, review npm contents and publish a tested installable version when authorized.
-- Install the controller plugin first in a non-actuating commissioning mode while the existing service remains active.
-- For the owner's migration use Tailwind local API for the opener and direct deCONZ for the bolt; publish both new combined Garage Door and Lock tiles.
-- Install the completed new administrator, stop the existing administrator, and switch to the new interface. Stop the old movement controller and its automatic inputs before the new coordinator gains ownership.
-- Commission real opening, closing, bolting, input behavior and restart recovery with the owner. Confirm both administration paths and HomeKit state.
-- Rebind scenes/automations as necessary. Remove only the obsolete HTTP Webhooks garage/bolt entries after acceptance; retain the plugin if it serves other accessories.
-- Retain one bounded rollback baseline, receipt and explicit cleanup inventory. Final old-installation cleanup is separate.
+- Retain the working controller configuration, accessories and commissioning through the update. Do not make the owner rebuild the controller to add web administration.
+- Pass supported Node/Homebridge checks, private-state and interruption tests, exact npm package validation and desktop/mobile web workflows. Publish a tested combined version when ready.
+- Supply one SSH Git / npm publication / pinned hb-service install script following the established release checks. Web administration remains disabled until explicitly configured and enabled.
+- Verify original non-controller page behavior against synthetic gateways before supervised owner acceptance. Do not send hardware commands from startup, setup, discovery or validation.
+- Keep the standalone controller/admin preserved for a separate future rollback; do not run both controllers for one assembly.
+- Retirement of old installed services, webhooks accessories or host snapshots is a separate reviewed cleanup task. The standalone build remains the non-Homebridge alternative.
 
 ## Later phase
 
-Host the standalone admin in a Homebridge plugin, keeping its own URL. This phase is deferred. It must retain the API and access model already established here.
+Add a web panel for the existing coordinator's timers, settings, status and supported operations after the non-controller pages are working. Reuse its profile store and reviewed APIs. This is a web presentation of the existing controller, not a port of the old controller implementation.
 
 ## Current implementation checkpoint
 
-M2–M4 operational code is now connected, including the custom configuration UI and companion admin. Release CI and cross-repository tests pass. M5 is ready for owner installation/testing; physical acceptance and any later npm publication remain outstanding; see status.md and owner-test.md.
+The Homebridge controller and its configuration UI already exist and are in owner use. The integrated web admin is separate development work on web-admin-node-port. Authentication, original page reads, protected edits, private journal/backups, history, event collection and direct coordinator adapters have automated validation. Optional production setup/lifecycle, alarm-PIN integration and full save/recovery browser acceptance remain outstanding. This branch is not yet the combined owner-test release. See web-admin-node-status.md and status.md for exact validation and remaining work.
