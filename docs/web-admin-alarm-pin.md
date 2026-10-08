@@ -89,5 +89,6 @@ backup modes, exact PIN-only changes, competing writes, source/config changes,
 grant protection and interrupted service requests. These use synthetic hosts;
 no household bridge or alarm was operated. CI run 37731074464 passes Node 22/24
 regression/package checks and integrated desktop/mobile confirmation acceptance,
-including current-page/session retention. Actual Homebridge compatibility checks
-are the final 0.4.24 candidate gate. No npm test release has been published.
+including current-page/session retention. CI run 37731476101 also passes the actual Homebridge 2.0/2.4 and custom-UI
+IPC checks for 0.4.24. These remain synthetic host tests. The source is ready for
+owner publication and installation; no npm test release has been published.

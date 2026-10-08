@@ -1,10 +1,10 @@
 # Node.js web admin status
 
-## 0.4.24 owner-test candidate
+## 0.4.24 ready for owner-test publication
 
 The optional integrated server and the original non-controller pages are implemented. It is disabled by default. Configure the first web administrator in General → Web admin interface; manage subsequent accounts in web Settings. Existing garage settings, commissioning and HomeKit pairing are retained. The original Python controller and HTTP Webhooks adapter are not included; the existing Homebridge coordinator handles movement.
 
-CI run [37731074464](https://github.com/pponce/homebridge-gdoor-admin-controller/actions/runs/37731074464), implementation 33bb72ced04831d3f90baba37e6f64fb472c5f83, passes all Node 22/24 regression and exact package checks, original Admin/Regular read pages, production setup/save/recovery/PIN-restart flows on desktop Chromium and mobile WebKit, and existing Homebridge configuration browser checks. The 0.4.24 version candidate adds actual Homebridge 2.0/2.4 and custom-UI IPC as final release gates. Source validation is not npm publication, installation or physical acceptance.
+All five jobs in [CI run 37731476101](https://github.com/pponce/homebridge-gdoor-admin-controller/actions/runs/37731476101) pass on implementation af338c806b389e6824f89e6d9a7d0733d88b849a: Node 22/24 regression/exact package checks, actual Homebridge 2.0/2.4, custom-UI IPC, desktop Chromium/mobile WebKit original read and production save/recovery/PIN-restart flows, and existing configuration browser checks. The final release checkpoint changes documentation only. Ready for owner-run npm publication and first installation; source validation is not publication, installation or physical acceptance.
 
 ## Implemented
 

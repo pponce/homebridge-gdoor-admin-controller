@@ -1,6 +1,6 @@
 # Optional web admin setup — 0.4.24 owner test
 
-The web administrator is new in the 0.4.24 owner-test candidate. Source validation, npm publication, installation and physical acceptance are separate steps; see status.md for the current gate.
+The web administrator is new in the validated 0.4.24 owner-test source release. Source validation, npm publication, installation and physical acceptance are separate steps; see status.md for the current gate.
 
 In the plugin's General page, save a deCONZ device connection first. The Web admin interface panel uses that saved connection and its private key. Enable the web interface, select its gateways, choose its HTTPS addresses, and create the first named administrator. Save web settings applies just that panel and keeps the Homebridge configuration screen open. Manage additional web accounts inside the web interface.
 

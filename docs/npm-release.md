@@ -1,3 +1,17 @@
+# 0.4.24 optional web admin publication
+
+All five acceptance jobs pass in CI run 37731476101 at af338c806b389e6824f89e6d9a7d0733d88b849a. Use the current status.md release checkpoint; the older commands below are historical. This release retains controller configuration/private data and HomeKit pairing. It adds the optional web administrator, disabled until explicitly configured in General. See web-admin-setup.md before enabling it.
+
+Use a clean SSH checkout at ~/devProjects/homebridge-gdoor-admin-controller on the reviewed main commit. Install runtime dependencies with `npm install --ignore-scripts --no-audit --no-fund --package-lock=false`, then run the existing publisher as your normal user:
+
+```sh
+bash scripts/publish-npm.sh REVIEWED_COMMIT_SHA </dev/tty >/dev/tty
+```
+
+Both npm input and output must remain attached to the terminal. npm's web-OTP handler rejects a non-terminal invocation before entering its browser approval flow. The publisher passes `--browser=false`, so the approval URL is printed for manual copying and npm waits for the result; no browser is launched. Do not pipe/capture its output or put the publisher inside a shell heredoc without the explicit terminal redirection. If there is no terminal, run this owner publication step from an interactive terminal rather than attempting token extraction from the error's done URL.
+
+After the exact npm archive is verified, install in this order: `sudo hb-service stop`, `sudo hb-service add homebridge-gdoor-admin-controller@0.4.24`, `sudo hb-service start`. The combined shell block must stop on an installation failure and leave Homebridge stopped. Do not run the old standalone movement service alongside the active coordinator. Publication is an owner-run action, separate from source validation.
+
 # 0.4.22 ready for maintainer publication
 
 All five jobs passed in [CI run 37715458224](https://github.com/pponce/homebridge-gdoor-admin-controller/actions/runs/37715458224) on implementation `0ca0463c5900d19d959415eb04bef117b35df216`: 172 tests on Node 22/24, actual Homebridge 2.0/2.4, custom UI IPC and desktop Chromium/mobile WebKit. Browser coverage includes direct local bridge/accessory selection without crypto.randomUUID, connection-owned key replacement staged until save, automatic unused-key deletion, Undo/Discard/native-save failure protection, compact refresh, device selection/addition/removal/draft retention and overflow. The earlier save/color/order improvements remain included. Screenshots are CI artifacts; this is not a claim of live owner-host acceptance.
