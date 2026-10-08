@@ -416,3 +416,11 @@ Admin compatibility commit 45e26c1d586bdcfa22b3b3b486485ba78ee4db6e passed all t
 
 0.4.20 source validation complete: [CI run 37707958298](https://github.com/pponce/homebridge-gdoor-admin-controller/actions/runs/37707958298) passed all five jobs on `c1503c3fe285a8df30efbaf0a3c02e45f43e84be`: 172 tests on Node 22/24, actual Homebridge 2.0/2.4, custom UI IPC and desktop Chromium/mobile WebKit. Package dry-run passed. This subsequent documentation-only revision preserves that implementation. npm publication, owner installation and physical acceptance remain outstanding.
 
+
+## 2026-10-08 — Integrated admin history/keypad checkpoint
+
+Recovered the existing dev checkpoint at b71f79b97ab6eb7e90d0bf1173fb41e5b57cfa0e; CI run 37721605324 passed all 80 focused tests on Node 22/24 and desktop/mobile original-UI read flows. Added private SQLite history/lockout collection, an independent durable keypad delivery ledger, bounded live event projection and debug captures, and direct adapters for the current coordinator maintenance and virtual-keypad APIs. The collector waits for discovery and queued writes at shutdown. Fourteen new history/keypad/event tests pass locally; collector and integrated-UI browser validation are queued for CI.
+
+The owner confirmed that the old HTTP Webhooks controller integration is unnecessary in the combined plugin. Source verification confirmed both reference commits still match their repositories’ current main branches. Investigation distinguished the separate homebridge-deconz alarm PIN synchronization feature from HTTP Webhooks. A provisional UI removal that conflated them was reverted before commit; all twelve frontend assets again match the reference hashes. Do not silently drop the separate alarm feature. Its existing implementation edits another plugin’s private cache and restarts its service, so the supported replacement needs separate evaluation under the owner’s no-hacks constraint. The standalone project/services remain unchanged.
+
+This is a development checkpoint, not a release or live cutover. Web administration remains unconnected to Homebridge startup and OFF by default. Optional setup/lifecycle, certificate/account enrollment, full save/recovery browser flows and owner installation acceptance remain outstanding. No hardware operation, npm publication or host-service change was performed.

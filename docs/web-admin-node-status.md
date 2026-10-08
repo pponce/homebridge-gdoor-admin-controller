@@ -40,3 +40,14 @@ No public signup endpoint, device mutation, service operation, npm publication o
 ## Standalone remains available
 See standalone-preservation.md. The original Python controller/web interface remains the non-Homebridge option, preserved at its verified source baseline. Its source files and installed services were not modified by the Node port.
 
+
+## 2026-10-08 — History, collector and direct keypad checkpoint
+
+- All 80 protected-write/read tests and package checks passed on Node 22/24, plus original-UI read flows on desktop Chromium/mobile WebKit, in CI run 37721605324 (b71f79b97ab6eb7e90d0bf1173fb41e5b57cfa0e).
+- Added private SQLite activity and lockout history with gateway identity binding, scoped clearing, retention confirmation and restart persistence. Clearing activity cannot clear the independent virtual-keypad request ledger or permit duplicate delivery.
+- Added an explicitly started read-only event collector, bounded event projection and on-demand ten-minute debug captures. Only an open event stream means connected; reconnections record gaps rather than implying replay. Shutdown waits for discovery and queued writes. Raw codes/frames are not retained.
+- Virtual keypad authorization uses one scoped deCONZ request, exact result classification, and the plugin’s existing coordinator begin/after API. Unknown outcomes hold with no automatic retry. Maintenance adapts the existing runtime, with no second controller or HTTP Webhooks dependency.
+- Fourteen new history/keypad/event tests pass locally. Three collector tests require the view layer’s installed dependency and will run in CI. Optional startup wiring, full save/recovery browser flows and owner installation remain pending. SQLite loads only for the optional feature and requires Node 22.13+ or 24+; setup must check compatibility.
+- Reference verification: extracted admin main is still 45e26c1d586bdcfa22b3b3b486485ba78ee4db6e; original standalone main is still a47fa4db3a12e5239d447ee4c5213c59eeb81542. These are current source baselines, not intentionally outdated releases.
+- The owner’s removal instruction concerns HTTP Webhooks for the controller. The Users/Settings Homebridge credential workflow is a separate homebridge-deconz alarm feature. A provisional removal that conflated them was reverted; all twelve UI assets still match the original hashes. Evaluate its supported replacement separately: the old helper edits another plugin’s private cache and restarts its service, which must not be copied into this plugin under the no-hacks constraint.
+

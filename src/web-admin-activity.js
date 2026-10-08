@@ -57,4 +57,22 @@ export class WebAdminActivity {
     const sources = gateways.filter(row => gateway === null || row.id === gateway);
     return { rows: rows.slice(0, 200), retention_days: retention, limit: 200, connected: sources.length > 0 && sources.every(row => row.connected) };
   }
+  async clear(body) {
+    requireWeb(exact(body, ['gateway', 'alarm', 'confirmed']) && body.confirmed === true, 'history_confirmation_required');
+    requireWeb(typeof this.history?.clear === 'function', 'operation_not_implemented');
+    const { gateway, alarm } = body;
+    requireWeb(gateway === null || typeof gateway === 'string' && this.registrations.has(gateway), 'gateway_not_registered');
+    requireWeb(alarm === null || integer(alarm, 1, 255), 'invalid_history_filter');
+    requireWeb(alarm === null || gateway !== null, 'history_alarm_requires_gateway');
+    const scopes = await this.scopes();
+    if (alarm !== null) requireWeb((await this.options(scopes)).gateways.find(row => row.id === gateway).alarms.some(row => row.id === alarm), 'alarm_not_found');
+    for (const row of scopes) if ((gateway === null || row.gateway === gateway) && (alarm === null || row.alarm === alarm)) await this.history.clear(row.gateway, row.alarm);
+    return { cleared: true };
+  }
+  async retention(body) {
+    requireWeb(typeof this.history?.setDays === 'function' && typeof this.history?.expire === 'function', 'operation_not_implemented');
+    const result = await this.history.setDays(body);
+    for (const row of await this.scopes()) await this.history.expire(row.gateway, row.alarm);
+    return result;
+  }
 }
