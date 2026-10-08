@@ -4,9 +4,11 @@ import { WebAdminError } from './web-admin-auth.js';
 import { WebAdminGateway, validateWebGateways } from './web-admin-gateway.js';
 import { WebAdminView } from './web-admin-view.js';
 import { WebAdminActivity } from './web-admin-activity.js';
+import { WebAdminEditor, webWriteOperations, webRecoveryOperations } from './web-admin-editor.js';
 import { requireWeb, object, exact, integer } from './web-admin-common.js';
 
 const regularReads = new Set(['inventory', 'administration', 'lockout', 'transaction_status']);
+const regularWrites = new Set(['save_user', 'delete_user', 'rotate_pin', 'reset_lockout']);
 const readonly = new Set(['inventory', 'discover', 'overview', 'alarm', 'lockout', 'administration', 'editor']);
 const privateAttention = /homebridge|extension|maintenance|recovery|participant|host_helper/;
 function limitedTransaction(value) {
@@ -15,17 +17,18 @@ function limitedTransaction(value) {
 }
 
 export class WebAdminBackend {
-  constructor({ registrations = [], accessMode = 'observe', setup, transactions, history, connected = new Map(), hiddenUsers = async () => [], gatewayFactory = row => new WebAdminGateway(row) }) {
+  constructor({ registrations = [], accessMode = 'observe', setup, transactions, history, backup, integration, requestDiscovery = () => {}, connected = new Map(), hiddenUsers = async () => [], gatewayFactory = (row, options) => new WebAdminGateway(row, options) }) {
     this.registrations = new Map(validateWebGateways(registrations).map(row => [row.id, row]));
     requireWeb(['observe', 'manage'].includes(accessMode), 'candidate_read_only_required');
-    Object.assign(this, { accessMode, setup, transactions, history, hiddenUsers, gatewayFactory });
+    Object.assign(this, { accessMode, setup, transactions, history, backup, integration, requestDiscovery, hiddenUsers, gatewayFactory });
     // Only the activity collector may set connection state. A successful REST
     // read does not establish that the live event stream is connected.
     this.connected = connected; this.catalog = new Map(); this.pending = Promise.resolve();
     this.activity = new WebAdminActivity({ registrations: this.registrations, catalog: this.catalog, connected, history });
   }
   dispatch(session, operation, body) {
-    const result = this.pending.then(() => this.execute(session, operation, body));
+    const principal = structuredClone(session), payload = structuredClone(body);
+    const result = this.pending.then(() => this.execute(principal, operation, payload));
     this.pending = result.catch(() => {}); return result;
   }
   unavailable() { throw new WebAdminError('operation_not_implemented'); }
@@ -61,7 +64,7 @@ export class WebAdminBackend {
     const { gateway, alarm, operation: action, body: payload } = body;
     requireWeb(typeof gateway === 'string' && this.registrations.has(gateway), 'gateway_not_registered');
     requireWeb(alarm === null || integer(alarm, 1, 255), 'invalid_alarm');
-    requireWeb(typeof action === 'string' && (!regular || regularReads.has(action)), 'forbidden');
+    requireWeb(typeof action === 'string' && (!regular || regularReads.has(action) || regularWrites.has(action)), 'forbidden');
     try {
       if (action === 'transaction_status' || action === 'history') {
         requireWeb(integer(alarm, 1, 255), 'explicit_alarm_required'); requireWeb(exact(payload, []), 'invalid_request');
@@ -73,14 +76,31 @@ export class WebAdminBackend {
         if (!this.history?.rows) return this.unavailable();
         return { rows: await this.history.rows(gateway, alarm, 200), connected: this.connected.get(gateway) === true };
       }
-      if (!readonly.has(action)) return this.unavailable();
-      requireWeb(exact(payload, []), 'invalid_request');
+      const edit = webWriteOperations.has(action), recovery = webRecoveryOperations.has(action);
+      if (!readonly.has(action) && !edit && !recovery) return this.unavailable();
+      if (edit || recovery) {
+        if (typeof this.transactions?.execute !== 'function' || edit && (!this.backup || typeof this.history?.add !== 'function')) return this.unavailable();
+        requireWeb(this.accessMode === 'manage', 'candidate_read_only_required');
+      } else requireWeb(exact(payload, []), 'invalid_request');
       if (!['inventory', 'discover'].includes(action)) requireWeb(integer(alarm, 1, 255), 'explicit_alarm_required');
-      const registration = this.registrations.get(gateway), client = this.gatewayFactory(registration);
+      const registration = this.registrations.get(gateway), client = this.gatewayFactory(registration, { writable: edit });
       await client.verify(alarm);
       const view = new WebAdminView({ gatewayId: gateway, name: registration.name, alarm, client,
         onInventory: result => { this.catalog.set(gateway, result); },
         transactionStatus: this.transactions?.status ? id => this.transactions.status(id) : undefined });
+      if (edit || recovery) {
+        const authorize = regular ? async (operation, body, snapshot) => {
+          requireWeb(regularWrites.has(operation), 'forbidden'); if (operation === 'reset_lockout') return;
+          requireWeb(!Object.hasOwn(body, 'homebridge_selection') && !body.enable_management && !body.owner, 'forbidden');
+          const uid = body.id ?? null; requireWeb(uid === null || typeof uid === 'string', 'invalid_user');
+          const hidden = new Set(await this.hiddenUsers(gateway));
+          const owners = new Set(Object.values(snapshot.grants).flatMap(grants => Object.values(grants).filter(row => row.owner).map(row => row.id)));
+          requireWeb(!hidden.has(uid) && !owners.has(uid), 'protected_identity');
+        } : undefined;
+        const editor = new WebAdminEditor({ view, identity: registration.identity, transactions: this.transactions, backup: this.backup, history: this.history,
+          authorize, integration: this.integration, requestDiscovery: this.requestDiscovery, actor: session.username ? 'Web account · ' + session.username : 'Administrator' });
+        const result = await editor.dispatch(action, payload); return regular ? { saved: result.saved === true } : result;
+      }
       if (action === 'inventory' || action === 'discover') return view.inventory();
       if (action === 'editor') return view.snapshot();
       if (action === 'overview') return { alarm: await view.alarm(), users: await view.users(), capabilities: { managed: (await client.verify(alarm)).managed === true } };
@@ -91,7 +111,7 @@ export class WebAdminBackend {
         const users = rows => rows.filter(row => !hidden.has(row.id)).map(row => ({ ...row, read_only: protectedIds.has(row.id) }));
         return { identities: users(value.identities), users: users(value.users), keypads: value.keypads,
           alarms: value.alarms.map(alarm => ({ ...alarm, users: users(alarm.users) })), managed: value.managed,
-          schedules: value.schedules, transaction: limitedTransaction(value.transaction), pin_rotation_available: false };
+          schedules: value.schedules, transaction: limitedTransaction(value.transaction), pin_rotation_available: this.accessMode === 'manage' && !!this.backup && typeof this.transactions?.execute === 'function' && typeof this.history?.add === 'function' };
       }
       return value;
     } catch (error) {

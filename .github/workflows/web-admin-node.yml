@@ -17,6 +17,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
+      - name: Install runtime dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund
       - run: node --test test/web-admin*.test.js
       - name: Verify development package assets
         run: |
@@ -34,6 +36,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
+      - name: Install runtime dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund
       - name: Install browser tool
         run: npm install --prefix "$RUNNER_TEMP/admin-browser" --no-save --package-lock=false --ignore-scripts playwright@1.58.2
       - name: Original admin read flows on desktop and mobile

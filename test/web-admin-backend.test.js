@@ -88,7 +88,8 @@ test('regular projection protects owners across alarms and omits private identit
   assert.deepEqual(result.transaction, { stage: 'held', pending: true, administrator_required: true });
   assert.equal(result.pin_rotation_available, false);
   assert.deepEqual(await f.backend.dispatch(regular, 'setup', {}), { access_mode: 'observe', extensions: [], onboarding_required: false });
-  for (const operation of ['overview', 'editor', 'history', 'save_user', 'keypad_send']) await assert.rejects(f.scoped(operation, {}, regular), /forbidden/);
+  for (const operation of ['overview', 'editor', 'history', 'save_alarm', 'keypad_send']) await assert.rejects(f.scoped(operation, {}, regular), /forbidden/);
+  await assert.rejects(f.scoped('save_user', {}, regular), /operation_not_implemented/);
   await assert.rejects(f.backend.dispatch(regular, 'installation_settings', {}), /forbidden/);
 });
 
