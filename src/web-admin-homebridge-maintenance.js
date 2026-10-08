@@ -56,11 +56,12 @@ export class WebHomebridgeMaintenance {
   }
   async status() {
     const row = await this.state();
-    const available = typeof this.host.available !== 'function' || await this.host.available();
-    return { configured: available, profile: 'homebridge-child-bridge', pending: this.uncertain || !!row.lease && row.lease.stage !== 'complete',
+    const readiness = typeof this.host.readiness === 'function' ? await this.host.readiness() :
+      { configured: typeof this.host.available !== 'function' || await this.host.available(), error: null };
+    return { ...readiness, profile: 'homebridge-child-bridge', pending: this.uncertain || !!row.lease && row.lease.stage !== 'complete',
       bindings: row.bindings.map(({ gateway, user, alarms }) => ({ gateway, user, alarms })) };
   }
-  async viewStatus() { const status = await this.status(); return status.configured || status.bindings.length || status.pending ? status : null; }
+  async viewStatus() { return this.status(); }
   async hiddenUsers(gateway) { return (await this.state()).bindings.filter(row => row.gateway === gateway).map(row => row.user); }
   async authorizeRecovery(transaction, credentials) {
     const row = await this.current(transaction);

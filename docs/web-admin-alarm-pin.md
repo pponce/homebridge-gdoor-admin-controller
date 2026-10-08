@@ -1,5 +1,13 @@
 # Homebridge deCONZ alarm credential
 
+## Required child bridges
+
+Garage Door Admin Controller **must run in its own child bridge**.
+`homebridge-deconz` **must run in a different child bridge**. Do not run either
+on the main Homebridge bridge or place them together. The PIN update restarts
+only the deCONZ child bridge; the controller and web administrator stay running,
+so the browser page and web session can remain open.
+
 ## Required behavior and accepted restart
 
 This PIN is the credential used by the existing homebridge-deconz Security System
@@ -92,3 +100,9 @@ regression/package checks and integrated desktop/mobile confirmation acceptance,
 including current-page/session retention. CI run 37731476101 also passes the actual Homebridge 2.0/2.4 and custom-UI
 IPC checks for 0.4.24. These remain synthetic host tests. The source is ready for
 owner publication and installation; no npm test release has been published.
+
+## Setup status and user selection
+
+Settings → Homebridge reports a specific readiness reason when setup needs attention: child-bridge configuration, local HTTP Homebridge UI, plugin availability, file access or reviewed-source compatibility. The user-level Homebridge checkbox remains visible but disabled until this check succeeds. The adapter does not restart anything while checking readiness.
+
+Choose one deCONZ user per gateway in Users using **Use this user for Homebridge on this gateway**. On every selected alarm, that user needs an enabled grant with arm/disarm and API access, unlimited uses and no schedule or expiry. Physical-keypad permissions remain separately selectable on the same user grants. Save access-policy edits before synchronizing the PIN. Enter the PIN twice, select the linked alarms, save, then explicitly confirm the deCONZ child-bridge restart and provide Homebridge UI administrator authentication.

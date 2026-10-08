@@ -14,7 +14,7 @@ Preserve garageDoorController and its standalone web application as a working al
 
 ## Architecture
 
-Run as a Homebridge dynamic platform, preferably in its own child bridge. Homebridge manages the process. Store plugin data, journals, API identity and credentials beneath api.user.storagePath(); never install systemd units or patch other plugins. The Node ESM platform uses Homebridge's injected API, with @homebridge/plugin-ui-utils for its custom configuration server. A commissioned runtime connects the shared movement engine to all supported inputs.
+Run as a Homebridge dynamic platform in its own child bridge (required). Run homebridge-deconz in a different child bridge (also required). Homebridge manages the process. Store plugin data, journals, API identity and credentials beneath api.user.storagePath(); never install systemd units or patch other plugins. The Node ESM platform uses Homebridge's injected API, with @homebridge/plugin-ui-utils for its custom configuration server. A commissioned runtime connects the shared movement engine to all supported inputs.
 
 Separate driver connections, state estimation, one coordinator per physical assembly, event/input profiles, accessory publication and the versioned management API. Several keypads/buttons may target one assembly with separate input policies, but do not instantiate competing movement engines. Validate hardware identity and prevent duplicate ownership, including cross-process ownership at deployment.
 

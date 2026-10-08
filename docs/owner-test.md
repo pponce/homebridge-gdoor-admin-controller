@@ -4,7 +4,7 @@ Use the revisions marked as passed in status.md. This is an initial owner test, 
 
 ## Install the coordinator first
 
-Requirements: Homebridge 2, Node 22/24, same-host access for the separate administrator's authenticated loopback API, and the Tailwind local control key plus a deCONZ API key with access to the selected devices. Keep the coordinator in its **own child bridge**, separate from homebridge-deconz: administration maintenance may restart the deCONZ child bridge while the coordinator must remain reachable.
+Requirements: Homebridge 2, Node 22/24, same-host access for the separate administrator's authenticated loopback API, and the Tailwind local control key plus a deCONZ API key with access to the selected devices. Required: run the coordinator in its **own child bridge** and `homebridge-deconz` in a **separate child bridge**. Neither plugin should run on the main bridge: administration maintenance may restart the deCONZ child bridge while the coordinator must remain reachable.
 
 After version 0.4.4 is published to npm, install it using Homebridge's managed plugin command:
 

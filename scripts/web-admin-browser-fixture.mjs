@@ -71,6 +71,7 @@ export async function webBrowserFixture() {
     { id: 'deconz', name: 'Synthetic gateway', type: 'deconz', baseUrl: 'http://127.0.0.1:' + gateway.address().port, credentialRef: 'synthetic' },
   ] }, guard() {}, state: { maintenance: null } };
   const homebridgeHost = {
+    async readiness() { return { configured: state.homebridgeAvailable, error: state.homebridgeAvailable ? null : 'homebridge_child_identity_invalid' }; },
     async available() { return state.homebridgeAvailable; },
     async authenticate(credentials) { assert.equal(credentials.username, 'BridgeAdmin'); assert.equal(credentials.password, 'synthetic-bridge-password'); maintenance.push('authenticated'); },
     async clearAuthentication() { maintenance.push('cleared'); },

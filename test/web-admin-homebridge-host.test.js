@@ -37,6 +37,25 @@ async function fixture(t) {
   return { root, target, host, calls, expected, config };
 }
 
+test('readiness reports a fixed prerequisite reason and never leaks private exception details', async t => {
+  const f = await fixture(t);
+  assert.deepEqual(await f.host.readiness(), { configured: true, error: null });
+  delete f.config.platforms[1]._bridge;
+  await writeFile(path.join(f.root, 'config.json'), JSON.stringify(f.config), { mode: 0o600 });
+  assert.deepEqual(await f.host.readiness(), { configured: false, error: 'homebridge_child_identity_invalid' });
+  f.config.platforms[1]._bridge = { username: bridge };
+  f.config.platforms[0].ssl = { selfSigned: true };
+  await writeFile(path.join(f.root, 'config.json'), JSON.stringify(f.config), { mode: 0o600 });
+  assert.deepEqual(await f.host.readiness(), { configured: false, error: 'homebridge_local_http_ui_required' });
+  delete f.config.platforms[0].ssl;
+  await writeFile(path.join(f.root, 'config.json'), JSON.stringify(f.config), { mode: 0o600 });
+  f.host.verifySources = async () => { throw Error('homebridge_source_changed_review_required'); };
+  assert.deepEqual(await f.host.readiness(), { configured: false, error: 'homebridge_source_changed_review_required' });
+  f.host.verifySources = async () => { throw Error('private fixture path and credential'); };
+  assert.deepEqual(await f.host.readiness(), { configured: false, error: 'homebridge_sources_unavailable' });
+  assert.equal(await f.host.available(), false); assert.deepEqual(f.calls, []);
+});
+
 test('offline cache transform changes only the precisely mapped alarm PIN', () => {
   const before = cache(), after = JSON.parse(editedHomebridgeCache(Buffer.from(JSON.stringify(before)), binding, mapping, '3333'));
   assert.equal(homebridgeAlarmContext(after, identity, 'alarm-1').pin, '3333');

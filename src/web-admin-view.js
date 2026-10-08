@@ -120,7 +120,8 @@ export class WebAdminView {
     requireWeb(!!current && typeof this.transactionStatus === 'function', 'administration_state_unavailable');
     const hb = await this.homebridgeStatus();
     return { identities: Object.values(snapshot.identities), alarms, users: current.users, keypads: current.keypads, managed: current.managed,
-      schedules: caps.schedules === true && caps.schedule_version === 1, homebridge_sync: false, homebridge_available: hb !== null,
+      schedules: caps.schedules === true && caps.schedule_version === 1, homebridge_sync: false, homebridge_available: hb !== null && hb.configured !== false,
+      ...(hb === null ? {} : { homebridge_status: { configured: hb.configured !== false, error: hb.error ?? null } }),
       homebridge_binding: hb?.bindings?.find(b => b.gateway === this.gatewayId) ?? null, transaction: await this.transactionStatus(this.gatewayId) };
   }
 }

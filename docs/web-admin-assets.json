@@ -26,8 +26,8 @@
       "path": "web-admin/public/app.js",
       "gitBlob": "3de32986d0b5d0b68adf7baacb000441c21b794b",
       "sha256": "80be3155ddf2900c2e8eebc54936040bbca513223e4588f21903ba487d0a580a",
-      "adaptedSha256": "ea0bdc2a816a8bf0d52727729493d534b4fc93045a5e1abb4a207b9d1314d827",
-      "adaptation": "Add the authorized Controller timing editor with admin-only navigation, demo isolation, and live save support; retain original gateway and account workflows."
+      "adaptedSha256": "f7fde3f98be4ae9cfb6e2313e27a199ea30afd4773e4b59014f78198c166a36a",
+      "adaptation": "Add the authorized Controller timing editor with admin-only navigation, demo isolation, and live save support; retain original gateway and account workflows. Explain Homebridge readiness failures and retain the blocked user-level PIN selector."
     },
     {
       "source": "configurator/static/apple-touch-icon.png",
@@ -46,8 +46,8 @@
       "path": "web-admin/public/homebridge-flow.js",
       "gitBlob": "9fcae68c8689ddd96a1a9edf1465c9d6cab567ff",
       "sha256": "b20ad60e19e7a7828991393d987ad1b1b5f77acdb53f844cb188f19c63e2d6fb",
-      "adaptedSha256": "64be554828ac1b1a14cfd1f8640e2ea93b42c509f770372a1eb4fa4fcf5a60de",
-      "adaptation": "Explicit child-bridge restart confirmation, temporary Homebridge UI authentication and recovery authorization. The current page and web session remain open."
+      "adaptedSha256": "29698a5f3ee6dddd418031f32ed25290a479bf24ffd48b6c9d396750db8e71e4",
+      "adaptation": "Explicit child-bridge restart confirmation, temporary Homebridge UI authentication and recovery authorization. The current page and web session remain open. Explain Homebridge readiness failures and retain the blocked user-level PIN selector."
     },
     {
       "source": "configurator/static/index.html",
@@ -74,8 +74,8 @@
       "path": "web-admin/public/settings.js",
       "gitBlob": "b1fd7706a6a059f144fbccd0437316b0b08a3bd7",
       "sha256": "ba13a68a4217eb1265c5e8e20dc783ae6bda331a28f63a604997889e81237ed6",
-      "adaptedSha256": "8605175f87fd7bdea048a367176e4bf26ac600c8d663343b8312166649d90b00",
-      "adaptation": "Display shared device connections managed in Homebridge General; distinguish the browser address from the HTTPS backend. Preserve account and separate homebridge-deconz alarm credential controls."
+      "adaptedSha256": "cfeda4c234c0b48192e3b71757a39a6288a968c1cd4c7d759f56c22d3d072fcc",
+      "adaptation": "Display shared device connections managed in Homebridge General; distinguish the browser address from the HTTPS backend. Preserve account and separate homebridge-deconz alarm credential controls. Explain Homebridge readiness failures and retain the blocked user-level PIN selector."
     },
     {
       "source": "configurator/static/style.css",

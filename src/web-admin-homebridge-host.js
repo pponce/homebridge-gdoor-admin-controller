@@ -123,9 +123,17 @@ export class WebHomebridgeHost {
       }
     }
   }
-  async available() {
-    try { await this.configuration(); await this.verifySources(); return true; } catch { return false; }
+  async readiness() {
+    let phase = 'configuration';
+    try { await this.configuration(); phase = 'sources'; await this.verifySources(); return { configured: true, error: null }; }
+    catch (error) {
+      const safe = new Set(['homebridge_local_linux_required', 'one_homebridge_child_bridge_required', 'homebridge_child_identity_invalid',
+        'homebridge_plugin_disabled', 'homebridge_local_http_ui_required', 'homebridge_source_changed_review_required', 'homebridge_file_unavailable']);
+      return { configured: false, error: safe.has(error.message) ? error.message :
+        phase === 'sources' ? 'homebridge_sources_unavailable' : 'homebridge_configuration_unavailable' };
+    }
   }
+  async available() { return (await this.readiness()).configured; }
   async authenticate(credentials) {
     const config = await this.configuration(); await this.verifySources(); this.client?.close();
     this.client = this.clientFactory({ origin: config.origin, bridge: config.bridge });

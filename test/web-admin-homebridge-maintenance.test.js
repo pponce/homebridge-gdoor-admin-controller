@@ -31,6 +31,13 @@ function fixture() {
   return { integration, host, tx, input, events, journals, credentials, store, run, state: () => state, record: () => record, writes: () => gatewayWrites };
 }
 
+test('unconfigured Homebridge stays visible with a readiness reason and no service action', async () => {
+  const f = fixture(); f.host.readiness = async () => ({ configured: false, error: 'homebridge_child_identity_invalid' });
+  const status = await f.integration.viewStatus();
+  assert.equal(status.configured, false); assert.equal(status.error, 'homebridge_child_identity_invalid');
+  assert.deepEqual(status.bindings, []); assert.deepEqual(f.events, []);
+});
+
 test('confirmed PIN transaction records each service intent before acting and publishes binding only after restart verification', async () => {
   const f = fixture(); assert.equal((await f.integration.status()).pending, false);
   assert.equal((await f.run()).saved, true); assert.equal(f.writes(), 1);

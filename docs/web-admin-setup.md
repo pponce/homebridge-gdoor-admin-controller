@@ -2,6 +2,8 @@
 
 The web administrator is new in the validated 0.4.24 owner-test source release. Source validation, npm publication, installation and physical acceptance are separate steps; see status.md for the current gate.
 
+**Required:** configure Garage Door Admin Controller and `homebridge-deconz` as two separate child bridges in Homebridge before enabling the web administrator. Each plugin needs its own child bridge; neither should run on the main bridge. PIN synchronization restarts only the deCONZ child bridge, so the web interface stays available.
+
 In General → Web admin interface, check **Enable web admin**, create the first administrator, and click **Save web settings**. A single saved deCONZ connection is selected automatically. With several connections, choose the gateways to administer. On a normal LAN installation the plugin detects the Homebridge machine's IPv4 address, configures the listener and accepted origin together, and shows **Open web admin: https://IP:9443** after the server starts. Browser trust of the private self-signed certificate is still required.
 
 **Advanced network settings** contains the IP address selector, port and an explicit reverse-proxy/custom-address option. Existing saved custom settings are retained. Multiple NICs, VPNs and containers may need a different address; Docker bridge installations need the host address and the same port published. If discovery cannot find an address, enter the machine's IP there. Address discovery is local OS enumeration and sends no network/device probes. Automatic setup is applied on explicit Save, not on startup; after a DHCP address change, select the current address and save again.
@@ -25,7 +27,7 @@ Existing controller API capabilities and payloads are unchanged. The standalone 
 
 ## First functional test
 
-1. Update the existing plugin normally. Keep its controller settings and HomeKit pairing; no uninstall or re-pair is needed. Do not start the preserved standalone movement controller alongside it.
+1. Configure this plugin and `homebridge-deconz` as two separate child bridges. Update the existing plugin normally. Keep its controller settings and HomeKit pairing; no uninstall or re-pair is needed. Do not start the preserved standalone movement controller alongside it.
 2. In General → Web admin interface, enable the server, select an already saved deCONZ connection, and enter the first administrator username/password twice. Use automatic local access, or select the custom-address option for an existing nginx route. Save web settings; expect Running and an Open web admin link. An occupied port must be resolved by an explicit owner-controlled web-listener cutover or a different test port.
 3. Sign in and inspect Gateway, Users, Access grants, Protection, Alarm, Activity and Settings on desktop and phone. Confirm the intended gateway/alarm is selected. Discovery and opening pages do not operate the garage or alarm.
 4. In Settings, change a display preference, create another web account, sign out/in, and verify the preference/account persists. Later account management stays here; General no longer offers first-account creation.

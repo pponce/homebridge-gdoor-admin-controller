@@ -33,7 +33,7 @@ After npm publication, install on a Homebridge 2 / Node 22 or 24 host:
 sudo hb-service add homebridge-gdoor-admin-controller@0.4.24
 ```
 
-Use Homebridge settings to configure the plugin in its own child bridge. New garages remain disabled until checked and enabled. Follow the [owner installation guide](docs/owner-test.md) for taking over from an existing controller. This package does not install a separate system service.
+**Required bridge setup:** run Garage Door Admin Controller in its own child bridge. Run `homebridge-deconz` in a separate child bridge. Do not place either on the main bridge or combine them in the same child bridge. This separation lets alarm PIN updates restart deCONZ while the controller and web administrator remain running. New garages remain disabled until checked and enabled. Follow the [owner installation guide](docs/owner-test.md) for taking over from an existing controller. This package does not install a separate system service.
 
 Maintainer publication instructions are in [npm-release.md](docs/npm-release.md). The GitHub repository can remain private while the npm package is public. No new open-source license is granted in this release (`UNLICENSED`).
 

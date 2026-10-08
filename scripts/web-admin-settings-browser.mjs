@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { CoordinatorRuntime } from '../src/runtime.js';
 import { WebAdminController } from '../src/web-admin-controller.js';
+import { loadIdentity } from '../src/storage.js';
 import { defaultWebSettings, validateWebSettings } from '../src/web-admin-settings.js';
 
 const playwright = await import(pathToFileURL(join(process.env.PLAYWRIGHT_MODULE, 'index.mjs')).href);
@@ -58,6 +59,7 @@ try {
     await page.close();
 
     const storagePath = await mkdtemp(join(tmpdir(), 'controller-browser-'));
+    await loadIdentity(storagePath);
     const config = JSON.parse(await readFile('examples/development-config.json'));
     config.controllers[0].inputs = [{ id: 'button', name: 'Indoor button', enabled: true,
       source: { type: 'deconz', kind: 'button', baseUrl: 'http://example.invalid', gatewayId: '0011223344556677', resourceId: '80', uniqueId: 'button-endpoint', resourceType: 'ZHASwitch', modelId: 'EXAMPLE', manufacturer: 'Example', credentialRef: 'example-key' },

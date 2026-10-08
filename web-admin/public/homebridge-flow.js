@@ -1,4 +1,15 @@
 'use strict';
+window.ConfiguratorHomebridgeReadiness = code => ({
+  homebridge_local_linux_required: 'Alarm PIN synchronization currently requires Homebridge on Linux.',
+  one_homebridge_child_bridge_required: 'Configure one local deCONZ platform and one Homebridge UI in this Homebridge instance.',
+  homebridge_child_identity_invalid: 'Run homebridge-deconz in its own child bridge, separate from Garage Door Admin Controller.',
+  homebridge_plugin_disabled: 'The homebridge-deconz plugin is disabled in this Homebridge instance.',
+  homebridge_local_http_ui_required: 'This integration currently needs Homebridge UI to accept local HTTP connections. An HTTPS-only UI needs additional certificate support.',
+  homebridge_source_changed_review_required: 'The installed deCONZ plugin or library differs from the reviewed versions (homebridge-deconz 1.3.5 and homebridge-lib 8.1.5). Compatibility must be checked before PIN synchronization can run.',
+  homebridge_sources_unavailable: 'The installed homebridge-deconz plugin or its library could not be located from this plugin.',
+  homebridge_file_unavailable: 'A required Homebridge configuration or plugin file could not be read with the expected file permissions.',
+  homebridge_configuration_unavailable: 'The local Homebridge configuration could not be inspected.',
+})[code] || 'Check the local deCONZ child bridge and Homebridge UI setup. PIN synchronization is unavailable until setup is ready.';
 // One user task, with declarative steps supplied by registered integrations.
 // Credentials live only in the current request closure; recovery never resends it.
 window.ConfiguratorHomebridgeFlow=deps=>{
