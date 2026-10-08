@@ -25,7 +25,7 @@ async function fixture(browser,{mobile,dark,mode='managed'}){
   if(['fault','moving','enabled'].includes(mode))enabled=true;
   let reviews=0,applies=0,nativeSaves=0,probes=0,commissions=0,disables=0,releaseNative;const probedIds=[],savedKeys=['example-tailwind-key','example-deconz-key'];
   let keyDeletes=0;
-  if(mode.startsWith('key-delete')){savedKeys.push('unused-key');configuration.connections=[{id:'unused-bridge',type:'homebridge',name:'Unused bridge',baseUrl:'http://127.0.0.1:51999',credentialRef:'unused-key'}];}
+  if(mode.startsWith('key-delete')){savedKeys.push('unused-key');configuration.connections=[{id:'unused-bridge',type:'homebridge',name:'Unused bridge',baseUrl:'http://192.0.2.99:51999',credentialRef:'unused-key'}];}
   let blocks=mode==='initial'?[]:[{platform:'GDoorAndBoltCoordinator',name:'Custom name',_bridge:{username:'synthetic-bridge',port:12345},controllers:configuration.controllers,connections:configuration.connections??[]}];
   let localImports=0,debugReads=0,debugRecording=false,debugWrites=0;
   const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>{errors.push('Unexpected native dialog');void d.dismiss();});
