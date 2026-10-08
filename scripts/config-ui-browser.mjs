@@ -117,7 +117,7 @@ try{
    for(const mode of ['enabled','moving','debug-unavailable']){
      const x=await fixture(browser,{mobile,dark,mode}),p=x.page;
      assert.equal(x.debugReads(),0,'No diagnostic requests before opening Debug');
-     await p.getByLabel('Garage name',{exact:true}).fill('Unsaved diagnostic test');
+     await p.getByLabel('Garage Door name',{exact:true}).fill('Unsaved diagnostic test');
      await p.getByRole('button',{name:'Debug',exact:true}).click();
      await p.waitForFunction(()=>!document.getElementById('debug-refresh').disabled);
      assert.equal(await p.locator('#debug-page').isVisible(),true);assert.equal(await p.locator('#garages-page').isVisible(),false);
@@ -141,7 +141,7 @@ try{
        if(process.env.PREVIEW_OUTPUT)await p.screenshot({path:path.join(process.env.PREVIEW_OUTPUT,mobile?'debug-mobile.png':'debug-desktop.png'),fullPage:true});
      }
      const reads=x.debugReads();await p.locator('#general-tab').click();await p.locator('#garages-tab').click();
-     assert.equal(x.debugReads(),reads);assert.equal(await p.getByLabel('Garage name',{exact:true}).inputValue(),'Unsaved diagnostic test');
+     assert.equal(x.debugReads(),reads);assert.equal(await p.getByLabel('Garage Door name',{exact:true}).inputValue(),'Unsaved diagnostic test');
      assert.equal(x.applies(),0);assert.equal(x.commissions(),0);assert.equal(x.disables(),0);assert.equal(x.probes(),0);
      assert.deepEqual(x.errors,[]);await p.close();
    }
@@ -228,7 +228,7 @@ try{
    await page.getByRole('button',{name:'01 Devices'}).click();
    await page.getByRole('button',{name:'Remove this garage door',exact:true}).click();
    assert.equal(await page.locator('.garage-card').count(),1);
-   await page.getByLabel('Garage name',{exact:true}).fill('Test garage');
+   await page.getByLabel('Garage Door name',{exact:true}).fill('Test garage');
    assert.equal(await page.locator('#native-save').isDisabled(),true,'Typing must disable native Save before blur');
    assert.equal(await page.locator('#native-check').isVisible(),false);
    await page.getByRole('button',{name:'02 Controls'}).click();
@@ -305,7 +305,7 @@ try{
    assert.equal(await page.locator('#native-save').isEnabled(),true);
    // Private-key saving must preserve a draft and must not enable bottom Save.
    await page.getByRole('button',{name:'01 Devices'}).click();
-   await page.getByLabel('Garage name',{exact:true}).fill('Unsaved garage name');
+   await page.getByLabel('Garage Door name',{exact:true}).fill('Unsaved garage name');
    await page.locator('#general-tab').click();
    assert.equal(await page.locator('#garage-overview .overview-row').getAttribute('data-state'),'disabled');
    await page.locator('#advanced-keys > summary').click();
@@ -344,10 +344,10 @@ try{
    await page.getByRole('button',{name:'Cancel replacement',exact:true}).click();
    assert.equal(await page.locator('#credential-reference').inputValue(),'');
    await page.locator('#garages-tab').click();
-   assert.equal(await page.getByLabel('Garage name',{exact:true}).inputValue(),'Unsaved garage name');
+   assert.equal(await page.getByLabel('Garage Door name',{exact:true}).inputValue(),'Unsaved garage name');
    assert.equal(await page.locator('#native-save').isDisabled(),true);
    await page.getByRole('button',{name:'Discard changes',exact:true}).click();await saved(page);
-   assert.equal(await page.getByLabel('Garage name',{exact:true}).inputValue(),'Test garage');
+   assert.equal(await page.getByLabel('Garage Door name',{exact:true}).inputValue(),'Test garage');
    await page.locator('#general-tab').click();
    await page.getByRole('button',{name:'Configure Test garage',exact:true}).click();
    await page.getByRole('button',{name:'Enable Test garage',exact:true}).click();
@@ -375,7 +375,7 @@ try{
 
    {
      const x=await fixture(browser,{mobile,dark,mode:'enabled'}),p=x.page;
-     await p.getByLabel('Garage name',{exact:true}).fill('Renamed garage');
+     await p.getByLabel('Garage Door name',{exact:true}).fill('Renamed garage');
      assert.equal(await p.locator('.garage-card').getAttribute('data-state'),'enabled','A name draft retains live enabled color');
      assert.equal(await p.locator('.garage-card .garage-status').textContent(),'Enabled · Unsaved changes');
      assert.equal(await p.locator('#native-save').isDisabled(),true);
@@ -402,7 +402,7 @@ try{
      await p.getByRole('button',{name:'Review changes Renamed garage',exact:true}).click();
      await p.locator('.garage-card #review').waitFor();
      // Editing after a card review must invalidate it, not leave a stale Save.
-     await p.getByLabel('Garage name',{exact:true}).fill('Final garage name');
+     await p.getByLabel('Garage Door name',{exact:true}).fill('Final garage name');
      assert.equal(await p.getByRole('button',{name:'Save configuration',exact:true}).count(),0);
      await p.getByRole('button',{name:'Review changes Final garage name',exact:true}).click();
      await p.locator('.garage-card #review').waitFor();
@@ -442,10 +442,10 @@ try{
      assert.equal(await p.locator('#native-save').isEnabled(),true,'Removing the only new draft restores a clean configuration');
      assert.equal(x.applies(),0);assert.equal(x.disables(),0);assert.equal(x.commissions(),0);
      await p.getByRole('button',{name:'01 Devices'}).click();
-     await p.getByLabel('Garage name',{exact:true}).fill('Pending name');
+     await p.getByLabel('Garage Door name',{exact:true}).fill('Pending name');
      await p.getByRole('button',{name:'Add a garage door',exact:true}).click();
      await p.getByRole('button',{name:'Remove this garage door',exact:true}).click();
-     assert.equal(await p.getByLabel('Garage name',{exact:true}).inputValue(),'Pending name');
+     assert.equal(await p.getByLabel('Garage Door name',{exact:true}).inputValue(),'Pending name');
      assert.equal(await p.locator('#native-save').isDisabled(),true,'Removing a draft preserves other edits');
      await p.getByRole('button',{name:'Discard changes',exact:true}).click();await saved(p);
      await p.getByRole('button',{name:'Remove this garage door',exact:true}).click();
@@ -627,7 +627,7 @@ try{
    for(const mode of ['initial','native-failure','pending','uncertain']){
      const x=await fixture(browser,{mobile,dark,mode}),p=x.page;
      if(mode==='initial')assert.equal(await p.locator('#native-save').isDisabled(),true);
-     else await p.getByLabel('Garage name',{exact:true}).fill('Reviewed garage name');
+     else await p.getByLabel('Garage Door name',{exact:true}).fill('Reviewed garage name');
      await review(p);await p.getByRole('button',{name:'Save configuration',exact:true}).click();
      if(mode==='pending'){
        await p.waitForFunction(()=>document.getElementById('workspace').disabled);
@@ -640,7 +640,7 @@ try{
      if(mode==='native-failure'){
        await p.locator('#notice').filter({hasText:'Retry Homebridge save'}).waitFor();
        assert.equal(await p.locator('#native-save').isDisabled(),true);
-       assert.equal(await p.getByLabel('Garage name',{exact:true}).isDisabled(),true);
+       assert.equal(await p.getByLabel('Garage Door name',{exact:true}).isDisabled(),true);
        assert.equal(await p.evaluate(()=>nativeToasts.some(t=>t.type==='success')),false);
        await p.getByRole('button',{name:'Retry Homebridge save',exact:true}).click();
      }
@@ -649,7 +649,7 @@ try{
        assert.equal(await p.locator('#native-save').isDisabled(),true);assert.equal(x.nativeSaves(),0);
        await p.getByRole('button',{name:'Reload saved settings',exact:true}).click();
        await saved(p);assert.equal(x.applies(),1);
-       assert.equal(await p.getByLabel('Garage name',{exact:true}).inputValue(),'Reviewed garage name');
+       assert.equal(await p.getByLabel('Garage Door name',{exact:true}).inputValue(),'Reviewed garage name');
        await p.locator('#native-save').click();await p.waitForFunction(()=>nativeClosed);
        assert.equal(x.applies(),1);
      }else{

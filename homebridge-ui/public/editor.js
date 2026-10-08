@@ -165,7 +165,7 @@ export class ProfileEditor {
   }
   devices(root,p){
     root.append(el('p','Devices operate or report on one part of your garage: the door or the bolt. Controls request a coordinated operation; the coordinator handles the door and bolt sequence.','help setup-model'));
-    const identity=this.panel(root,'Garage details');const grid=this.grid(identity);this.input(grid,'Garage name',p,'name');identity.append(el('p','Controller ID: '+p.id+' · Use this to link the standalone administrator.','help'));this.input(grid,'Show a separate bolt Lock tile',p,'exposeBoltLock',{type:'checkbox'});
+    const identity=this.panel(root,'Garage Door Details');const grid=this.grid(identity);this.input(grid,'Garage Door name',p,'name');identity.append(el('p','Controller ID: '+p.id+' · Use this to link the standalone administrator.','help'));this.input(grid,'Show a separate bolt Lock tile',p,'exposeBoltLock',{type:'checkbox'});
     const opener=this.panel(root,'Garage opener','The default opener connection and source of door position feedback. HomeKit and the virtual keypad use this device; other controls can choose it or an opener relay.');
     this.connection(opener,p,'door','garage');
     if(p.door.type==='homebridge')this.bridgeDevice(opener,p.door,'garage');else {
