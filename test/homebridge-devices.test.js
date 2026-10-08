@@ -27,6 +27,13 @@ test('Homebridge errors and read-only mode do not write; button discovery is not
  const f=await fixture(t);const input=new HomebridgeInput({...f.connection('button'),kind:'button'},'031-45-154');assert.equal((await input.inspect()).value,null);assert.equal(f.writes.length,0);
  const door=new HomebridgeDoor(f.connection('garage'),'031-45-154',{feedback:{opening:'sensor',closing:'sensor'}});await assert.rejects(door.write('open'),/actuation_disabled/);f.broken();await assert.rejects(door.read(),/state_unavailable/);assert.equal(f.writes.length,0);
 });
+test('temporarily absent child-bridge services are unavailable while changed identities still reject',async t=>{
+ const f=await fixture(t),door=new HomebridgeDoor(f.connection('garage'),'031-45-154',{feedback:{opening:'sensor',closing:'sensor'}});
+ const accessory=f.data.accessories.pop();await assert.rejects(door.read(),/homebridge_service_unavailable/);
+ f.data.accessories.push(accessory);assert.equal((await door.read()).door,'closed');
+ accessory.services[0].characteristics.find(c=>c.type==='30').value='replaced';
+ await assert.rejects(door.read(),/homebridge_service_identity_mismatch/);assert.deepEqual(f.writes,[]);
+});
 test('HAP live subscription parses split frames and repeated events without snapshot replay',async t=>{
  let peer;const server=net.createServer(s=>{peer=s;s.once('data',()=>s.write('HTTP/1.1 204 No Content\r\n\r\n'));});server.listen(0,'127.0.0.1');await once(server,'listening');t.after(()=>{peer?.destroy();server.close();});
  const stream=new HapSubscription('http://127.0.0.1:'+server.address().port,'031-45-154',2,31);const values=[];stream.on('value',v=>values.push(v));stream.start();await once(stream,'ready');assert.deepEqual(values,[]);

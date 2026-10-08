@@ -10,6 +10,7 @@ export class TailwindDoor {
     requireValue(typeof token === 'string' && /^[0-9]{6}$/.test(token), 'tailwind_credential_invalid');
     this.config = structuredClone(configuration); this.token = token;
     this.request = request; this.readOnly = readOnly;
+    this.capabilities = Object.freeze({ directional: true });
   }
 
   async call(data, write = false) {

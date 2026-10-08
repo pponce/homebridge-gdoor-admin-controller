@@ -75,6 +75,13 @@ try {
     });
     try {
       await editor.goto(origin + '/controller'); await editor.locator('[data-default-group="timing"]').first().waitFor();
+      const entry=runtime.entry(config.controllers[0].id);
+      entry.held='waiting-for-devices';entry.engine={snapshot:()=>({phase:'unavailable',unavailable:'bolt_unreachable'}),stop(){}};
+      await editor.evaluate(()=>panel.load());
+      await editor.getByRole('status').filter({hasText:'retrying automatically every 5 seconds'}).waitFor();
+      entry.held='controller_requires_review';entry.engine.snapshot=()=>({phase:'fault',fault:'bolt_write_ambiguous'});
+      await editor.evaluate(()=>panel.load());await editor.getByRole('status').filter({hasText:'bolt_write_ambiguous'}).waitFor();
+      entry.engine=null;entry.held='not-commissioned';await editor.evaluate(()=>panel.load());
       await editor.locator('[data-default-group="timing"][data-key="openRetractSettleSeconds"]').fill('0.3');
       await editor.getByText('Indoor button', { exact: true }).click();
       await editor.locator('[data-inherit="0"][data-key="closeRetractSettleSeconds"]').uncheck();

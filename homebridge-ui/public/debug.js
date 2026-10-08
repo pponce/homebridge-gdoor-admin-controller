@@ -39,7 +39,7 @@ export class DebugPanel {
     this.mode.textContent=(report.recording?'Recording ON':'Recording OFF')+' · '+report.events.length+' recorded HomeKit events · '+(report.traceMode??'unknown')+' tracing · '+(report.publicationMode??'unknown')+' publication';
     this.summary.replaceChildren(el('h3','Current status'));
     this.summary.append(el('p','Plugin '+(report.versions.plugin??'unknown')+' · Homebridge '+(report.versions.homebridge??'unknown')+' · HAP '+(report.versions.hap??'unknown'),'help'));
-    for(const c of report.controllers){const item=el('p');item.textContent=c.garage+': '+(c.door??'unknown')+' door, '+(c.bolt??'unknown')+' bolt'+(c.busy?' · Operation active':'')+(c.fault?' · Fault present':'')+(c.unavailable?' · Unavailable':'');this.summary.append(item);}
+    for(const c of report.controllers){const item=el('p');item.textContent=c.garage+': '+(c.door??'unknown')+' door, '+(c.bolt??'unknown')+' bolt'+(c.busy?' · Operation active':'')+(c.reconciling?' · Monitoring movement after restart':'')+(c.fault?' · Fault: '+(c.faultReason??'reason unavailable'):'')+(c.unavailable?' · Waiting for devices: '+(c.unavailableReason??'reason unavailable'):'');this.summary.append(item);}
     if(report.controllers.some(c=>c.busy))this.summary.append(el('p','Recording can be changed after the current operation finishes.','help'));
     this.summary.append(el('p',report.clients.length+' HomeKit connections · Subscription inspection '+(report.connectionInspection??'unavailable'),'help'));
     this.json.textContent=JSON.stringify(report,null,2);this.controls();

@@ -248,10 +248,11 @@ test('obstruction, reversal and extension during open hold without corrective do
   }
 });
 
-test('competing requests never queue and stopping an active operation leaves a hold', async () => {
+test('competing requests never queue and shutdown preserves intent for observation after restart', async () => {
   const { engine, model } = fixture({ door: (_c, m) => { m.door = 'not-closed'; } });
   await engine.initialize(); const operation = engine.execute('open');
   await assert.rejects(engine.execute('close'), /controller_busy/);
   engine.stop(); await operation;
-  assert.equal(engine.state.fault, 'operation_interrupted'); assert.equal(model.journal.fault, true);
+  assert.equal(engine.state.fault, null); assert.equal(engine.state.reconciling, true);
+  assert.equal(model.journal.fault, false);
 });

@@ -15,7 +15,7 @@ Known gaps from the source audit: five configurable notification/reconciliation 
 | Stable closed confirmation then one bolt extension and settle | Fresh reads and unexpected-extension correction; timed closing requires explicit estimated-bolting policy |
 | Manual external unlock override | Preserved until next operation/restart; no startup auto-bolt |
 | Idle outage vs active failure | Fresh idle reads can recover; active failure latches a durable hold |
-| Restart during motion or partial stop | No replay; explicit physical review/recommissioning |
+| Restart during motion or partial stop | Owner-requested 0.4.26 change: retain commissioning and resume observation without replay. Confirmed endpoints restore readiness; incomplete feedback remains unconfirmed. A new directional Tailwind Close is allowed; relay toggles wait for confirmed position. Existing fault/ambiguity holds still require review |
 | Physical keypad | Enrolled source/alarm checks, live freshness/epoch gate, native deCONZ disarm, no legacy alarm-disarm writes |
 | Virtual keypad | Pre-PIN eligibility receipt, two-second expiry, fresh alarm verification, primary motor route, no PIN forwarding |
 | Settings / maintenance | Revision-checked shared profiles, durable pause, original transaction hooks, physical confirmations when Homebridge restarts |

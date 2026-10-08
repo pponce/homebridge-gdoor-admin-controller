@@ -3,9 +3,13 @@ import { lstat, open, realpath, rename, unlink } from 'node:fs/promises';
 import { randomBytes } from 'node:crypto';
 import path from 'node:path';
 import { Fault, requireValue } from './fault.js';
+import { faultCode } from './controller-faults.js';
 
-const valid = value => value && Object.keys(value).sort().join() === 'fault,inProgress' &&
-  typeof value.inProgress === 'boolean' && typeof value.fault === 'boolean';
+const valid = value => value && typeof value.inProgress === 'boolean' && typeof value.fault === 'boolean' &&
+  (Object.keys(value).sort().join() === 'fault,inProgress' ||
+    Object.keys(value).sort().join() === 'at,fault,inProgress,reason' && value.fault === true &&
+    faultCode(value.reason) !== null && typeof value.at === 'string' &&
+    /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(value.at) && Number.isFinite(Date.parse(value.at)));
 const trusted = stat => stat.isFile() && stat.nlink === 1 && !(stat.mode & 0o077) &&
   (!process.getuid || stat.uid === process.getuid()) && stat.size <= 1024;
 

@@ -1,5 +1,6 @@
 import { performance } from 'node:perf_hooks';
 import { Fault, requireValue } from './fault.js';
+import { faultCode, retryableRead } from './controller-faults.js';
 import { TravelEstimate, followInterruptedTravel } from './interruption.js';
 
 const systemClock = { now: () => performance.now(), sleep: ms => new Promise(resolve => setTimeout(resolve, ms)) };
@@ -30,7 +31,15 @@ export class MovementEngine {
       openEstimated: false, closeEstimated: false, fault: null, externalUnlockOverride: false };
   }
 
-  snapshot() { return structuredClone({ ...this.state, busy: this.busy }); }
+  snapshot() { return structuredClone({ ...this.state, busy: this.busy, restartCloseAvailable: this.restartCloseAvailable() }); }
+  restartCloseAvailable() {
+    return this.state.reconciling === true && this.state.door === 'not-closed' && !this.state.fault &&
+      !this.state.unavailable && this.door.capabilities?.directional === true;
+  }
+  acceptsFreshCommand(command, motorPath = 'primary') {
+    return !this.state.reconciling && !['opening', 'closing'].includes(this.state.door) ||
+      command === 'close' && motorPath === 'primary' && this.restartCloseAvailable();
+  }
   update(changes) { Object.assign(this.state, changes); this.publish(this.snapshot()); }
   checkRunning() { requireValue(!this.stopped, 'operation_interrupted'); }
   stop() { this.stopped = true; this.admitInterruption(false); for (const motor of this.motorPaths.values()) motor.stop?.(); }
@@ -50,16 +59,38 @@ export class MovementEngine {
 
   async initialize() {
     requireValue(!this.initialized && !this.busy, 'engine_already_initialized');
-    this.busy = true;
+    this.busy = true; this.startupRetry = false;
+    let cleanJournal = false;
     try {
+      this.checkRunning();
       const previous = await this.journal.read();
+      this.checkRunning();
       requireValue(previous && typeof previous.inProgress === 'boolean' && typeof previous.fault === 'boolean', 'journal_invalid');
-      requireValue(!previous.inProgress && !previous.fault, 'previous_run_requires_review');
+      if (previous.fault) {
+        // Preserve the original fault and timestamp; legacy holds stay held.
+        this.update({ phase: 'fault', fault: faultCode(previous.reason) ?? 'previous_run_requires_review', faultAt: previous.at ?? null });
+        return this.snapshot();
+      }
+      cleanJournal = true;
+      this.restartObservation = previous.inProgress;
       const sample = await this.read();
       requireValue(sample.door === 'closed' || !sample.locked, 'startup_bolt_state_requires_review');
-      this.update({ phase: sample.door === 'closed' ? 'closed' : sample.door === 'open' ? 'open' : 'position-unknown' });
+      const reconciling = (previous.inProgress && !['closed', 'open'].includes(sample.door)) || ['opening', 'closing'].includes(sample.door);
+      if (previous.inProgress && !reconciling) await this.journal.write({ inProgress: false, fault: false });
+      this.update({ phase: ['closed', 'open', 'opening', 'closing'].includes(sample.door) ? sample.door : 'position-unknown',
+        target: sample.door === 'opening' ? 'open' : sample.door === 'closing' ? 'closed' : null,
+        reconciling, fault: null, faultAt: null });
       this.initialized = true;
-    } catch (error) { await this.fail(code(error)); }
+    } catch (error) {
+      // Shutdown while a startup read is outstanding must not manufacture a
+      // durable fault. Active-operation interruption still follows fail().
+      if (!this.stopped) {
+        if (cleanJournal && retryableRead(code(error))) {
+          this.startupRetry = true;
+          this.update({ phase: 'unavailable', unavailable: code(error), fault: null, faultAt: null });
+        } else await this.fail(code(error));
+      }
+    }
     finally { this.busy = false; }
     return this.snapshot();
   }
@@ -86,10 +117,12 @@ export class MovementEngine {
 
   async fail(reason) {
     this.admitInterruption(false); this.travel = null; this.partialOwner = null; this.autoClosePending = false;
-    this.initialized = false;
-    try { await this.journal.write({ inProgress: false, fault: true }); }
+    this.initialized = false; this.startupRetry = false;
+    reason = faultCode(reason) ?? 'unexpected_adapter_error';
+    const faultAt = new Date().toISOString();
+    try { await this.journal.write({ inProgress: false, fault: true, reason, at: faultAt }); }
     catch { reason = 'journal_write_failed'; }
-    this.update({ phase: 'fault', fault: reason, openEstimated: false, closeEstimated: false });
+    this.update({ phase: 'fault', fault: reason, faultAt, openEstimated: false, closeEstimated: false });
   }
 
   async observe() {
@@ -107,6 +140,18 @@ export class MovementEngine {
     const previousBolt = this.lastBolt; const previousDoor = this.state.door;
     try {
       const sample = await this.read();
+      if (this.state.reconciling) {
+        // Reattach to physical feedback only. No replay, timer reconstruction or
+        // automatic bolt operation follows a movement interrupted by restart.
+        const terminal = ['closed', 'open'].includes(sample.door);
+        requireValue(sample.door === 'closed' || !sample.locked, 'startup_bolt_state_requires_review');
+        if (terminal && this.restartObservation) await this.journal.write({ inProgress: false, fault: false });
+        this.autoClosePending = false;
+        this.update({ phase: ['closed', 'open', 'opening', 'closing'].includes(sample.door) ? sample.door : 'position-unknown',
+          target: sample.door === 'open' || sample.door === 'opening' ? 'open' : sample.door === 'closed' || sample.door === 'closing' ? 'closed' : null,
+          reconciling: !terminal, unavailable: null });
+        return this.snapshot();
+      }
       const changes = {};
       if (previousBolt === true && !sample.locked) changes.externalUnlockOverride = true;
       if (sample.door === 'closed') {
@@ -123,7 +168,8 @@ export class MovementEngine {
     } catch (error) {
       // Transient idle read loss does not erase the previous bolt observation or
       // invent a recovered travel estimate. Identity/physical conflicts latch.
-      if (['door_read_failed', 'bolt_read_failed', 'bolt_unreachable', 'motor_read_failed', 'motor_unreachable', 'homebridge_read_failed'].includes(code(error))) {
+      if (this.stopped) return this.snapshot();
+      if (retryableRead(code(error))) {
         this.update({ phase: 'unavailable', unavailable: code(error), openEstimated: false, closeEstimated: false });
       } else await this.fail(code(error));
     }
@@ -173,6 +219,7 @@ export class MovementEngine {
     requireValue(['open', 'close', 'unlock', 'lock', 'observed-close'].includes(command), 'command_invalid');
     requireValue(!this.busy, 'controller_busy');
     requireValue(this.initialized && !this.state.fault && !this.stopped, 'engine_unavailable');
+    requireValue(this.acceptsFreshCommand(command, motorPath), 'controller_observing_movement');
     requireValue(command !== 'observed-close' || !this.state.externalUnlockOverride, 'manual_unlock_override');
     requireValue(this.motorPaths.has(motorPath), 'motor_path_unavailable');
     requireValue(Object.keys(timing).every(key => ['openRetractSettleMs', 'closeRetractSettleMs', 'openingMs', 'closingMs'].includes(key)) &&
@@ -192,7 +239,7 @@ export class MovementEngine {
       requireValue(this.initialized && !this.state.fault, this.state.fault ?? 'engine_unavailable');
       this.autoClosePending = false;
       await this.journal.write({ inProgress: true, fault: false }); // Durable intent before any actuator request.
-      this.update({ externalUnlockOverride: command === 'unlock', target: command === 'open' ? 'open' : command === 'close' ? 'closed' : this.state.target });
+      this.update({ reconciling: false, externalUnlockOverride: command === 'unlock', target: command === 'open' ? 'open' : command === 'close' ? 'closed' : this.state.target });
       const sample = await this.read();
       requireValue(!['opening', 'closing'].includes(sample.door), 'external_movement');
       if (command === 'unlock') {
@@ -214,7 +261,14 @@ export class MovementEngine {
         if (command === 'open') await this.open(); else await this.close(checked);
       }
       await this.journal.write({ inProgress: Boolean(this.partialOwner), fault: false });
-    } catch (error) { await this.fail(code(error)); }
+    } catch (error) {
+      if (this.stopped && code(error) === 'operation_interrupted') {
+        // The durable intent already exists. A routine shutdown keeps enablement
+        // and resumes observation next boot; ambiguous writes still latch below.
+        this.initialized = false;
+        this.update({ phase: 'position-unknown', reconciling: true, openEstimated: false, closeEstimated: false });
+      } else await this.fail(code(error));
+    }
     finally { this.admitInterruption(false); this.interruptionOperation = false; this.operationOwner = null; this.motor = this.door; this.timing = previousTiming; this.busy = false; }
     return this.snapshot();
   }

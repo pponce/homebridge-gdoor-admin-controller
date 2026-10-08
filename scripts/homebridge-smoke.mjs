@@ -1,6 +1,6 @@
 // CI only: actual Homebridge 2 child bridge, temporary storage and loopback
 // hardware emulators. No pairing, real accessories or household configuration.
-import { spawn } from 'node:child_process';
+import { spawn, execFileSync } from 'node:child_process';
 import { mkdtemp, readFile, writeFile, rm, appendFile } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
@@ -50,9 +50,12 @@ async function main() {
         pin: '031-45-154', port: await freePort(), bind: ['127.0.0.1'] },
       platforms: [platform], accessories: [],
     }), { mode: 0o600 });
-    child = spawn(process.execPath, [process.env.HOMEBRIDGE_BIN, '-I', '-U', directory, '-P', root], { stdio: ['ignore', 'pipe', 'pipe'] });
-    child.stdout.on('data', data => { logs = (logs + data).slice(-32768); });
-    child.stderr.on('data', data => { logs = (logs + data).slice(-32768); });
+    const launch = () => {
+      child = spawn(process.execPath, [process.env.HOMEBRIDGE_BIN, '-I', '-U', directory, '-P', root], { stdio: ['ignore', 'pipe', 'pipe'] });
+      child.stdout.on('data', data => { logs = (logs + data).slice(-32768); });
+      child.stderr.on('data', data => { logs = (logs + data).slice(-32768); });
+    };
+    launch();
     const origin = 'http://127.0.0.1:' + platform.managementPort;
     await until(async () => {
       assert.equal(child.exitCode, null, 'Homebridge exited during startup');
@@ -71,7 +74,7 @@ async function main() {
     assert.equal((await response.json()).probe.compatible, true);
     assert.deepEqual(hardware.state.writes, []);
     const management = async (endpoint, body) => {
-      const response = await fetch(origin + endpoint, { method: body ? 'POST' : 'GET', headers: { Authorization: 'Bearer '+identity.token, ...(body?{'Content-Type':'application/json'}:{}) }, ...(body?{body:JSON.stringify({instanceId:identity.instanceId,...body})}:{}), signal:AbortSignal.timeout(10000) });
+      const response = await fetch(origin + endpoint, { method: body ? 'POST' : 'GET', headers: { Authorization: 'Bearer '+identity.token, 'X-Coordinator-Status':'detailed', ...(body?{'Content-Type':'application/json'}:{}) }, ...(body?{body:JSON.stringify({instanceId:identity.instanceId,...body})}:{}), signal:AbortSignal.timeout(10000) });
       assert.ok(response.ok); return response.json();
     };
     const id=platform.controllers[0].id;const endpoint='/v1/controllers/'+id;
@@ -207,10 +210,49 @@ async function main() {
     assert.equal(captureOutput.includes('031-45-154'),false);
     capture.kill('SIGINT');await until(async()=>capture.exitCode!==null,5000);
     assert.equal(capture.exitCode,0,captureOutput);
+    for(const subscription of subscriptions)subscription.stop();
+    const restart = async full => {
+      const boot = (await management(endpoint+'/state')).status.bootId;
+      if (full) {
+        child.kill('SIGTERM'); await until(async()=>child.exitCode!==null||child.signalCode!==null,10000); launch();
+      } else {
+        // This isolated Homebridge has exactly one child bridge. Killing that
+        // process exercises Homebridge's real supervisor and durable recovery.
+        const pids=execFileSync('ps',['-o','pid=','--ppid',String(child.pid)],{encoding:'utf8'}).trim().split(/\s+/).map(Number);
+        assert.equal(pids.length,1);assert.ok(Number.isInteger(pids[0])&&pids[0]>1);
+        process.kill(pids[0],'SIGKILL');
+      }
+      await until(async()=>{try{return (await management(endpoint+'/state')).status.bootId!==boot;}catch{return false;}},45000);
+      return (await management(endpoint+'/state')).status;
+    };
+    let writes=structuredClone(hardware.state.writes);
+    let state=await restart(false);assert.equal(state.actuationEnabled,true);assert.equal(state.state.phase,'closed');
+    assert.deepEqual(hardware.state.writes,writes,'Child-bridge restart cannot move hardware');
+    hardware.state.closed=false;hardware.state.locked=false;
+    state=await restart(true);assert.equal(state.actuationEnabled,true);assert.equal(state.state.phase,'position-unknown');
+    assert.deepEqual(hardware.state.writes,writes,'Full Homebridge restart while open cannot move hardware');
+    hardware.state.reachable=false;
+    state=await restart(false);assert.equal(state.held,'waiting-for-devices');assert.equal(state.commissioned,true);
+    hardware.state.reachable=true;
+    await until(async()=>(await management(endpoint+'/state')).status.actuationEnabled,12000);
+    assert.deepEqual(hardware.state.writes,writes,'Late startup recovery cannot move hardware');
+    // Crash while a real Tailwind open operation is in progress. The new process
+    // must retain enablement, report unknown position and never replay the write.
+    hardware.state.closed=true;hardware.state.locked=true;
+    await until(async()=>{const s=(await management(endpoint+'/state')).status.state;return s.phase==='closed'&&!s.busy;});
+    state=(await management(endpoint+'/state')).status;
+    await management(endpoint+'/commands',{command:'open',requestId:'restart-open-fixture',issuedAt:Date.now(),bootId:state.bootId});
+    await until(async()=>(await management(endpoint+'/state')).status.state.phase==='opening');
+    writes=structuredClone(hardware.state.writes);
+    state=await restart(false);assert.equal(state.actuationEnabled,true);assert.equal(state.state.reconciling,true);
+    assert.equal(state.state.openEstimated,false);assert.equal(state.state.fault,null);assert.deepEqual(hardware.state.writes,writes);
+    hardware.state.closed=true;hardware.state.locked=false;
+    await until(async()=>{const s=(await management(endpoint+'/state')).status;return s.state.phase==='closed'&&!s.state.reconciling;});
+    assert.deepEqual(hardware.state.writes,writes,'Post-restart observation cannot replay a pulse or automatically bolt');
     child.kill('SIGTERM');
     await until(async () => child.exitCode !== null || child.signalCode !== null, 10000);
     await assert.rejects(fetch(origin + '/v1/identity', { signal: AbortSignal.timeout(1000) }));
-    console.log('Actual Homebridge child bridge passed HomeKit and physical-button cycles, unchanged coordination, notification pairs/repeats, stable subscribers in events/inspection/deferred experiments, restoration and shutdown.');
+    console.log('Actual Homebridge passed HomeKit/button cycles, reporting checks, child/full restarts, delayed startup, interrupted-motion observation without replay, and shutdown.');
   } catch (error) {
     // Synthetic logs only, with the generated management token still redacted.
     const safeLogs = logs.replaceAll(identity?.token || 'never-match-placeholder', '[redacted]');

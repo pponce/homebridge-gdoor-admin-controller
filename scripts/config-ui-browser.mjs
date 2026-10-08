@@ -5,6 +5,7 @@ import { readFile, mkdir, appendFile } from 'node:fs/promises';
 import { once } from 'node:events';
 import assert from 'node:assert/strict';
 import { validateConfiguration } from '../src/config.js';
+import { controllerHealth } from '../src/controller-faults.js';
 const require=createRequire(import.meta.url);
 const {chromium,webkit}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
 const root=path.resolve('homebridge-ui/public');
@@ -48,7 +49,11 @@ async function fixture(browser,{mobile,dark,mode='managed'}){
     }
     if(name==='/homebridge')return {services:['button','switch','garage','lock','light'].map((kind,index)=>({kind,name:'Fixture '+kind,bridgeId:'fixture-bridge',serviceId:'2.'+(10+index),accessoryIdentity:'a'.repeat(64)}))};
     if(name==='/load')return{connected:mode!=='initial',settings:{revision,configuration},credentials:savedKeys,adminConnection:mode==='initial'?null:{baseUrl:'http://127.0.0.1:27773',identityFile:'/synthetic/homebridge/gdoorandbolt-coordinator/identity.json'},
-      controllers:mode==='initial'?[]:configuration.controllers.map(profile=>({id:profile.id,name:profile.name,status:{bootId:'synthetic-boot',actuationEnabled:enabled,held:enabled?null:'not-commissioned',state:{busy:mode==='moving',fault:mode==='fault'?'synthetic-fault':null}}}))};
+      controllers:mode==='initial'?[]:configuration.controllers.map(profile=>{
+        const status={bootId:'synthetic-boot',actuationEnabled:enabled,held:enabled?null:'not-commissioned',state:{busy:mode==='moving',fault:mode==='fault'?'synthetic-fault':null}};
+        if(mode==='restart-wait'){status.held='waiting-for-devices';status.state.unavailable='bolt_unreachable';status.health=controllerHealth(status);}
+        if(mode==='restart-fault'){status.held='controller_requires_review';status.state.fault='bolt_write_ambiguous';status.health=controllerHealth(status);}
+        return{id:profile.id,name:profile.name,status};})};
     if(name==='/validate')return validateConfiguration(body.configuration,{allowEmpty:true});
     if(name==='/review'){assert.equal(body.revision,revision);reviews++;reviewed=validateConfiguration(body.configuration,{allowEmpty:true});return{review:{token:'review-test',configuration:reviewed,requiresCommissioning:reviewed.controllers.filter(p=>!enabled||!configuration.controllers.some(old=>old.id===p.id&&JSON.stringify({...old,name:p.name})===JSON.stringify(p))).map(p=>p.id)}};}
     if(name==='/cancel'){reviewed=null;return{};}
@@ -114,6 +119,13 @@ try{
  for(const [browserType,mobile,dark]of [[chromium,false,false],[webkit,true,true]]){
   const browser=await browserType.launch({headless:true});
   try{
+   for(const mode of ['restart-wait','restart-fault']){
+     const x=await fixture(browser,{mobile,dark,mode}),p=x.page;
+     await p.getByRole('button',{name:'Review setup',exact:true}).click();
+     await p.locator('.commission-result').filter({hasText:mode==='restart-wait'?'retrying automatically':'bolt_write_ambiguous'}).waitFor();
+     assert.equal(await p.getByRole('button',{name:'Enable this garage door',exact:true}).count(),mode==='restart-wait'?0:1);
+     assert.equal(x.commissions(),0);assert.equal(x.applies(),0);assert.deepEqual(x.errors,[]);await p.close();
+   }
    for(const mode of ['enabled','moving','debug-unavailable']){
      const x=await fixture(browser,{mobile,dark,mode}),p=x.page;
      assert.equal(x.debugReads(),0,'No diagnostic requests before opening Debug');
@@ -725,4 +737,5 @@ try{
  console.log('Desktop Chromium/mobile WebKit passed guided editing, modeled native Save/check/toasts, setup and managed saves, delayed/failed native save, uncertain apply reload, metadata preservation, commissioning, General overview, inline garage checks, per-garage draft status, dialog-free draft removal, masked key creation/replacement/deletion, optional virtual keypad setup, draft-safe keys, theme switching and overflow.');
 }catch(e){if(process.env.GITHUB_OUTPUT)await appendFile(process.env.GITHUB_OUTPUT,'result='+String(e.stack||e).replaceAll('\n',' ').slice(0,2000)+'\n');throw e;}
 finally{server.closeAllConnections();await new Promise(r=>server.close(r));}
+
 

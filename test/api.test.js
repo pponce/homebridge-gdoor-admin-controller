@@ -52,6 +52,31 @@ test('real socket identity and inventory explicitly report no operational capabi
   assert.equal(JSON.stringify(all).includes(token), false);
   assert.equal(JSON.stringify(all).includes('example.invalid'), false);
 });
+
+test('detailed status is opt-in and legacy inventory, state and mutation responses retain their exact shape', async t => {
+  const id=configuration.controllers[0].id;
+  const status={controllerId:id,bootId:instanceId,commissioned:true,actuationEnabled:true,held:null,inputStates:{},revision:1,
+    state:{phase:'position-unknown',door:'not-closed',bolt:'unlocked',busy:false,fault:null,reconciling:true,restartCloseAvailable:true,faultAt:null},
+    health:{title:'Enabled · Position unconfirmed',detail:'Synthetic explanation',code:null}};
+  const runtime={configuration,inventory:()=>[{id,status}],status:()=>status,commission:async()=>status,disable:async()=>status};
+  const server=createManagementServer({identity:{token,instanceId},configuration,runtime});
+  const port=await listenLocal(server,0);t.after(()=>closeServer(server));
+  for(const detailed of [false,true]){
+    const headers=detailed?{'X-Coordinator-Status':'detailed'}:{};
+    const inventory=(await request(port,'/v1/controllers',{headers})).body.controllers[0].status;
+    const single=(await request(port,'/v1/controllers/'+id,{headers})).body.controller.status;
+    const state=(await request(port,'/v1/controllers/'+id+'/state',{headers})).body.status;
+    const enabled=(await request(port,'/v1/controllers/'+id+'/commission',{method:'POST',headers:{...headers,'Content-Type':'application/json'},
+      body:{instanceId,revision:1,previousControllerStopped:true,physicalSetupReviewed:true,recover:true}})).body.status;
+    const disabled=(await request(port,'/v1/controllers/'+id+'/disable',{method:'POST',headers:{...headers,'Content-Type':'application/json'},body:{instanceId,revision:1,bootId:instanceId}})).body.status;
+    for(const row of [inventory,single,state,enabled,disabled]){
+      assert.equal(Object.hasOwn(row,'health'),detailed);
+      for(const key of ['reconciling','restartCloseAvailable','faultAt'])assert.equal(Object.hasOwn(row.state,key),detailed);
+      assert.equal(row.actuationEnabled,true);assert.equal(row.state.door,'not-closed');
+    }
+  }
+  assert.equal(status.state.reconciling,true,'Projection cannot mutate the internal state');
+});
 test('every endpoint requires authentication including identity and error routes', async t => {
   const { port } = await fixture(t);
   for (const path of ['/v1/identity', '/v1/controllers', '/v1/controllers/example-garage/routing', '/missing']) {
@@ -144,4 +169,3 @@ test('reporting experiment requires authenticated identity, exact supported mode
     }
   assert.equal(changes.length,8);
 });
-

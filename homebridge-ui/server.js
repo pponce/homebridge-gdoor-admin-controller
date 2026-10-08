@@ -80,7 +80,7 @@ export class UiServer extends HomebridgePluginUiServer {
   async api(endpoint, body) {
     const { port } = await this.bootstrap(); const identity = await loadIdentity(this.homebridgeStoragePath);
     return requestJson({ url: 'http://127.0.0.1:' + port + endpoint, method: body === undefined ? 'GET' : 'POST',
-      headers: { Authorization: 'Bearer ' + identity.token }, ...(body === undefined ? {} : { body: { ...body, instanceId: identity.instanceId } }),
+      headers: { Authorization: 'Bearer ' + identity.token, 'X-Coordinator-Status': 'detailed' }, ...(body === undefined ? {} : { body: { ...body, instanceId: identity.instanceId } }),
       timeoutMs: 30000, maxRequestBytes: 262144, maxResponseBytes: 524288 });
   }
   async load() {

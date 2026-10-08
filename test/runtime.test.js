@@ -10,6 +10,7 @@ import { createManagementServer, listenLocal, closeServer } from '../src/api.js'
 import { hardwareFixture } from './support/hardware.mjs';
 import { controllerTimingValues } from '../src/controller-timings.js';
 import { WebAdminController } from '../src/web-admin-controller.js';
+import { StateJournal } from '../src/journal.js';
 const example = JSON.parse(await readFile(new URL('../examples/development-config.json', import.meta.url), 'utf8'));
 test('timing-only saves update the existing engine, retain overrides and enablement, persist and send no commands', async t => {
   const f = await fixture(t, true); await f.commission();
@@ -114,6 +115,21 @@ test('ambiguous commands hold the garage and restart does not replay them', asyn
   const second = new CoordinatorRuntime({ storagePath: f.storagePath, configuration: f.config, credentials: async () => f.hardware.credentials });
   t.after(() => second.stop()); await second.start(); assert.equal(second.status(f.id).actuationEnabled, false);
   await assert.rejects(second.submit(f.id, body), /request_invalid/); assert.deepEqual(f.hardware.state.writes, writes);
+});
+
+test('interrupted Tailwind travel permits a new directional Close request without replaying old commands or relay pulses', async t => {
+  const f = await fixture(t); await f.commission(); await f.runtime.stop();
+  await new StateJournal(f.storagePath, f.id).write({ inProgress: true, fault: false });
+  f.hardware.state.closed = false; f.hardware.state.locked = false;
+  const next = new CoordinatorRuntime({ storagePath: f.storagePath, configuration: f.config, credentials: async () => f.hardware.credentials, clock: f.clock });
+  t.after(() => next.stop()); await next.start();
+  assert.equal(next.status(f.id).actuationEnabled, true); assert.equal(next.status(f.id).state.reconciling, true);
+  assert.equal(next.status(f.id).state.restartCloseAvailable, true); assert.deepEqual(f.hardware.state.writes, []);
+  await assert.rejects(next.submit(f.id, { ...f.command('open'), bootId: next.bootId }), /observing_movement/);
+  await next.submit(f.id, { ...f.command('close'), bootId: next.bootId }); await next.entry(f.id).job;
+  assert.equal(next.status(f.id).state.phase, 'closed'); assert.equal(next.status(f.id).state.reconciling, false);
+  assert.deepEqual(f.hardware.state.writes, [['door', 'close'], ['bolt', true]]);
+  assert.deepEqual(await new StateJournal(f.storagePath, f.id).read(), { inProgress: false, fault: false });
 });
 
 test('name-only edits preserve valid enablement through apply and restart without hardware writes', async t => {

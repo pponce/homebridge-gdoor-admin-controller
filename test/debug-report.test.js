@@ -17,6 +17,15 @@ test('unsupported diagnostics or snapshots spanning a restart cannot appear as a
  const x=input();x.reporting.schema=0;assert.throws(()=>debugReport(x),/unavailable/);
  x.reporting.schema=1;x.reporting.bootId='new-boot';assert.throws(()=>debugReport(x),/restarted/);
 });
+test('diagnostics include fixed hold/fault reasons and original time while rejecting arbitrary strings',()=>{
+ const x=input(),s=x.controllers[0].status;s.held='controller_requires_review';
+ Object.assign(s.state,{fault:'bolt_write_ambiguous',faultAt:'2026-10-08T18:00:00.000Z',unavailable:'bolt_unreachable',reconciling:false});
+ let row=debugReport(x).controllers[0];assert.equal(row.faultReason,'bolt_write_ambiguous');assert.equal(row.faultAt,s.state.faultAt);
+ assert.equal(row.heldReason,'controller_requires_review');assert.equal(row.unavailableReason,'bolt_unreachable');
+ s.held=s.state.fault=s.state.unavailable=s.state.faultAt='PRIVATE';
+ row=debugReport(x).controllers[0];assert.equal(JSON.stringify(row).includes('PRIVATE'),false);
+ assert.equal(row.faultReason,null);assert.equal(row.faultAt,null);
+});
 test('unexpected scalar content, extra fields and unbounded histories cannot leak into debug downloads',()=>{
  const x=input();x.controllers[0].status.state.door='PRIVATE-DOOR';x.reporting.tiles[0].fields[0].cached='PRIVATE-CACHED';
  x.reporting.events=Array.from({length:400},()=>({...x.reporting.events[0],value:{secret:'PRIVATE-KEY'}}));

@@ -49,6 +49,9 @@ export class HomebridgeService {
     const data=await discoverHomebridge(this.config.baseUrl,this.pin,{request:this.request});
     requireValue(data.bridgeId.toLowerCase()===this.config.bridgeId.toLowerCase(),'homebridge_bridge_identity_mismatch');
     const rows=data.services.filter(s=>s.serviceId===this.config.serviceId);
+    // A child bridge can answer before its accessories are restored. Missing
+    // remains unavailable; a present but different identity still latches.
+    requireValue(rows.length !== 0, 'homebridge_service_unavailable');
     requireValue(rows.length===1 && rows[0].accessoryIdentity===this.config.accessoryIdentity &&
       (Array.isArray(kind)?kind.includes(rows[0].kind):rows[0].kind===kind),'homebridge_service_identity_mismatch');
     return rows[0];

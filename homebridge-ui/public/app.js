@@ -104,7 +104,8 @@ function commissioning(root,profile){
   const panel=document.createElement('div');panel.className='commission-row';
   const active=row.status.actuationEnabled;
   const result=document.createElement('p');result.className='commission-result';result.setAttribute('role','status');
-  result.textContent=form.result||(active?'Control is enabled. No additional save is needed.':row.status.held==='maintenance'?'Paused for maintenance.':'Control is disabled until you check and enable this garage door.');
+  result.textContent=form.result||(row.status.health?.detail?(row.status.health.title+'. '+row.status.health.detail+(row.status.health.code?' Reason: '+row.status.health.code+'.':'')):
+    active?'Control is enabled. No additional save is needed.':row.status.held==='maintenance'?'Paused for maintenance.':'Control is disabled until you check and enable this garage door.');
   const check=document.createElement('button');check.textContent='Check connections';check.type='button';check.className='secondary';
   check.onclick=()=>action(async()=>{
     let value;try{value=await hb.request('/probe',{controller:row.id});}
@@ -113,7 +114,7 @@ function commissioning(root,profile){
     const controls=p.controls??[];const issues=[p.door.error,p.bolt.error,...p.limitations,...controls.filter(r=>r.error).map(r=>r.name+': '+r.error)].filter(Boolean);
     form.result=p.compatible?'Connections verified. Door: '+p.door.state+' ('+p.door.feedback+'). Bolt: '+p.bolt.state+' ('+p.bolt.feedback+').'+(controls.length?' Motor relays and physical controls checked: '+controls.length+'.':''):'Connection needs attention: '+issues.join(', ');
   });panel.append(check,result);
-  if(!active){
+  if(!active&&row.status.held!=='waiting-for-devices'){
     const enable=document.createElement('button');enable.type='button';enable.className='primary';enable.textContent='Enable this garage door';enable.disabled=!form.ack.every(Boolean);
     ['The previous controller and its automatic inputs are stopped.','The door is physically closed, the bolt wiring is checked and the motor relay is released.'].forEach((text,index)=>{
       const label=document.createElement('label');label.className='check';const input=document.createElement('input');input.type='checkbox';input.checked=form.ack[index];
@@ -246,11 +247,12 @@ function garageStatus(profile){
   if(!loaded.connected)return warning('Not configured','Start the coordinator child bridge to check connections.');
   if(!status)return warning('Not configured');
   if(status.held==='maintenance')return warning('Maintenance paused');
+  if(status.held==='waiting-for-devices')return warning('Waiting for devices',status.health?.detail??'Connection checks retry automatically.');
   if(status.state?.fault||status.state?.unavailable||status.state?.obstruction||connectionChecks.get(profile.id)===false||
-    status.held&&!['not-commissioned'].includes(status.held))return warning('Needs attention');
+    status.held&&!['not-commissioned'].includes(status.held))return warning('Needs attention',status.health?.detail??'');
   const draft=save.phase!=='saved'||!!connectionEditor?.dirty,detail=draft?'Save or discard pending changes before changing enablement.':'';
-  return status.actuationEnabled?{tone:'enabled',label:'Enabled',action:'Disable',disabled:!!status.state?.busy||draft||!save.canEdit,
-    detail:status.state?.busy?'An operation is active. Wait for it to finish before disabling.':detail}:
+  return status.actuationEnabled?{tone:'enabled',label:status.health?.title??'Enabled',action:'Disable',disabled:!!status.state?.busy||draft||!save.canEdit,
+    detail:status.state?.busy?'An operation is active. Wait for it to finish before disabling.':detail||status.health?.detail||''}:
     {tone:'disabled',label:'Disabled',action:'Enable',disabled:!save.canEdit,detail};
 }
 function openChecks(profile){

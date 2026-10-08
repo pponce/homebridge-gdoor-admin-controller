@@ -13,6 +13,7 @@ import { HomebridgeDoor, HomebridgeBolt, HomebridgeMotorRelay, HomebridgeInput, 
 import { requestJson } from './transport.js';
 import { Fault, requireValue } from './fault.js';
 import { profileWithTimings } from './controller-timings.js';
+import { controllerHealth } from './controller-faults.js';
 
 const hash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const normalize = value => validateConfiguration(value, { allowEmpty: true });
@@ -42,7 +43,7 @@ export class CoordinatorRuntime {
     this.state = await this.store.read() ?? { schema: 1, revision: 1, configuration: this.bootstrap, commissioned: {}, maintenance: null, events: [], requests: [] };
     this.state.configuration = normalize(this.state.configuration);
     for (const request of this.state.requests) if (request.status === 'pending') {
-      request.status = 'unknown'; delete this.state.commissioned[request.controllerId]; this.event(request.controllerId, 'restart-review-required');
+      request.status = 'unknown'; this.event(request.controllerId, 'restart-observation');
     }
     await this.save(); await this.build();
   }
@@ -74,25 +75,46 @@ export class CoordinatorRuntime {
         const hw = await this.makeDrivers(p);
         const engine = new MovementEngine({ ...hw, journal: new StateJournal(this.storagePath, p.id), feedback: p.feedback, timing: timing(p),
           ...(this.clock ? { clock: this.clock } : {}), publish: snapshot => this.publish(p.id, snapshot) });
-        entry.engine = engine; entry.router = new InputRouter(engine, p.inputs, this.clock);
+        entry.engine = engine; entry.hardware = hw; entry.router = new InputRouter(engine, p.inputs, this.clock);
         entry.router.inhibited = () => this.stopped || this.changing || Boolean(this.state.maintenance) || Boolean(entry.job);
-        await engine.initialize(); requireValue(engine.initialized, 'controller_requires_review');
-        entry.enabled = true; entry.held = null;
-        for (const input of p.inputs.filter(i => i.enabled)) {
-          const listener = new (input.source.type === 'deconz' ? DeconzInputListener : HomebridgeInputListener)({ profile: input, driver: hw.inputDrivers.get(input.id), router: entry.router, ...(this.clock ? { clock: this.clock } : {}),
-            onState: value => { entry.inputStates[input.id] = value; } });
-          entry.listeners.push(listener); listener.start();
-        }
+        await this.initializeEntry(entry);
         this.schedule(entry);
       } catch (error) { entry.held = error instanceof Fault ? error.message : 'controller_unavailable'; }
     }
     this.publish(null, null);
   }
+  current(entry) {
+    return !this.stopped && !this.storageFault && !this.state.maintenance &&
+      this.entries.get(entry.profile.id) === entry && !entry.engine?.stopped &&
+      this.state.commissioned[entry.profile.id] === hash(entry.profile);
+  }
+  async initializeEntry(entry) {
+    if (!this.current(entry) || entry.initializing) return;
+    const task = (async () => {
+      await entry.engine.initialize();
+      if (!this.current(entry)) return;
+      entry.enabled = entry.engine.initialized;
+      entry.held = entry.enabled ? null : entry.engine.startupRetry ? 'waiting-for-devices' : 'controller_requires_review';
+      if (entry.enabled) for (const input of entry.profile.inputs.filter(i => i.enabled)) {
+        const listener = new (input.source.type === 'deconz' ? DeconzInputListener : HomebridgeInputListener)({
+          profile: input, driver: entry.hardware.inputDrivers.get(input.id), router: entry.router,
+          ...(this.clock ? { clock: this.clock } : {}), onState: value => { entry.inputStates[input.id] = value; } });
+        entry.listeners.push(listener); listener.start();
+      }
+    })();
+    entry.initializing = task;
+    try { await task; }
+    finally { entry.initializing = null; if (this.current(entry)) this.publish(entry.profile.id, entry.engine.snapshot()); }
+  }
   schedule(entry) {
     clearTimeout(entry.timer);
-    if (this.stopped || !entry.enabled) return;
+    if (!this.current(entry) || !entry.enabled && !entry.engine?.startupRetry) return;
     entry.timer = setTimeout(async () => {
       try {
+        if (!this.current(entry)) return;
+        if (!this.changing && !entry.enabled && entry.engine.startupRetry) {
+          await this.initializeEntry(entry); return;
+        }
         if (!this.changing && !this.state.maintenance && !entry.job && !entry.engine.busy && entry.engine.initialized) {
           await entry.engine.observe();
           if (!this.changing && !this.state.maintenance && !entry.job && !entry.engine.busy && entry.profile.autoBolt && entry.engine.autoClosePending && !entry.engine.snapshot().externalUnlockOverride && entry.engine.initialized) {
@@ -101,17 +123,18 @@ export class CoordinatorRuntime {
         }
       } catch { /* Current engine status carries fixed faults; never retry movement. */ }
       finally { this.schedule(entry); }
-    }, entry.profile.timing.idlePollSeconds * 1000); entry.timer.unref?.();
+    }, entry.engine?.startupRetry ? 5000 : entry.engine?.state.reconciling ? 1000 : entry.profile.timing.idlePollSeconds * 1000); entry.timer.unref?.();
   }
   entry(id) { const e = this.entries.get(id); requireValue(e, 'controller_not_found'); return e; }
   status(id) {
     const e = this.entry(id); const sample = e.engine?.snapshot();
     if (sample) sample.busy = sample.busy || Boolean(e.job) || e.router?.activeInput !== null;
-    return { controllerId: id, bootId: this.bootId, commissioned: this.state.commissioned[id] === hash(e.profile),
+    const status = { controllerId: id, bootId: this.bootId, commissioned: this.state.commissioned[id] === hash(e.profile),
       actuationEnabled: e.enabled && !this.storageFault && !this.state.maintenance && !this.changing && !this.stopped,
       held: this.state.maintenance ? 'maintenance' : e.held, inputStates: { ...e.inputStates },
       state: sample ?? { phase: 'not-commissioned', door: 'unknown', bolt: 'unknown', busy: false, fault: null },
       revision: this.state.revision };
+    status.health = controllerHealth(status); return status;
   }
   inventory() { return inventory(this.configuration).map(row => ({ ...row, status: this.status(row.id) })); }
   routing(id) { const e = this.entry(id); return { ...routingInventory(e.profile), runtimeEnabled: this.status(id).actuationEnabled }; }
@@ -233,6 +256,7 @@ export class CoordinatorRuntime {
     requireValue(Number.isFinite(body.issuedAt) && Math.abs(Date.now() - body.issuedAt) <= 15000, 'command_request_expired');
     requireValue(['open', 'close', 'lock', 'unlock', ...(source === 'automatic' ? ['observed-close'] : [])].includes(body.command), 'command_invalid');
     requireValue(!this.stopped && !this.storageFault && !this.changing && !this.state.maintenance && e.enabled && e.engine.initialized && !e.engine.state.fault, 'controller_held');
+    requireValue(e.engine.acceptsFreshCommand(body.command), 'controller_observing_movement');
     requireValue(!e.job && !e.engine.busy && e.router.activeInput === null, 'controller_busy');
     e.job = true;
     try {
@@ -242,7 +266,7 @@ export class CoordinatorRuntime {
       this.state.requests.push(record); await this.save();
       requireValue(!this.stopped && !this.state.maintenance, 'controller_held');
       const operation = ['open', 'close'].includes(body.command) ? e.router.builtin(source === 'virtual-keypad' ? source : 'homekit', body.command) : e.engine.execute(body.command);
-      e.job = Promise.resolve(operation).then(result => { record.status = e.engine.state.fault || result?.accepted === false ? 'held' : 'complete'; this.event(id, record.status, body.command); return result; }, () => { record.status = 'held'; this.event(id, 'command-held'); })
+      e.job = Promise.resolve(operation).then(result => { record.status = e.engine.state.reconciling ? 'unknown' : e.engine.state.fault || result?.accepted === false ? 'held' : 'complete'; this.event(id, record.status, body.command); return result; }, () => { record.status = 'held'; this.event(id, 'command-held'); })
         .finally(async () => { try { await this.save(); } finally { e.job = null; this.publish(id, e.engine.snapshot()); } }).catch(() => { e.enabled = false; e.held = 'private_storage_write_failed'; });
       return { accepted: true, duplicate: false, requestId: body.requestId, status: 'pending' };
     } catch (error) { e.job = null; throw error; }
@@ -340,6 +364,6 @@ export class CoordinatorRuntime {
   async stop() {
     this.stopped = true; this.tickets.clear();
     for (const e of this.entries.values()) { clearTimeout(e.timer); for (const l of e.listeners) l.stop(); e.engine?.stop(); }
-    await Promise.allSettled([...this.entries.values()].flatMap(e => [e.job, e.router?.operation, e.engine?.observation]).filter(x => x && x !== true)); await this.pendingWrites;
+    await Promise.allSettled([...this.entries.values()].flatMap(e => [e.initializing, e.job, e.router?.operation, e.engine?.observation]).filter(x => x && x !== true)); await this.pendingWrites;
   }
 }

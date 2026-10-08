@@ -23,6 +23,15 @@ test('durable operation intent survives a new journal instance', async t => {
   assert.deepEqual(await first.read(), { inProgress: false, fault: true });
 });
 
+test('fixed fault reason and timestamp survive restart; arbitrary reason strings never enter the journal', async t => {
+  const f = await fixture(t); const journal = new StateJournal(f.directory, 'garage');
+  const record = { inProgress: false, fault: true, reason: 'bolt_write_ambiguous', at: '2026-10-08T18:00:00.000Z' };
+  await journal.write(record); assert.deepEqual(await new StateJournal(f.directory, 'garage').read(), record);
+  for (const bad of [{ ...record, reason: 'PRIVATE_SECRET' }, { ...record, at: 'PRIVATE_DATE' },
+    { ...record, extra: 'PRIVATE_DATA' }, { ...record, fault: false }]) await assert.rejects(journal.write(bad), /journal_invalid/);
+  assert.deepEqual(await journal.read(), record);
+});
+
 test('journal cannot follow a symlink or replace corrupt/shared-permission state silently', async t => {
   const f = await fixture(t); const file = path.join(f.root, 'garage.state.json');
   const journal = new StateJournal(f.directory, 'garage');

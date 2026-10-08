@@ -25,7 +25,8 @@ window.ConfiguratorController = ({ root, api, readOnly }) => {
     const row = profile(), values = row.values, fields = data.fields;
     const state = row.status.state;
     root.innerHTML = `<label class="gp-field">Garage<select data-controller-select>${data.controllers.map(c => `<option value="${esc(c.id)}" ${c.id === selected ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>
-      <p class="gp-note">${row.status.actuationEnabled ? 'Enabled' : 'Held: ' + esc(row.status.held || 'unavailable')} · Door: ${esc(state.door)} · Bolt: ${esc(state.bolt)}${state.busy ? ' · Busy' : ''}. Status at last reload.</p>
+      <p class="gp-note">${esc(row.status.health?.title || (row.status.actuationEnabled ? 'Enabled' : 'Held: ' + (row.status.held || 'unavailable')))} · Door: ${esc(state.door)} · Bolt: ${esc(state.bolt)}${state.busy ? ' · Busy' : ''}. Status at last reload.</p>
+      ${row.status.health?.detail ? `<p class="gp-note" role="status">${esc(row.status.health.detail)}${row.status.health.code ? ' Reason: '+esc(row.status.health.code)+'.' : ''}</p>` : ''}
       <p class="gp-sub">All times are in seconds. Changes apply to the next operation without restarting Homebridge. Save when controllers are idle.</p>
       <p class="gp-sub">Opening feedback: ${esc(row.feedback.opening)} · Closing feedback: ${esc(row.feedback.closing)} · Bolt feedback: ${esc(row.feedback.bolt)}. Travel times are estimates when timed feedback is selected.</p>
       <p data-controller-message role="status" aria-live="polite"></p>

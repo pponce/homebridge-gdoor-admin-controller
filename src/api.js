@@ -12,6 +12,15 @@ export function createManagementServer({ identity, configuration, diagnostics, r
   const envelope = { apiVersion: 1, instanceId: identity.instanceId };
   const controllers = () => runtime ? runtime.inventory() : inventory(configuration);
   const server = http.createServer({ maxHeaderSize: 8192, requestTimeout: 5000, headersTimeout: 5000 }, async (request, response) => {
+    // Old administration clients validate an exact v1 shape. Extra explanations
+    // are opt-in, so upgrading this plugin does not require upgrading a client.
+    const statusView = value => {
+      if (request.headers['x-coordinator-status'] === 'detailed' || !value?.state) return value;
+      const { health, state, ...status } = value;
+      const { faultAt, reconciling, restartCloseAvailable, ...legacyState } = state;
+      return { ...status, state: legacyState };
+    };
+    const controllerRows = () => controllers().map(row => ({ ...row, status: statusView(row.status) }));
     function send(status, value) {
       response.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
       response.end(JSON.stringify(value));
@@ -57,7 +66,7 @@ export function createManagementServer({ identity, configuration, diagnostics, r
           if (request.url === '/v1/maintenance') return send(200, { ...envelope, maintenance: runtime.state.maintenance });
           if (request.url === '/v1/guard') return send(200, { ...envelope, ready: runtime.guard() });
           const state = /^\/v1\/controllers\/([a-z][a-z0-9-]{0,47})\/state$/.exec(request.url);
-          if (state) return send(200, { ...envelope, status: runtime.status(state[1]) });
+          if (state) return send(200, { ...envelope, status: statusView(runtime.status(state[1])) });
         }
         if (request.method === 'POST' && !request.url.endsWith('/probe')) {
           requireValue(request.headers['content-type'] === 'application/json', 'invalid_request');
@@ -80,9 +89,9 @@ export function createManagementServer({ identity, configuration, diagnostics, r
           const command = /^\/v1\/controllers\/([a-z][a-z0-9-]{0,47})\/commands$/.exec(request.url);
           if (command) { exact(['command','requestId','issuedAt','bootId']); return send(202, { ...envelope, operation: await runtime.submit(command[1], body) }); }
           const commission = /^\/v1\/controllers\/([a-z][a-z0-9-]{0,47})\/commission$/.exec(request.url);
-          if (commission) { exact(['revision','previousControllerStopped','physicalSetupReviewed','recover']); return send(200, { ...envelope, status: await runtime.commission(commission[1], body) }); }
+          if (commission) { exact(['revision','previousControllerStopped','physicalSetupReviewed','recover']); return send(200, { ...envelope, status: statusView(await runtime.commission(commission[1], body)) }); }
           const disable = /^\/v1\/controllers\/([a-z][a-z0-9-]{0,47})\/disable$/.exec(request.url);
-          if (disable) { exact(['revision','bootId']); return send(200, { ...envelope, status: await runtime.disable(disable[1], body) }); }
+          if (disable) { exact(['revision','bootId']); return send(200, { ...envelope, status: statusView(await runtime.disable(disable[1], body)) }); }
           const maintenance = /^\/v1\/maintenance\/(preflight|pause|verify|resume|complete)$/.exec(request.url);
           if (maintenance) { exact(['transactionId','physicalCheck','gateway']); requireValue(typeof body.physicalCheck === 'boolean', 'invalid_request'); return send(200, { ...envelope, acknowledged: await runtime.maintenance(maintenance[1], body.transactionId, body) }); }
           if (request.url === '/v1/maintenance/prepare') { exact(['gateway','confirmedClosed']); return send(200, { ...envelope, result: await runtime.prepareMaintenance(body.gateway, body.confirmedClosed) }); }
@@ -110,12 +119,12 @@ export function createManagementServer({ identity, configuration, diagnostics, r
       if (request.method !== 'GET') return send(405, { error: 'read_only_milestone' });
       if (request.url === '/v1/identity') return send(200, { ...envelope, pluginVersion: PLUGIN_VERSION,
         mode: runtime ? 'managed' : diagnostics ? 'observation' : 'development', capabilities: { ...CAPABILITIES, diagnostics: Boolean(diagnostics), ...(runtime ? { settingsWrite: true, motion: true, maintenance: true, keypad: true } : {}) } });
-      if (request.url === '/v1/controllers') return send(200, { ...envelope, controllers: controllers() });
+      if (request.url === '/v1/controllers') return send(200, { ...envelope, controllers: controllerRows() });
       const routing = /^\/v1\/controllers\/([a-z][a-z0-9-]{0,47})\/routing$/.exec(request.url ?? '');
       const routed = routing && (runtime?.configuration ?? configuration).controllers.find(item => item.id === routing[1]);
       if (routed) return send(200, { ...envelope, routing: runtime ? runtime.routing(routed.id) : routingInventory(routed) });
       const match = /^\/v1\/controllers\/([a-z][a-z0-9-]{0,47})$/.exec(request.url ?? '');
-      const controller = match && controllers().find(item => item.id === match[1]);
+      const controller = match && controllerRows().find(item => item.id === match[1]);
       if (controller) return send(200, { ...envelope, controller });
       return send(404, { error: 'not_found' });
     } catch (error) { return error instanceof Fault || error instanceof ConfigurationError ? send(error.message === 'controller_not_found' ? 404 : 409, { error: error.message }) : send(500, { error: 'internal_error' }); }

@@ -64,7 +64,7 @@ export class InputRouter {
   }
   context(inputId) {
     const profile = this.profiles.get(inputId); const state = this.engine.snapshot();
-    const healthy = !this.inhibited?.() && this.engine.initialized && !state.fault && !this.engine.stopped;
+    const healthy = !this.inhibited?.() && this.engine.initialized && !state.fault && !state.reconciling && !this.engine.stopped;
     const idle = healthy && !state.busy && this.activeInput === null && (['open', 'closed'].includes(state.phase) || state.phase === 'stopped-estimated' && this.engine.partialOwner === inputId);
     const interrupt = healthy && state.busy && this.activeInput === inputId && profile?.busyBehavior === 'interrupt' &&
       this.engine.interruptionAllowed === true && typeof this.engine.requestInterruption === 'function';
