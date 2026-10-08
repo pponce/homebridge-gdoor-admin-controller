@@ -3,6 +3,8 @@
 ## Optional product boundary
 The integrated web interface must be optional and disabled by default. Enabling it will require an explicit owner choice after its setup and runtime are ready. No listener is connected to Homebridge startup in this milestone. The validated main-branch 0.4.23 UI release does not include this development work.
 
+The Homebridge deCONZ alarm-user/PIN synchronization feature remains required. It supplies the existing alarm tile's Away/Home/Night/Disarm credential, independently of HTTP Webhooks. See [web-admin-alarm-pin.md](web-admin-alarm-pin.md) for the clarified requirement, upstream API findings and remaining validation. This adapter is not yet implemented in the Node runtime.
+
 ## Implemented foundations
 - Named Admin/Regular accounts, scrypt password verification, current-password rules, last-admin protection, session expiry, revision checks and session invalidation.
 - HTTPS-only server factory with Host/Origin/CSRF checks, private cookies, bounded request bodies and sanitized errors. Unsupported domain operations fail explicitly.
@@ -48,6 +50,7 @@ See standalone-preservation.md. The original Python controller/web interface rem
 - Added an explicitly started read-only event collector, bounded event projection and on-demand ten-minute debug captures. Only an open event stream means connected; reconnections record gaps rather than implying replay. Shutdown waits for discovery and queued writes. Raw codes/frames are not retained.
 - Virtual keypad authorization uses one scoped deCONZ request, exact result classification, and the plugin’s existing coordinator begin/after API. Unknown outcomes hold with no automatic retry. Maintenance adapts the existing runtime, with no second controller or HTTP Webhooks dependency.
 - Fourteen new history/keypad/event tests pass locally. Three collector tests require the view layer’s installed dependency and will run in CI. Optional startup wiring, full save/recovery browser flows and owner installation remain pending. SQLite loads only for the optional feature and requires Node 22.13+ or 24+; setup must check compatibility.
+- Subsequent validation: all expanded focused tests and package checks passed on Node 22/24 in [CI run 37723981636](https://github.com/pponce/homebridge-gdoor-admin-controller/actions/runs/37723981636), implementation ee953191df7a505851e52b3d9dab994b9eecfeaf. Desktop Chromium and mobile WebKit Admin/Regular read flows also passed with the original frontend restored. These remain synthetic checks, not a deployed web-server or hardware acceptance test.
 - Reference verification: extracted admin main is still 45e26c1d586bdcfa22b3b3b486485ba78ee4db6e; original standalone main is still a47fa4db3a12e5239d447ee4c5213c59eeb81542. These are current source baselines, not intentionally outdated releases.
 - The owner’s removal instruction concerns HTTP Webhooks for the controller. The Users/Settings Homebridge credential workflow is a separate homebridge-deconz alarm feature. A provisional removal that conflated them was reverted; all twelve UI assets still match the original hashes. Evaluate its supported replacement separately: the old helper edits another plugin’s private cache and restarts its service, which must not be copied into this plugin under the no-hacks constraint.
 
