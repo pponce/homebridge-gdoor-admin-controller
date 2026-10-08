@@ -27,13 +27,14 @@ const tracked = new Set(execFileSync('git', ['ls-files', '-z'], { encoding: 'utf
 const packed = new Set();
 for (const file of pack.files) {
   assert.ok(tracked.has(file.path), 'Untracked package file: ' + file.path);
-  assert.ok(/^(?:package\.json|README\.md|config\.schema\.json|src\/[\w-]+\.js|homebridge-ui\/(?:server\.js|public\/[\w-]+\.(?:js|css|html))|web-admin\/public\/[\w-]+\.(?:js|css|html|svg|png|webmanifest)|docs\/web-admin-assets\.json|docs\/[\w-]+\.md|examples\/[\w-]+\.json)$/.test(file.path), 'Unexpected package file: ' + file.path);
+  assert.ok(/^(?:package\.json|README\.md|config\.schema\.json|src\/[\w-]+\.js|src\/web-admin-homebridge-sources\.json|homebridge-ui\/(?:server\.js|public\/[\w-]+\.(?:js|css|html))|web-admin\/public\/[\w-]+\.(?:js|css|html|svg|png|webmanifest)|docs\/web-admin-assets\.json|docs\/[\w-]+\.md|examples\/[\w-]+\.json)$/.test(file.path), 'Unexpected package file: ' + file.path);
   assert.equal(packed.has(file.path), false, 'Duplicate package file');
   packed.add(file.path);
 }
 for (const file of ['package.json', 'README.md', 'config.schema.json', 'src/index.js', 'src/runtime.js', 'homebridge-ui/server.js', 'homebridge-ui/public/index.html', 'homebridge-ui/public/app.js', 'homebridge-ui/public/editor.js', 'homebridge-ui/public/style.css', 'docs/owner-test.md', 'src/web-admin-auth.js', 'src/web-admin-store.js', 'web-admin/public/index.html', 'docs/web-admin-assets.json']) {
   assert.ok(packed.has(file), 'Required package file missing: ' + file);
 }
+assert.ok(packed.has('src/web-admin-homebridge-sources.json'), 'Reviewed Homebridge source fingerprints missing');
 const directory = await realpath(path.dirname(manifestPath));
 const archivePath = path.join(directory, pack.filename);
 assert.equal(await realpath(archivePath), archivePath);

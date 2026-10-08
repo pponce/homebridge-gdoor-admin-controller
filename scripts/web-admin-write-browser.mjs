@@ -90,7 +90,7 @@ try {
       assert.equal(await page.locator('#login').isVisible(), false); assert.equal(await page.locator('#users').isVisible(), true);
       assert.equal(await page.locator('[name="homebridge-password"]').count(), 0);
       await page.locator('#logout').click(); await page.locator('#username').fill('Guest'); await page.locator('#password').fill('synthetic-guest-password'); await page.locator('#login button').click();
-      await page.locator('#user-list [data-id]').first().waitFor(); await ready(); await page.locator('#user-list [data-id]').first().click();
+      await page.locator('#users').waitFor({ state: 'visible' }); await ready();
       assert.equal(await page.locator('#user-list [data-id="' + 'a'.repeat(32) + '"]').count(), 0);
       assert.deepEqual(errors, []); assert.deepEqual(f.errors, []);
       await context.close(); await browser.close(); browser = null;

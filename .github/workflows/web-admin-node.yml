@@ -20,7 +20,11 @@ jobs:
       - name: Install runtime dependencies
         run: npm install --ignore-scripts --no-audit --no-fund
       - name: Controller and web admin regression tests
-        run: npm test
+        id: tests
+        run: node scripts/test-ci.mjs
+      - name: "Unit result: ${{ steps.tests.outputs.result || steps.tests.outcome }}"
+        if: always()
+        run: echo "Unit diagnostics are recorded in this step name."
       - name: Verify development package assets
         run: |
           npm pack --ignore-scripts --json --pack-destination "$RUNNER_TEMP" > "$RUNNER_TEMP/admin-pack.json"
