@@ -1,0 +1,104 @@
+name: Web admin Node port
+on:
+  push:
+    branches: [web-admin-node-port]
+    paths: ['src/web-admin-*.js', 'src/private-store.js', 'test/web-admin*.test.js', 'test/fixtures/web-admin*.json', 'scripts/web-admin-*.mjs', 'scripts/web-admin-*.py', 'web-admin/public/**', 'docs/web-admin-assets.json', 'package.json', 'scripts/check-package.mjs', '.github/workflows/web-admin-node.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  foundation:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: ['22', '24']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Install runtime dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Controller and web admin regression tests
+        id: tests
+        run: node scripts/test-ci.mjs
+      - name: "Unit result: ${{ steps.tests.outputs.result || steps.tests.outcome }}"
+        if: always()
+        run: echo "Unit diagnostics are recorded in this step name."
+      - name: Verify development package assets
+        run: |
+          npm pack --ignore-scripts --json --pack-destination "$RUNNER_TEMP" > "$RUNNER_TEMP/admin-pack.json"
+          node scripts/check-package.mjs "$RUNNER_TEMP/admin-pack.json"
+
+  homebridge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      matrix:
+        homebridge: ['2.0.0', '2.4.0']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install Homebridge for isolated smoke test
+        run: npm install --prefix "$RUNNER_TEMP/coordinator-hb" --no-save --package-lock=false --ignore-scripts --no-audit --no-fund homebridge@${{ matrix.homebridge }}
+      - name: Actual Homebridge child bridge with synthetic hardware
+        id: smoke
+        env:
+          HOMEBRIDGE_BIN: ${{ runner.temp }}/coordinator-hb/node_modules/homebridge/bin/homebridge.js
+        run: node scripts/homebridge-smoke.mjs
+      - name: "Homebridge result: ${{ steps.smoke.outputs.result || steps.smoke.outcome }}"
+        if: always()
+        run: echo "Homebridge diagnostics are recorded in this step name."
+
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble
+      options: --init --ipc=host
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install runtime dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Actual custom UI server IPC and management integration
+        run: node scripts/config-ui-server-smoke.mjs
+      - name: Install browser tool
+        run: npm install --prefix "$RUNNER_TEMP/admin-browser" --no-save --package-lock=false --ignore-scripts playwright@1.58.2
+      - name: Original admin read flows on desktop and mobile
+        id: browser
+        env:
+          PLAYWRIGHT_MODULE: ${{ runner.temp }}/admin-browser/node_modules/playwright
+          PREVIEW_OUTPUT: ${{ runner.temp }}/admin-browser/screenshots
+        run: node scripts/web-admin-browser.mjs
+      - name: "Browser result: ${{ steps.browser.outputs.result || steps.browser.outcome }}"
+        if: always()
+        run: echo "Browser diagnostics are recorded in this step name."
+      - name: Production setup, saves and interruption recovery
+        id: writes
+        env:
+          PLAYWRIGHT_MODULE: ${{ runner.temp }}/admin-browser/node_modules/playwright
+          PREVIEW_OUTPUT: ${{ runner.temp }}/admin-browser/screenshots
+        run: node scripts/web-admin-write-browser.mjs
+      - name: "Write result: ${{ steps.writes.outputs.result || steps.writes.outcome }}"
+        if: always()
+        run: echo "Write-flow diagnostics are recorded in this step name."
+      - name: Existing Homebridge configuration flows
+        id: configuration
+        env:
+          PLAYWRIGHT_MODULE: ${{ runner.temp }}/admin-browser/node_modules/playwright
+          PREVIEW_OUTPUT: ${{ runner.temp }}/admin-browser/screenshots
+        run: node scripts/config-ui-browser.mjs
+      - name: "Configuration result: ${{ steps.configuration.outputs.result || steps.configuration.outcome }}"
+        if: always()
+        run: echo "Configuration diagnostics are recorded in this step name."
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: web-admin-read-pages
+          path: ${{ runner.temp }}/admin-browser/screenshots
+

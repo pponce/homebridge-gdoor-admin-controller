@@ -1,0 +1,57 @@
+name: Publish GitHub release
+on:
+  workflow_run:
+    workflows: [Coordinator checks]
+    types: [completed]
+    branches: [main]
+permissions:
+  contents: write
+concurrency:
+  group: github-release
+  cancel-in-progress: false
+jobs:
+  release:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Publish the tested version and demo
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TESTED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$RELEASE_TESTED_SHA"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)" = "$RELEASE_TESTED_SHA"
+          release_version="$(node -p 'JSON.parse(require("fs").readFileSync("package.json")).version')"
+          [[ "$release_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          release_tag="v$release_version"
+          if gh release view "$release_tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'This version already has a GitHub release; leaving it unchanged.'
+            exit 0
+          fi
+          if git rev-parse --verify "refs/tags/$release_tag" >/dev/null 2>&1; then
+            test "$(git rev-parse "$release_tag^{commit}")" = "$RELEASE_TESTED_SHA"
+          fi
+          node scripts/build-demo.mjs --check
+          mkdir -p "$RUNNER_TEMP/release"
+          node scripts/prepare-release.mjs "$RUNNER_TEMP/release/notes.md"
+          npm pack --ignore-scripts --json --pack-destination "$RUNNER_TEMP/release" > "$RUNNER_TEMP/release/pack.json"
+          node scripts/check-package.mjs "$RUNNER_TEMP/release/pack.json"
+          printf '%s\n' "$RELEASE_TESTED_SHA" > "$RUNNER_TEMP/release/source-commit.txt"
+          release_demo="$RUNNER_TEMP/release/homebridge-gdoor-admin-controller-demo-$release_version.zip"
+          (cd web/demo && zip -q "$release_demo" ./*)
+          gh release create "$release_tag" \
+            "$RUNNER_TEMP/release/homebridge-gdoor-admin-controller-$release_version.tgz" \
+            "$release_demo" "$RUNNER_TEMP/release/source-commit.txt" \
+            --repo "$GITHUB_REPOSITORY" --target "$RELEASE_TESTED_SHA" \
+            --title "$release_tag" --notes-file "$RUNNER_TEMP/release/notes.md" --latest

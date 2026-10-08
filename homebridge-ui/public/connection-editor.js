@@ -1,0 +1,158 @@
+import { connectionTypes, connectionOrigin, validateConnections, connectionUsers, updateConnection } from './connections.js';
+const el=(tag,text,cls)=>{const node=document.createElement(tag);if(text!==undefined)node.textContent=text;if(cls)node.className=cls;return node;};
+const button=(text,fn,cls='secondary')=>{const node=el('button',text,cls);node.type='button';node.onclick=fn;return node;};
+const id=()=> 'connection-'+Array.from(crypto.getRandomValues(new Uint8Array(5)),n=>n.toString(16).padStart(2,'0')).join('');
+export class ConnectionEditor {
+  constructor(root,{configuration,credentials,request,run,changed,refresh,message,keyCreated,keyRetired}){
+    Object.assign(this,{root,configuration,credentials,request,run,changed,refresh,message,keyCreated,keyRetired});this.dirty=false;this.editing=null;
+    root.replaceChildren(el('h2','Device connections'),el('p','Configure each gateway, controller or accessory bridge here. When you add a garage door, choose these saved connections under Devices and Controls.','subtle'));
+    const purposes=el('ul',undefined,'connection-purposes');
+    for(const text of ['deCONZ — connects your bolt, optional opener relay, buttons and keypads to their gateway.','Tailwind — connects the opener and its door-state feedback. Each garage selects its door on this controller.','Local Homebridge accessories — choose the bridge directly under Devices or Controls. Connections for this Homebridge instance are managed automatically and do not appear in this list.'])purposes.append(el('li',text));root.append(purposes);
+    this.fields=el('fieldset');root.append(this.fields);this.list=el('div');this.list.className='connection-list';this.fields.append(this.list);
+    this.add=button('Add device connection',()=>this.openForm(),'primary add-connection');this.add.setAttribute('aria-label','Add device connection');this.add.setAttribute('aria-controls','device-connection-form');this.fields.append(this.add);
+    this.title=el('h3','Add a device connection');this.fields.append(this.title);
+    this.form=el('form');this.form.className='field-grid connection-form';this.form.id='device-connection-form';this.fields.append(this.form);
+    const field=(name,label,tag='input')=>{const wrap=el('label',label),node=el(tag);node.id='shared-'+name;node.setAttribute('aria-label',label);wrap.append(node);this.form.append(wrap);return node;};
+    this.type=field('type','Connection type','select');for(const [value,label] of Object.entries(connectionTypes))this.type.append(Object.assign(el('option',label),{value}));
+    this.source=field('source','Configured connection','select');
+    this.sourceRow=el('div',undefined,'configured-connection-row');this.source.parentElement.before(this.sourceRow);this.sourceRow.append(this.source.parentElement);
+    this.sourceRefresh=button('↻',()=>void this.run(()=>this.loadCandidates()),'secondary connection-refresh');this.sourceRefresh.title='Refresh configured connections';this.sourceRefresh.setAttribute('aria-label','Refresh configured connections');this.sourceRow.append(this.sourceRefresh);
+    this.sourceHint=el('p',undefined,'help wide');this.form.append(this.sourceHint);
+    this.candidates=[];this.source.onchange=()=>this.chooseCandidate();
+    this.name=field('name','Connection name');this.name.required=true;this.name.maxLength=64;this.name.placeholder='Garage deCONZ';
+    this.address=field('address','Device address');this.address.required=true;this.address.placeholder='http://192.0.2.20:8080';
+    this.key=field('key','Saved connection key','select');this.key.required=true;
+    this.keyName=field('new-key-name','New key name');this.keyName.pattern='[a-z][a-z0-9-]{0,47}';this.keyName.autocomplete='off';
+    this.secret=field('secret','New private key');this.secret.type='password';this.secret.autocomplete='new-password';
+    this.keyStatus=el('p',undefined,'help wide');this.form.append(this.keyStatus);
+    this.replaceKey=button('Replace key',()=>{this.key.value='__new__';this.keyName.value=id();this.dirty=true;this.describe();this.refresh();});this.form.append(this.replaceKey);
+    this.count=field('door-count','Number of Tailwind doors','select');for(const [value,label] of [['','Not specified'],['1','1 door'],['2','2 doors'],['3','3 doors']])this.count.append(Object.assign(el('option',label),{value}));
+    this.hint=el('p',undefined,'help wide');this.form.append(this.hint);
+    this.submit=el('button','Add connection','primary');this.submit.type='submit';this.cancel=button('Cancel connection edit',()=>{this.reset();this.refresh();this.add.focus();});
+    const actions=el('div',undefined,'actions wide');actions.append(this.submit,this.cancel);this.form.append(actions);
+    this.form.addEventListener('input',()=>{this.dirty=true;this.describe();this.refresh();});
+    this.form.addEventListener('change',()=>{this.dirty=true;this.describe();this.refresh();});
+    this.type.onchange=()=>{this.source.value='';this.renderCandidates();this.refreshKeys();this.describe();};this.key.onchange=()=>this.describe();
+    this.form.onsubmit=event=>{event.preventDefault();void this.run(async()=>{try{await this.commit();}catch(error){this.errorCode=error.message;throw error;}},()=>({
+      local_import_failed:'Could not use this bridge. Check that it is running and allows accessory control in insecure mode. If its settings changed, cancel and refresh configured connections.',
+      local_connection_changed:'The selected connection changed. Choose it again or enter the connection manually.',
+      duplicate_connection:'This address and saved key already have a connection. Select or edit that connection instead.',
+      invalid_connection_address:'Enter a device address such as http://192.0.2.20:8080, with no path or embedded key.',
+      invalid_connection_name:'Enter a connection name of 1–64 characters.',
+      invalid_secret_reference:'Enter a key name using lowercase letters, numbers and hyphens.',
+      tailwind_door_out_of_range:'That door count excludes a door already assigned to a garage. Change its door selection first.',
+      invalid_tailwind_door_count:'Choose a Tailwind door count from 1 to 3, or Not specified.'
+    }[this.errorCode]??'Could not save this connection. Check the coordinator connection and saved key.'));};
+    this.reset();this.renderList();void this.loadCandidates();
+  }
+  async loadCandidates(){
+    if(this.source.value){this.message('Finish or cancel the selected connection before refreshing.',true);return;}
+    this.sourceRefresh.disabled=true;
+    try{const result=await this.request('/local-connections',{});this.candidates=result.candidates;this.candidateError=false;}
+    catch{this.candidates=[];this.candidateError=true;}
+    finally{this.sourceRefresh.disabled=false;this.renderCandidates();this.describe();this.renderList();}
+  }
+  candidate(){return this.candidates.find(row=>row.id===this.source.value&&row.type===this.type.value);}
+  renderCandidates(){
+    const selected=this.source.value;
+    this.source.replaceChildren(Object.assign(el('option','Enter manually'),{value:''}));
+    for(const row of this.candidates.filter(row=>row.type===this.type.value))this.source.append(Object.assign(el('option',row.name+(row.baseUrl?' · '+row.baseUrl:'')),{value:row.id}));
+    this.source.value=[...this.source.options].some(o=>o.value===selected)?selected:'';
+  }
+  chooseCandidate(){
+    const row=this.candidate();this.dirty=true;
+    if(row){this.name.value=row.name;this.address.value=row.baseUrl;}
+    this.secret.value='';this.refreshKeys();
+    if(row?.canImportPin)this.key.value='__configured__';
+    this.describe();this.refresh();
+  }
+  refreshKeys(){
+    const selected=this.key.value;this.key.replaceChildren(Object.assign(el('option','Choose a saved key'),{value:''}));
+    for(const value of [...this.credentials()].sort())this.key.append(Object.assign(el('option',value),{value}));
+    if(this.candidate()?.canImportPin)this.key.append(Object.assign(el('option','Use configured pairing PIN'),{value:'__configured__'}));
+    this.key.append(Object.assign(el('option','Create a new key here'),{value:'__new__'}));
+    this.key.value=selected&&[...this.key.options].some(o=>o.value===selected)?selected:'__new__';
+    this.describe();
+  }
+  describe(){
+    const kind=this.type.value,candidate=this.candidate();
+    if(this.key.value==='__configured__'&&(!candidate?.canImportPin||this.address.value!==candidate.baseUrl))this.key.value='__new__';
+    const newKey=this.key.value==='__new__';
+    this.sourceRow.hidden=kind==='tailwind';this.sourceHint.hidden=kind==='tailwind';this.sourceRefresh.hidden=kind==='tailwind';
+    this.sourceHint.textContent=candidate?.detail??(this.candidateError?'Configured connections could not be loaded. Enter the connection manually or refresh.':this.candidates.some(row=>row.type===kind)?'Choose a connection from this Homebridge configuration, or enter another address manually.':'No configured connections found. Enter the connection manually.');
+    this.key.parentElement.hidden=true;this.key.required=false;this.keyName.parentElement.hidden=true;this.keyName.required=false;this.secret.parentElement.hidden=!newKey;this.secret.required=newKey;
+    this.keyStatus.textContent=this.key.value==='__configured__'?'Pairing PIN will be read privately from Homebridge.':newKey?'Enter the credential for this connection.':'Key saved';
+    this.replaceKey.hidden=newKey||this.key.value==='__configured__';
+    this.count.parentElement.hidden=kind!=='tailwind';
+    const keyLabel=kind==='tailwind'?'Tailwind local control token':kind==='deconz'?'deCONZ API key':'HomeKit pairing PIN';this.secret.parentElement.firstChild.textContent=keyLabel;this.secret.setAttribute('aria-label',keyLabel);
+    this.hint.textContent=kind==='homebridge'?'Use the accessory port of the bridge or child bridge exposing the device, and save its HomeKit pairing PIN as the key. This is separate from the Homebridge web UI and web admin interface. The source bridge must allow accessory control in insecure mode.':kind==='tailwind'?'Use the Tailwind local address and local control token. Door count is the number configured in the Tailwind app; leave Not specified until confirmed. Select the individual door in its garage settings.':'Use the deCONZ gateway address, including its port, and its API key. The connection can serve your bolt, motor relay and physical inputs.';
+    if(this.key.value==='__configured__')this.hint.textContent='The configured pairing PIN will be stored privately when you add this connection. The bridge must be running and allow accessory control in insecure mode.';
+    if(newKey)this.hint.textContent+=' The new key is stored privately when you add or update this connection.';
+    this.cancel.hidden=!this.open;
+  }
+  showForm(open){
+    this.open=open;this.title.hidden=!open;this.form.hidden=!open;this.add.hidden=open;this.add.setAttribute('aria-expanded',String(open));
+  }
+  openForm(type){
+    if(!this.dirty&&!this.editing&&type){this.type.value=type;this.source.value='';this.renderCandidates();this.refreshKeys();}
+    this.showForm(true);this.describe();this.name.focus();
+  }
+  reset(){
+    this.showForm(false);this.editing=null;this.dirty=false;this.type.disabled=false;this.form.reset();this.type.value='deconz';this.source.value='';this.renderCandidates();this.secret.value='';this.keyName.value=id();this.key.value='__new__';
+    this.title.textContent='Add a device connection';this.submit.textContent='Add connection';this.refreshKeys();this.describe();
+  }
+  edit(row){
+    if(this.dirty){this.message('Add, update or cancel the connection you are editing first.',true);return;}
+    this.editing=row.id;this.type.value=row.type;this.source.value='';this.renderCandidates();this.type.disabled=true;this.name.value=row.name;this.address.value=row.baseUrl;this.refreshKeys();this.key.value=row.credentialRef;this.keyName.value=id();this.secret.value='';this.count.value=row.doorCount??'';
+    this.title.textContent='Edit connection';this.submit.textContent='Update connection';this.showForm(true);this.describe();this.name.focus();
+  }
+  focus(type){
+    this.openForm(type);
+    this.root.scrollIntoView({behavior:'smooth',block:'start'});
+  }
+  async commit(){
+    const wasEditing=!!this.editing,configuration=this.configuration(),isNewKey=this.key.value==='__new__',useConfigured=this.key.value==='__configured__',candidate=this.candidate();
+    if(useConfigured&&(!candidate?.canImportPin||this.address.value!==candidate.baseUrl))throw Error('local_connection_changed');
+    const row={id:this.editing??id(),type:this.type.value,name:this.name.value,baseUrl:connectionOrigin(this.address.value,{allowBare:true}),credentialRef:useConfigured?candidate.credentialRef:isNewKey?this.keyName.value:this.key.value,...(this.type.value==='tailwind'?{doorCount:this.count.value===''?null:Number(this.count.value)}:{})};
+    const previousKey=configuration.connections.find(row=>row.id===this.editing)?.credentialRef;
+    const checked=validateConnections([row])[0];
+    // Validate duplicates, all affected profiles and door count before storing a key.
+    const draft=structuredClone(configuration);
+    if(this.editing)updateConnection(draft,this.editing,checked);else draft.connections=validateConnections([...draft.connections,checked]);
+    if(useConfigured){
+      let response;try{response=await this.request('/local-connections/import',{id:candidate.id});}catch{throw Error('local_import_failed');}
+      if(!response.saved||response.reference!==checked.credentialRef)throw Error('local_import_failed');
+      this.keyCreated(response.reference);
+    }else if(isNewKey){
+      const response=await this.request('/credentials',{reference:checked.credentialRef,secret:this.secret.value,mode:'create'});this.secret.value='';
+      if(!response.saved){this.message('That key name is already saved. Select it from Saved connection key or choose a different new name.',true);return;}
+      this.keyCreated(checked.credentialRef);
+    }else if(!this.credentials().includes(checked.credentialRef)){this.message('Choose an existing saved key, or create one here.',true);return;}
+    configuration.connections=draft.connections;configuration.controllers=draft.controllers;
+    if(previousKey&&previousKey!==checked.credentialRef)this.keyRetired?.(previousKey);
+    this.reset();this.changed(configuration);this.renderList();
+    this.message(this.isLocalBridge(checked)?'Local Homebridge bridge ready in your draft. Choose its accessories under Devices or Controls, then save your configuration.':wasEditing?'Connection updated in your draft. Review and save to apply it.':'Connection added to your configuration. Review and save to apply it.');
+  }
+  isLocalBridge(row){
+    if(row.type!=='homebridge')return false;
+    // Presentation only: local accessory endpoints stay behind the bridge picker,
+    // even when no device uses them or local configuration discovery is offline.
+    let host;try{host=new URL(row.baseUrl).hostname;}catch{return false;}
+    return ['127.0.0.1','localhost','[::1]'].includes(host)||this.candidates.some(candidate=>candidate.type==='homebridge'&&candidate.baseUrl===row.baseUrl);
+  }
+  renderList(){
+    this.list.replaceChildren();const configuration=this.configuration();
+    const visible=(configuration.connections??[]).filter(row=>!this.isLocalBridge(row));
+    for(const row of visible){
+      const card=el('article',undefined,'shared-connection');card.dataset.connection=row.id;card.setAttribute('aria-label',row.name+' connection');
+      const text=el('div',undefined,'connection-details');text.append(el('span',connectionTypes[row.type],'connection-kind'),el('h3',row.name),el('p',row.baseUrl,'help'),el('p','Key saved · ••••••••','help'));
+      if(row.type==='tailwind')text.append(el('p',row.doorCount==null?'Door count not specified':row.doorCount+' configured door'+(row.doorCount===1?'':'s'),'help'));
+      const users=connectionUsers(configuration,row);text.append(el('p',users.length?'Used by '+users.map(p=>p.name).join(', '):'Not assigned to a garage door.','help'));
+      const actions=el('div',undefined,'actions connection-actions');const edit=button('Edit',()=>this.edit(row));edit.setAttribute('aria-label','Edit connection '+row.name);
+      const remove=button('Remove',()=>{if(this.dirty){this.message('Finish or cancel the connection form first.',true);return;}configuration.connections=configuration.connections.filter(item=>item.id!==row.id);this.keyRetired?.(row.credentialRef);if(this.editing===row.id)this.reset();this.changed(configuration);this.renderList();this.message('Connection removed from your draft. Save to remove it and its unused credential.');},'danger');remove.setAttribute('aria-label','Remove connection '+row.name);remove.disabled=users.length>0;
+      if(users.length)remove.title='Change the garage assignments before removing this connection.';
+      actions.append(edit,remove);card.append(text,actions);this.list.append(card);
+    }
+    if(!visible.length)this.list.append(el('p','No device connections yet. Choose Add device connection to get started.','help'));
+  }
+}

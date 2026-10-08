@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Garage Door Admin Controller</title>
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+<main id="coordinator-ui">
+  <header class="hero">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 48 48" aria-hidden="true"><path d="M7 40V18L24 7l17 11v22M15 40V22h18v18M15 28h18M15 34h18M5 40h38"/></svg>
+      <div><p class="eyebrow">HOMEBRIDGE</p><h1>Garage Door Admin Controller</h1><p class="subtle">Set up your devices, controls and garage behavior.</p></div>
+    </div>
+    <span id="connection" class="badge">Connecting</span>
+  </header>
+  <div id="notice" role="status" aria-live="polite"></div>
+  <fieldset id="workspace">
+    <nav class="page-tabs" aria-label="Settings pages">
+      <button id="general-tab" type="button" aria-current="page">General</button>
+      <button id="garages-tab" type="button">Garage doors</button>
+      <button id="debug-tab" type="button">Debug</button>
+    </nav>
+    <div id="general-page">
+      <section class="panel">
+        <div class="section-heading"><div><h2>Garage doors</h2><p class="subtle">View garage status. Configure each garage door and its controls under Garage doors.</p></div><button id="configure-garages" type="button" class="secondary">Configure garage doors</button></div>
+        <p id="no-garages" class="subtle small">No garage doors configured yet. Add your device connections, then add a garage door.</p>
+        <div id="garage-overview"></div>
+      </section>
+    <section class="panel" id="shared-connections" aria-label="Device connections"></section>
+    <details class="panel connection-panel" id="advanced-keys"><summary>Advanced credential maintenance</summary>
+      <div class="section-heading"><div><h2>Connection keys</h2><p class="subtle">Manage the private keys used by your device connections.</p></div><span class="badge neutral">Private</span></div>
+      <h3 id="credential-form-title">Create a new connection key</h3>
+      <form id="credential-form" class="field-grid">
+        <label>Key name<input id="credential-reference" required pattern="[a-z][a-z0-9-]{0,47}" placeholder="garage-tailwind" autocomplete="off"><span class="help">A short name such as garage-tailwind or garage-deconz.</span></label>
+        <label>API key, local control token or pairing PIN<input id="credential-secret" type="password" required autocomplete="new-password"><span class="help">Stored privately in Homebridge. Saved keys are never displayed.</span></label>
+        <div class="wide actions"><button id="credential-save" type="submit" class="primary">Create connection key</button><button id="credential-cancel" type="button" class="secondary" hidden>Cancel replacement</button></div>
+      </form>
+      <h3>Saved connection keys</h3>
+      <div id="saved-keys" aria-label="Saved connection keys"></div>
+      <p id="no-keys" class="subtle small">No connection keys saved yet.</p>
+      <p class="help">Replacing a key pauses configured controls until you check and enable them again.</p>
+    </details>
+      <section id="admin-setup" class="panel">
+        <h2>Web admin interface</h2>
+        <p class="subtle">Loading optional web interface settings…</p>
+      </section>
+    </div>
+    <div id="garages-page" hidden>
+    <fieldset id="editor-fields"><div id="editor"></div></fieldset>
+    </div>
+    <div id="debug-page" hidden></div>
+    <div id="review-slot"><section id="review" class="panel review-panel" hidden></section></div>
+    <div class="savebar">
+      <div><strong id="save-state" role="status" data-state="loading">Loading settings</strong><p id="save-hint">Please wait.</p></div>
+      <div class="actions">
+        <button id="reload" class="secondary" type="button">Discard changes</button>
+        <button id="review-button" class="primary" type="button">Review changes</button>
+        <button id="retry-save" class="primary" type="button" hidden>Retry Homebridge save</button>
+      </div>
+    </div>
+  </fieldset>
+</main>
+</body>
+</html>
