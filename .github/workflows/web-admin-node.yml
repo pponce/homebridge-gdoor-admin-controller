@@ -50,6 +50,24 @@ jobs:
       - name: "Browser result: ${{ steps.browser.outputs.result || steps.browser.outcome }}"
         if: always()
         run: echo "Browser diagnostics are recorded in this step name."
+      - name: Production setup, saves and interruption recovery
+        id: writes
+        env:
+          PLAYWRIGHT_MODULE: ${{ runner.temp }}/admin-browser/node_modules/playwright
+          PREVIEW_OUTPUT: ${{ runner.temp }}/admin-browser/screenshots
+        run: node scripts/web-admin-write-browser.mjs
+      - name: "Write result: ${{ steps.writes.outputs.result || steps.writes.outcome }}"
+        if: always()
+        run: echo "Write-flow diagnostics are recorded in this step name."
+      - name: Existing Homebridge configuration flows
+        id: configuration
+        env:
+          PLAYWRIGHT_MODULE: ${{ runner.temp }}/admin-browser/node_modules/playwright
+          PREVIEW_OUTPUT: ${{ runner.temp }}/admin-browser/screenshots
+        run: node scripts/config-ui-browser.mjs
+      - name: "Configuration result: ${{ steps.configuration.outputs.result || steps.configuration.outcome }}"
+        if: always()
+        run: echo "Configuration diagnostics are recorded in this step name."
       - uses: actions/upload-artifact@v4
         if: success()
         with:

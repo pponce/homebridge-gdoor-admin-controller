@@ -10,6 +10,7 @@ const assets = [
   ['/app-icon-192.png', 'app-icon-192.png', 'image/png'], ['/app-icon-512.png', 'app-icon-512.png', 'image/png'],
   ['/apple-touch-icon.png', 'apple-touch-icon.png', 'image/png'],
   ['/manifest.webmanifest', 'manifest.webmanifest', 'application/manifest+json'],
+  ['/installation-help.html', 'installation-help.html', 'text/html'],
 ];
 export async function loadWebAdminAssets() {
   return new Map(await Promise.all(assets.map(async ([route, name, type]) =>

@@ -67,7 +67,9 @@
       "source": "configurator/static/settings.js",
       "path": "web-admin/public/settings.js",
       "gitBlob": "b1fd7706a6a059f144fbccd0437316b0b08a3bd7",
-      "sha256": "ba13a68a4217eb1265c5e8e20dc783ae6bda331a28f63a604997889e81237ed6"
+      "sha256": "ba13a68a4217eb1265c5e8e20dc783ae6bda331a28f63a604997889e81237ed6",
+      "adaptedSha256": "17c10298b77621e0c35d83d04bebb8a711fa079380e198430bf2e2a08a45770a",
+      "adaptation": "Display shared device connections managed in Homebridge General; distinguish the browser address from the HTTPS backend. Preserve account and separate homebridge-deconz alarm credential controls."
     },
     {
       "source": "configurator/static/style.css",
