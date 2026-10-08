@@ -73,12 +73,12 @@ function buildEditor(configuration,position){
       if(!loaded.credentials.includes(imported.reference))loaded.credentials.push(imported.reference);
       editor.credentials=loaded.credentials;connectionKeys();connectionEditor?.refreshKeys();
       let shared=editor.configuration.connections.find(row=>row.type==='homebridge'&&row.baseUrl===fresh.baseUrl&&row.credentialRef===imported.reference);
-      if(!shared){shared={id:'connection-'+crypto.randomUUID().replaceAll('-','').slice(0,16),name:fresh.name,type:'homebridge',baseUrl:fresh.baseUrl,credentialRef:imported.reference};}
+      if(!shared){shared={id:'connection-'+Array.from(crypto.getRandomValues(new Uint8Array(8)),n=>n.toString(16).padStart(2,'0')).join(''),name:fresh.name,type:'homebridge',baseUrl:fresh.baseUrl,credentialRef:imported.reference};}
       return shared;
     },
     discoverHomebridge:body=>hb.request('/homebridge',body),discover:body=>hb.request('/deconz',body),error:message=>notice(message,true),
     saveConfiguration:()=>persist(true),renderCheckEnable:commissioning,viewChanged:refresh,getStatus:garageStatus,cardAction:garageAction,manageConnections:type=>{showPage('general');connectionEditor?.focus(type);}});
-  if(position){editor.selected=Math.min(position.selected,Math.max(0,configuration.controllers.length-1));editor.step=position.step;editor.expandedGarage=position.expandedGarage;editor.selectedInputs=new Map(position.selectedInputs??[]);editor.render();}
+  if(position){editor.selected=Math.min(position.selected,Math.max(0,configuration.controllers.length-1));editor.step=position.step;editor.expandedGarage=position.expandedGarage;editor.selectedInputs=new Map(position.selectedInputs??[]);editor.selectedDevices=new Map(position.selectedDevices??[]);editor.render();}
   connectionEditor=new ConnectionEditor($('shared-connections'),{configuration:()=>editor.configuration,credentials:()=>loaded.credentials,
     request:(path,body)=>hb.request(path,body),run:action,changed:configuration=>{changed(configuration);editor.render();},refresh:()=>{if(connectionEditor?.dirty&&save.phase==='review')save.changed(editor.configuration);refresh();},message:notice,
     keyRetired:reference=>{if(!usesKey(editor.configuration,reference)){pendingKeyDeletes.add(reference);connectionKeys();}},
@@ -127,7 +127,7 @@ async function load(keepPendingKeys=false){
   if(!hb){notice('Open this screen from the coordinator’s Settings in Homebridge.',true);return;}
   hb.hideSchemaForm?.();
   themeChoice=await hb.userCurrentLightingMode?.();applyTheme();
-  const position=editor&&{selected:editor.selected,step:editor.step,expandedGarage:editor.expandedGarage,selectedInputs:[...editor.selectedInputs]};
+  const position=editor&&{selected:editor.selected,step:editor.step,expandedGarage:editor.expandedGarage,selectedInputs:[...editor.selectedInputs],selectedDevices:[...editor.selectedDevices]};
   blocks=await hb.getPluginConfig();loaded=await hb.request('/load');
   if(!loaded.connected&&blocks[0]?.controllers)loaded.settings.configuration.controllers=blocks[0].controllers;
   loaded.settings.configuration=withConnections(loaded.settings.configuration);

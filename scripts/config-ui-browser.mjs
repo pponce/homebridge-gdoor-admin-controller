@@ -151,6 +151,7 @@ try{
      assert.equal(await p.getByLabel('During movement',{exact:true}).count(),0);
      assert.equal(await p.getByRole('heading',{name:'Additional opener devices',exact:true}).count(),0);
      await p.getByRole('button',{name:'01 Devices'}).click();
+     await p.getByRole('button',{name:'Configure device '+base.motorPaths[0].name,exact:true}).click();
      assert.equal(await p.getByRole('heading',{name:'Additional opener devices',exact:true}).count(),1);
      await p.getByLabel('During movement',{exact:true}).selectOption('disabled');
      await p.getByRole('button',{name:'02 Controls'}).click();
@@ -263,6 +264,7 @@ try{
    assert.equal(await virtual.getByLabel('Alarm number',{exact:true}).inputValue(),'1');
    assert.equal(f.probes(),0);assert.equal(f.commissions(),0);
    await page.getByRole('button',{name:'01 Devices'}).click();
+   await page.getByRole('button',{name:'Configure device '+base.motorPaths[0].name,exact:true}).click();
    await page.locator('.device-block').filter({has:page.getByRole('heading',{name:'Additional opener devices',exact:true})}).getByRole('button',{name:'Find devices',exact:true}).first().click();
    await page.getByLabel('Discovered motor',{exact:true}).selectOption('0');
    await page.getByText('Selected: lumi.switch.acn047 · resource 2',{exact:true}).waitFor();
@@ -494,6 +496,7 @@ try{
      assert.equal(await p.locator('.overview-row').getAttribute('data-state'),'enabled');
      await p.locator('#garages-tab').click();await p.getByRole('button',{name:'Add a garage door',exact:true}).click();
      await p.getByLabel('Tailwind connection',{exact:true}).selectOption({label:'Driveway Tailwind'});
+     await p.getByRole('button',{name:'Configure device Bolt / Lock',exact:true}).click();
      await p.getByLabel('deCONZ connection',{exact:true}).selectOption({label:'Other gateway'});
      assert.match(await p.locator('.connection-summary').last().textContent(),/http:\/\/192.0.2.55:8080/);
      assert.equal(await p.locator('.garage-card').first().getAttribute('data-state'),'enabled');
@@ -591,6 +594,25 @@ try{
      assert.equal(x.savedKeys().includes(oldKey),false);
      assert.equal(JSON.stringify(x.blocks()).includes('private-browser-test-key'),false);
      assert.deepEqual(x.errors,[]);await p.close();
+   }
+   {
+     const x=await fixture(browser,{mobile,dark}),p=x.page;
+     assert.equal(await p.locator('.device-choice').count(),3);
+     await p.getByRole('button',{name:'Configure device Bolt / Lock',exact:true}).click();
+     assert.equal(await p.getByLabel('Relay ON means bolt extended',{exact:true}).count(),1);
+     assert.equal(await p.getByLabel('Tailwind door',{exact:true}).count(),0);
+     await p.getByRole('button',{name:'Add opener device',exact:true}).click();
+     assert.equal(await p.locator('.device-choice').count(),4);
+     await p.getByLabel('Device name',{exact:true}).fill('Second opener');
+     assert.equal(await p.getByRole('button',{name:'Configure device Second opener',exact:true}).getAttribute('aria-pressed'),'true');
+     await p.getByRole('button',{name:'Configure device Garage Door opener',exact:true}).click();
+     assert.equal(await p.getByLabel('Tailwind door',{exact:true}).count(),1);
+     await p.getByRole('button',{name:'Configure device Second opener',exact:true}).click();
+     assert.equal(await p.getByLabel('Device name',{exact:true}).inputValue(),'Second opener');
+     await p.getByRole('button',{name:'Remove opener device',exact:true}).click();
+     assert.equal(await p.locator('.device-choice').count(),3);
+     assert.equal(await p.getByRole('button',{name:'Configure device Garage Door opener',exact:true}).getAttribute('aria-pressed'),'true');
+     assert.deepEqual(x.errors,[]);assert.equal(await p.locator('body').evaluate(b=>b.scrollWidth<=innerWidth+1),true);await p.close();
    }
    for(const mode of ['key-delete','key-delete-native-failure']){
      const x=await fixture(browser,{mobile,dark,mode}),p=x.page;

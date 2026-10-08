@@ -1,3 +1,9 @@
+# 0.4.22 additions: selectable Devices and Garage Door labels
+
+Devices now uses a selectable row: Garage Door opener, Bolt / Lock, then each additional opener, followed by Add opener device. Only the selected device's settings render below. Add creates and selects a new draft device; switching preserves edits and saving preserves the selection. Renaming updates its selector immediately. Garage detail labels are Garage Door Details and Garage Door name.
+
+The local bridge browser test exposed reliance on crypto.randomUUID, unavailable in the supported embedded-browser fixture. New connection IDs now use crypto.getRandomValues, matching the existing editor's compatibility approach. No device communication behavior changed.
+
 # Release 0.4.22: connection-owned credentials and direct local Homebridge selection
 
 Local Homebridge device/control setup now offers a bridge picker directly, with private PIN import through the existing supported local discovery API and Other Homebridge instance for manual setup. Accessory discovery remains filtered by role. No upstream patches, private cache access, native pairing or hardware commands are introduced.
