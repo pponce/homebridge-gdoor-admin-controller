@@ -7,9 +7,9 @@ export class ConnectionEditor {
     Object.assign(this,{root,configuration,credentials,request,run,changed,refresh,message,keyCreated,keyRetired});this.dirty=false;this.editing=null;
     root.replaceChildren(el('h2','Device connections'),el('p','Configure each gateway, controller or accessory bridge here. When you add a garage door, choose these saved connections under Devices and Controls.','subtle'));
     const purposes=el('ul',undefined,'connection-purposes');
-    for(const text of ['deCONZ — connects your bolt, optional opener relay, buttons and keypads to their gateway.','Tailwind — connects the opener and its door-state feedback. Each garage selects its door on this controller.','Homebridge accessories — connects devices exposed by another plugin. This is separate from the web admin interface.'])purposes.append(el('li',text));root.append(purposes);
+    for(const text of ['deCONZ — connects your bolt, optional opener relay, buttons and keypads to their gateway.','Tailwind — connects the opener and its door-state feedback. Each garage selects its door on this controller.','Local Homebridge accessories — choose the bridge directly under Devices or Controls. Connections for this Homebridge instance are managed automatically and do not appear in this list.'])purposes.append(el('li',text));root.append(purposes);
     this.fields=el('fieldset');root.append(this.fields);this.list=el('div');this.list.className='connection-list';this.fields.append(this.list);
-    this.add=button('Add device connection',()=>this.openForm(),'primary add-connection');this.add.setAttribute('aria-controls','device-connection-form');this.fields.append(this.add);
+    this.add=button('Add device connection',()=>this.openForm(),'primary add-connection');this.add.setAttribute('aria-label','Add device connection');this.add.setAttribute('aria-controls','device-connection-form');this.fields.append(this.add);
     this.title=el('h3','Add a device connection');this.fields.append(this.title);
     this.form=el('form');this.form.className='field-grid connection-form';this.form.id='device-connection-form';this.fields.append(this.form);
     const field=(name,label,tag='input')=>{const wrap=el('label',label),node=el(tag);node.id='shared-'+name;node.setAttribute('aria-label',label);wrap.append(node);this.form.append(wrap);return node;};
@@ -50,7 +50,7 @@ export class ConnectionEditor {
     this.sourceRefresh.disabled=true;
     try{const result=await this.request('/local-connections',{});this.candidates=result.candidates;this.candidateError=false;}
     catch{this.candidates=[];this.candidateError=true;}
-    finally{this.sourceRefresh.disabled=false;this.renderCandidates();this.describe();}
+    finally{this.sourceRefresh.disabled=false;this.renderCandidates();this.describe();this.renderList();}
   }
   candidate(){return this.candidates.find(row=>row.id===this.source.value&&row.type===this.type.value);}
   renderCandidates(){
@@ -131,11 +131,19 @@ export class ConnectionEditor {
     configuration.connections=draft.connections;configuration.controllers=draft.controllers;
     if(previousKey&&previousKey!==checked.credentialRef)this.keyRetired?.(previousKey);
     this.reset();this.changed(configuration);this.renderList();
-    this.message(wasEditing?'Connection updated in your draft. Review and save to apply it.':'Connection added to your configuration. Review and save to apply it.');
+    this.message(this.isLocalBridge(checked)?'Local Homebridge bridge ready in your draft. Choose its accessories under Devices or Controls, then save your configuration.':wasEditing?'Connection updated in your draft. Review and save to apply it.':'Connection added to your configuration. Review and save to apply it.');
+  }
+  isLocalBridge(row){
+    if(row.type!=='homebridge')return false;
+    // Presentation only: local accessory endpoints stay behind the bridge picker,
+    // even when no device uses them or local configuration discovery is offline.
+    let host;try{host=new URL(row.baseUrl).hostname;}catch{return false;}
+    return ['127.0.0.1','localhost','[::1]'].includes(host)||this.candidates.some(candidate=>candidate.type==='homebridge'&&candidate.baseUrl===row.baseUrl);
   }
   renderList(){
     this.list.replaceChildren();const configuration=this.configuration();
-    for(const row of configuration.connections??[]){
+    const visible=(configuration.connections??[]).filter(row=>!this.isLocalBridge(row));
+    for(const row of visible){
       const card=el('article',undefined,'shared-connection');card.dataset.connection=row.id;card.setAttribute('aria-label',row.name+' connection');
       const text=el('div',undefined,'connection-details');text.append(el('span',connectionTypes[row.type],'connection-kind'),el('h3',row.name),el('p',row.baseUrl,'help'),el('p','Key saved · ••••••••','help'));
       if(row.type==='tailwind')text.append(el('p',row.doorCount==null?'Door count not specified':row.doorCount+' configured door'+(row.doorCount===1?'':'s'),'help'));
@@ -145,6 +153,6 @@ export class ConnectionEditor {
       if(users.length)remove.title='Change the garage assignments before removing this connection.';
       actions.append(edit,remove);card.append(text,actions);this.list.append(card);
     }
-    if(!configuration.connections?.length)this.list.append(el('p','No device connections yet. Choose Add device connection to get started.','help'));
+    if(!visible.length)this.list.append(el('p','No device connections yet. Choose Add device connection to get started.','help'));
   }
 }

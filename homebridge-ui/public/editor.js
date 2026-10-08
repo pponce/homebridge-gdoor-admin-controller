@@ -60,16 +60,20 @@ export class ProfileEditor {
     const refresh=this.button('↻',()=>void populate(true),'secondary connection-refresh');refresh.title='Refresh configured connections';refresh.setAttribute('aria-label','Refresh configured connections');row.append(refresh);
     let candidates=[];
     const populate=async(force=false)=>{
-      select.replaceChildren(Object.assign(el('option','Choose a bridge'),{value:'',disabled:true}));
-      for(const item of saved)select.append(Object.assign(el('option',item.name),{value:'saved:'+item.id}));
-      select.value=matched?'saved:'+matched.id:'';
-      refresh.disabled=true;
-      try{
-        candidates=await this.localBridges(force);
+      const options=()=>{
+        select.replaceChildren(Object.assign(el('option','Choose a bridge'),{value:'',disabled:true}));
+        const local=candidates.find(item=>item.baseUrl===connection.baseUrl);
         for(const item of candidates)select.append(Object.assign(el('option',item.name+(item.canImportPin?'':' — manual setup needed')),{value:'local:'+item.id,disabled:!item.canImportPin}));
-        hint.textContent='Choose the bridge exposing your accessory. Its pairing PIN is handled privately.';
-      }catch{hint.textContent='Local bridges could not be read. Refresh or use another Homebridge connection.';}
-      finally{select.append(Object.assign(el('option','Other Homebridge instance…'),{value:'manual'}));refresh.disabled=false;}
+        for(const item of saved.filter(item=>!candidates.some(local=>local.baseUrl===item.baseUrl)))select.append(Object.assign(el('option',item.name),{value:'saved:'+item.id}));
+        select.append(Object.assign(el('option','Other Homebridge instance…'),{value:'manual'}));
+        select.value=local?'local:'+local.id:matched?'saved:'+matched.id:'';
+      };
+      refresh.disabled=true;options();
+      try{
+        candidates=await this.localBridges(force);options();
+        hint.textContent='Local bridges are managed automatically. Choose the bridge exposing your accessory; its pairing PIN is handled privately.';
+      }catch{hint.textContent='Local bridges could not be read. Your existing bridge selection is retained. Refresh or use another Homebridge connection.';}
+      finally{refresh.disabled=false;}
     };
     select.onchange=async()=>{
       if(select.value==='manual'){this.manageConnections?.('homebridge');return;}
@@ -96,7 +100,7 @@ export class ProfileEditor {
   }
   bridgeDevice(parent,connection,kind,{showConnection=true}={}){
     if(showConnection)this.sharedConnection(parent,connection);
-    parent.append(el('p','Save this bridge’s pairing PIN as a private connection key. The selected Homebridge must allow unpaired accessory control (insecure mode). Native HomeKit accessories are not supported.','help'));
+    parent.append(el('p','The pairing PIN for a local bridge is handled automatically. For another Homebridge instance, use its configured connection. The selected bridge must allow accessory control in insecure mode. Native HomeKit accessories are not supported.','help'));
     const output=el('div',undefined,'discovery-results');parent.append(this.button('Find Homebridge devices',async()=>{
       if(!this.discoverHomebridge)return this.error('Discover Homebridge devices in the Homebridge plugin settings.');
       try {output.textContent='Finding devices…';const data=await this.discoverHomebridge({baseUrl:connection.baseUrl,credentialRef:connection.credentialRef});

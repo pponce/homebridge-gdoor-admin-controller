@@ -1,8 +1,20 @@
+# Release 0.4.23 preparation
+
+Combines the on-demand General connection form, distinct saved-connection cards, and automatic local Homebridge bridge presentation. No movement behavior or public API schema changes. Existing pairing and configuration are retained. Integrated web administration remains separate development work and will require explicit enablement, disabled by default.
+
+Validation for this combined release is pending below. npm publication and owner installation are separate, unconfirmed steps.
+
+# Unreleased: local Homebridge bridges stay in device/control setup
+
+Automatically used bridges from the current Homebridge configuration no longer appear as connection cards in General. Devices and Controls show each local bridge once, select the existing local bridge after reload/save, and handle its private pairing PIN automatically. General still offers manually configured connections for other Homebridge instances. The General list excludes Homebridge loopback connections (127.0.0.1, localhost and ::1), as well as supported configured-local matches. This is presentation only, not an authorization decision. Unused automatic records stay hidden even when discovery is unavailable; existing bridge selections remain usable from Devices/Controls.
+
+Resolved hardware profiles, internal connection records and private credentials are retained for compatibility; this is a presentation change with no data migration, commissioning change, polling or device command. Browser coverage checks the General list, single bridge option and selection retention.
+
 # Unreleased: clearer General device connections
 
 The connection form starts collapsed behind Add device connection. Add and Edit reveal it; successful Add/Update and Cancel close it again. A blank form can be cancelled without first typing, and opening it does not create an unsaved change. Manage connections still opens the relevant form and preserves an existing draft. Saved connections are named cards with a type label, address, masked-key status and a separate action footer. The primary Add button is visually distinct from existing connections. No credential lifetime, configuration-save or device-control behavior changes.
 
-Desktop/mobile browser coverage now exercises the collapsed form, open/cancel focus, unchanged save status, edit/add completion and draft retention. Validation pending. This is source work for the next release; do not republish 0.4.22. npm publication, installation and owner acceptance remain separate.
+Desktop/mobile browser coverage now exercises the collapsed form, open/cancel focus, unchanged save status, edit/add completion and draft retention. JavaScript syntax checks passed. Browser validation is in progress; the first run exposed a button accessible-name mismatch from the decorative plus, now fixed with an explicit accessible name. These changes are included in the 0.4.23 release preparation. npm publication, installation and owner acceptance remain separate.
 
 # 0.4.22 ready for maintainer publication
 
