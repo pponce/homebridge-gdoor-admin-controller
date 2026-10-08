@@ -57,6 +57,10 @@ Version 0.4.13 adds reusable device connections in General for deCONZ, Tailwind 
 
 Read the [implementation plan](docs/implementation-plan.md), [migration plan](docs/migration.md), [API contract](docs/api-v1.md), and [current status](docs/status.md).
 
+## Xfinity keypad reference
+
+See [what we have learned about the Xfinity keypad](docs/xfinity-keypad.md): the green entry light, extra digits after rejected and accepted codes, lockout request counting, and the limits of the latest physical test. Observations and unproven explanations are labeled separately.
+
 ## A friendly disclaimer
 
 I use this plugin on my own garage, but it's still software, and software can have bugs. Please test **all functions of your setup** before relying on it, and test again after updates or configuration changes. Check PIN access, opening, stopping or reversing where configured, closing, locking, and behavior after a restart. My garage gives it a regular workout, but yours may discover a new party trick.

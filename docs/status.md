@@ -1,3 +1,7 @@
+## 2026-10-08 — Xfinity keypad observations
+
+Added docs/xfinity-keypad.md and a README link at the owner's request. Consolidates the earlier entry-light/wrong-code observations, source-backed lockout and duplicate handling, and the latest 0.4.27 physical test with five distinct outcomes and no separate event attributable to the extra digit after acceptance. Labels the possible success-dependent entry reset as unproven, preserves uncertainty about the second incorrect entry's physical effect and the original six-failure lockout, and corrects the copied-activity timestamp interpretation. Includes sanitized relative timings and source provenance only. Documentation reviewed against the supplied capture and existing implementation; links checked locally. No runtime, protection policy, package version or installed-host changes.
+
 ## 2026-10-08 — README disclaimer
 
 Added the owner's requested plain-language disclaimer at the bottom of the README: personal use, testing every configured function and retesting after changes, possible software bugs, and as-is use with user responsibility. Documentation only; reviewed the appended wording and location. No runtime, package version, installation or device operation changed. The reported keypad open/stop/close/next-open issue remains under investigation.
