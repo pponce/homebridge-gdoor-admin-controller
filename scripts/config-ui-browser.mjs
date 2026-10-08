@@ -58,7 +58,7 @@ async function fixture(browser,{mobile,dark,mode='managed'}){
     if(name==='/commission'){assert.equal(body.previousControllerStopped,true);assert.equal(body.physicalSetupReviewed,true);enabled=true;commissions++;return{};}
     if(name==='/disable'){assert.equal(body.revision,revision);assert.equal(body.bootId,'synthetic-boot');enabled=false;disables++;return{};}
     if(name==='/credentials'){assert.equal(body.secret,'private-browser-test-key');const exists=savedKeys.includes(body.reference);if(body.mode==='create'&&exists)return{saved:false,reason:'exists'};if(!exists)savedKeys.push(body.reference);else enabled=false;return{saved:true};}
-    if(name==='/credentials/delete'){keyDeletes++;const used=v=>v&&typeof v==='object'&&(v.credentialRef===body.reference||Object.values(v).some(used));if(used(configuration)||used(blocks))return{deleted:false,reason:'in-use'};if(body.reference.startsWith('example-'))return{deleted:false,reason:'in-use'};savedKeys.splice(savedKeys.indexOf(body.reference),1);return{deleted:true};}
+    if(name==='/credentials/delete'){keyDeletes++;const used=v=>v&&typeof v==='object'&&(v.credentialRef===body.reference||Object.values(v).some(used));if(used(configuration)||used(blocks))return{deleted:false,reason:'in-use'};savedKeys.splice(savedKeys.indexOf(body.reference),1);return{deleted:true};}
     if(name==='/deconz'){const row=configuration.controllers[0].motorPaths[0].connection;return{gatewayId:row.gatewayId,
       lights:[{name:'Synthetic Aqara opener',resourceId:row.resourceId,uniqueId:row.uniqueId,resourceType:row.resourceType,modelId:row.modelId,manufacturer:row.manufacturer}],sensors:[],alarms:[]};}
     throw Error('unsupported_browser_request');
@@ -574,6 +574,23 @@ try{
      assert.equal(x.probes(),0);assert.equal(x.commissions(),0);assert.deepEqual(x.errors,[]);
      assert.equal(await p.locator('body').evaluate(b=>b.scrollWidth<=innerWidth+1),true);
      await p.close();
+   }
+   {
+     const x=await fixture(browser,{mobile,dark}),p=x.page;
+     const oldKey=x.configuration().controllers[0].bolt.credentialRef;
+     await p.locator('#general-tab').click();
+     await p.getByRole('button',{name:'Edit connection deCONZ 1',exact:true}).click();
+     assert.equal(await p.locator('#shared-secret').isVisible(),false);
+     await p.locator('.connection-form').getByRole('button',{name:'Replace key',exact:true}).click();
+     await p.locator('#shared-secret').fill('private-browser-test-key');
+     await p.getByRole('button',{name:'Update connection',exact:true}).click();
+     assert.equal(x.configuration().controllers[0].bolt.credentialRef,oldKey,'Replacement must not alter saved references before Save');
+     assert.ok(x.savedKeys().includes(oldKey));assert.equal(x.keyDeletes(),0);
+     await review(p);await p.getByRole('button',{name:'Save configuration',exact:true}).click();await saved(p);
+     assert.notEqual(x.configuration().controllers[0].bolt.credentialRef,oldKey);
+     assert.equal(x.savedKeys().includes(oldKey),false);
+     assert.equal(JSON.stringify(x.blocks()).includes('private-browser-test-key'),false);
+     assert.deepEqual(x.errors,[]);await p.close();
    }
    for(const mode of ['key-delete','key-delete-native-failure']){
      const x=await fixture(browser,{mobile,dark,mode}),p=x.page;

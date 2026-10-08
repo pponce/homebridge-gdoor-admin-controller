@@ -73,7 +73,7 @@ function buildEditor(configuration,position){
       if(!loaded.credentials.includes(imported.reference))loaded.credentials.push(imported.reference);
       editor.credentials=loaded.credentials;connectionKeys();connectionEditor?.refreshKeys();
       let shared=editor.configuration.connections.find(row=>row.type==='homebridge'&&row.baseUrl===fresh.baseUrl&&row.credentialRef===imported.reference);
-      if(!shared){shared={id:'connection-'+crypto.randomUUID().replaceAll('-','').slice(0,16),name:fresh.name,type:'homebridge',baseUrl:fresh.baseUrl,credentialRef:imported.reference};editor.configuration.connections.push(shared);}
+      if(!shared){shared={id:'connection-'+crypto.randomUUID().replaceAll('-','').slice(0,16),name:fresh.name,type:'homebridge',baseUrl:fresh.baseUrl,credentialRef:imported.reference};}
       return shared;
     },
     discoverHomebridge:body=>hb.request('/homebridge',body),discover:body=>hb.request('/deconz',body),error:message=>notice(message,true),

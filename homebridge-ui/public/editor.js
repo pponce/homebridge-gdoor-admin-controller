@@ -77,7 +77,7 @@ export class ProfileEditor {
       try{
         const shared=value.startsWith('saved:')?saved.find(row=>'saved:'+row.id===value):await this.useLocalBridge(candidates.find(row=>'local:'+row.id===value));
         if(!row.isConnected)return;
-        if(!shared)throw Error('missing_bridge');selectConnection(connection,shared);this.change();this.render();
+        if(!shared)throw Error('missing_bridge');if(!this.configuration.connections.some(item=>item.id===shared.id))this.configuration.connections.push(shared);selectConnection(connection,shared);this.change();this.render();
       }catch{hint.textContent='Could not access this bridge. Check that it is running and allows accessory control, then refresh.';}
       finally{select.disabled=false;}
     };
