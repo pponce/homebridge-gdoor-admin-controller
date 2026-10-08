@@ -1,20 +1,22 @@
 # Node.js web admin development status
 
-## Foundation milestone
-Implemented src/web-admin-auth.js and src/web-admin-server.js on web-admin-node-port. Main remains the reviewed 0.4.22 owner release.
+## Optional product boundary
+The integrated web interface must be optional and disabled by default. Enabling it will require an explicit owner choice after its setup and runtime are ready. No listener is connected to Homebridge startup in this milestone. The validated main-branch 0.4.23 UI release does not include this development work.
 
-The authentication module preserves the reference's named-account schema, asynchronous scrypt verification (N=16384, r=8, p=1, 64 bytes), Admin/Regular restrictions, current-password requirements, last-admin protection, revision-checked writes and session invalidation after uncertain writes. Sessions retain the eight-hour absolute and thirty-minute idle limits, twelve-session cap and six-attempts-per-minute limit. Unrelated account edits preserve unchanged accounts' sessions.
-
-The transport preserves the existing login/session/logout/password/account route shapes, Secure/HttpOnly/SameSite session cookies, Host/Origin/CSRF checks, bounded JSON bodies and sanitized unexpected errors. It accepts an explicit static asset map and rejects unimplemented domain endpoints. The server factory requires TLS and returns an unstarted listener.
+## Implemented foundations
+- Named Admin/Regular accounts, scrypt password verification, current-password rules, last-admin protection, session expiry, revision checks and session invalidation.
+- HTTPS-only server factory with Host/Origin/CSRF checks, private cookies, bounded request bodies and sanitized errors. Unsupported domain operations fail explicitly.
+- Homebridge-private durable account storage using the existing PrivateStore. Trusted initialization refuses to replace existing, malformed or shared files. Serialized revision writes reject stale edits. This store is owned by the active coordinator under its existing ownership lock; it is not a cross-process database.
+- Twelve original frontend assets copied byte-for-byte from the pinned extracted administrator: main page, application/settings/keypad/Homebridge-flow/demo scripts, stylesheet, manifest and four icons. docs/web-admin-assets.json records source Git blobs and SHA-256 hashes. A finite static-route map excludes account files, installers and arbitrary paths.
 
 ## Validation
-Nine focused tests passed locally on Node 24.19.0. Coverage includes account permissions, unrelated account changes, disablement, revision/current-password checks, password changes, idle/absolute expiry, rate limits, uncertain writes, logout, Host/Origin/CSRF/cookies, unsupported endpoints and sanitized errors. The transport fixture uses a loopback HTTP harness with explicit Host/Origin headers; it is not a deployed HTTPS browser test.
-A focused branch workflow runs the same tests on Node 22 and 24.
+The original nine foundation tests passed on Node 22/24 in CI run 37716390646. The expanded sixteen tests passed locally on Node 24.19.0. Added checks cover durable restart login, private file modes, duplicate setup, queued revision conflicts, immutable pending writes, corrupted/shared/symlink storage rejection, exact frontend provenance and initial page resource closure.
+The branch workflow runs the expanded suite on Node 22/24 and checks the packaged artifact. Browser parity and a deployed HTTPS setup are still pending.
 
-## Not yet implemented
-No Homebridge startup integration, public listener, persistent account-store adapter, first-admin setup UI, certificate configuration UI, original static asset extraction, frontend/browser parity, deCONZ domain operations, virtual-keypad adapter, backup/history jobs or production release is included.
-The initial-account constructor is for trusted setup, not a public anonymous signup endpoint. Legacy password-only account migration is not part of this fresh-setup milestone.
-Next: reviewed static asset manifest and persistent account storage/setup integration, then connect the original frontend to the implemented session routes and extend domain operations against the pinned reference.
+## Still required before an owner test install
+Homebridge enable/disable settings and lifecycle wiring; first-admin setup; certificate configuration; the Homebridge-specific replacement for standalone installation help; actual original-frontend browser flows; deCONZ setup/inventory/users/PINs/alarm/lockout operations; coordinator keypad routing; persistent activity/history; backup and interruption recovery.
+Standalone setup/welcome/install screens have not been copied blindly because their host-service lifecycle differs. Core frontend assets remain unchanged while their backend contracts are ported.
+No public signup endpoint, device mutation, service operation, npm publication or live cutover is included.
 
 ## Standalone remains available
-See standalone-preservation.md. The original Python web interface/controller is retained as the non-Homebridge option. No service or device was operated.
+See standalone-preservation.md. The original Python controller/web interface remains the non-Homebridge option, preserved at its verified source baseline. Its source files and installed services were not modified by the Node port.

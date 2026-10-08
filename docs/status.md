@@ -1,3 +1,33 @@
+# Web admin Node port: private account storage and original frontend assets
+
+Development branch only. The expanded sixteen checks pass locally; see web-admin-node-status.md for exact validation and missing functionality. Account/session foundations and twelve verified original frontend assets are now present. The optional web interface must default OFF and still has no Homebridge startup integration. No test install or live web cutover is ready yet. Standalone remains preserved.
+
+# 0.4.23 ready for maintainer publication
+
+All five jobs passed in [CI run 37717601855](https://github.com/pponce/homebridge-gdoor-admin-controller/actions/runs/37717601855) on implementation `cb6fae2d3efd85b795d4588ffa9ff8b8edbbc156`: Node 22/24, actual Homebridge 2.0/2.4, custom UI IPC, desktop Chromium and mobile WebKit. The browser checks cover on-demand connection forms and focus, saved connection cards, local bridge selection without duplicate choices, local records hidden from General after saving/deleting/discarding device drafts, remote connection deletion, and existing credential/save protections. Earlier browser failures were a decorative-plus accessible-name mismatch and a manual-removal fixture incorrectly using a local address; both are resolved.
+
+Publish/install 0.4.23 as a normal update, retaining configuration, private data and HomeKit pairing. No uninstall or Home app bridge removal is needed. Source validation does not establish npm publication, owner installation or physical acceptance. Use the exact reviewed revision with scripts/publish-npm.sh, verify npm, then hb-service stop → add the pinned version → start; leave Homebridge stopped after installation failure.
+
+The optional Node.js web interface remains development work on web-admin-node-port and is not included in this release. It must default OFF and require explicit owner enablement when ready for testing. The original standalone deployment remains preserved.
+
+# Release 0.4.23 preparation
+
+Combines the on-demand General connection form, distinct saved-connection cards, and automatic local Homebridge bridge presentation. No movement behavior or public API schema changes. Existing pairing and configuration are retained. Integrated web administration remains separate development work and will require explicit enablement, disabled by default.
+
+Validation for this combined release is pending below. npm publication and owner installation are separate, unconfirmed steps.
+
+# Unreleased: local Homebridge bridges stay in device/control setup
+
+Automatically used bridges from the current Homebridge configuration no longer appear as connection cards in General. Devices and Controls show each local bridge once, select the existing local bridge after reload/save, and handle its private pairing PIN automatically. General still offers manually configured connections for other Homebridge instances. The General list excludes Homebridge loopback connections (127.0.0.1, localhost and ::1), as well as supported configured-local matches. This is presentation only, not an authorization decision. Unused automatic records stay hidden even when discovery is unavailable; existing bridge selections remain usable from Devices/Controls.
+
+Resolved hardware profiles, internal connection records and private credentials are retained for compatibility; this is a presentation change with no data migration, commissioning change, polling or device command. Browser coverage checks the General list, single bridge option and selection retention.
+
+# Unreleased: clearer General device connections
+
+The connection form starts collapsed behind Add device connection. Add and Edit reveal it; successful Add/Update and Cancel close it again. A blank form can be cancelled without first typing, and opening it does not create an unsaved change. Manage connections still opens the relevant form and preserves an existing draft. Saved connections are named cards with a type label, address, masked-key status and a separate action footer. The primary Add button is visually distinct from existing connections. No credential lifetime, configuration-save or device-control behavior changes.
+
+Desktop/mobile browser coverage now exercises the collapsed form, open/cancel focus, unchanged save status, edit/add completion and draft retention. JavaScript syntax checks passed. Browser validation is in progress; the first run exposed a button accessible-name mismatch from the decorative plus, now fixed with an explicit accessible name. These changes are included in the 0.4.23 release preparation. npm publication, installation and owner acceptance remain separate.
+
 # 0.4.22 ready for maintainer publication
 
 All five jobs passed in [CI run 37715458224](https://github.com/pponce/homebridge-gdoor-admin-controller/actions/runs/37715458224) on implementation `0ca0463c5900d19d959415eb04bef117b35df216`: 172 tests on Node 22/24, actual Homebridge 2.0/2.4, custom UI IPC and desktop Chromium/mobile WebKit. Browser coverage includes direct local bridge/accessory selection without crypto.randomUUID, connection-owned key replacement staged until save, automatic unused-key deletion, Undo/Discard/native-save failure protection, compact refresh, device selection/addition/removal/draft retention and overflow. The earlier save/color/order improvements remain included. Screenshots are CI artifacts; this is not a claim of live owner-host acceptance.

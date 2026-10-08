@@ -2,7 +2,7 @@ name: Web admin Node foundation
 on:
   push:
     branches: [web-admin-node-port]
-    paths: ['src/web-admin-*.js', 'test/web-admin.test.js', '.github/workflows/web-admin-node.yml']
+    paths: ['src/web-admin-*.js', 'src/private-store.js', 'test/web-admin*.test.js', 'web-admin/public/**', 'docs/web-admin-assets.json', 'package.json', 'scripts/check-package.mjs', '.github/workflows/web-admin-node.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -17,4 +17,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
-      - run: node --test test/web-admin.test.js
+      - run: node --test test/web-admin*.test.js
+      - name: Verify development package assets
+        run: |
+          npm pack --ignore-scripts --json --pack-destination "$RUNNER_TEMP" > "$RUNNER_TEMP/admin-pack.json"
+          node scripts/check-package.mjs "$RUNNER_TEMP/admin-pack.json"

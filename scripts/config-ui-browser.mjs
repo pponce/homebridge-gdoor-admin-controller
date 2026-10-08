@@ -25,7 +25,7 @@ async function fixture(browser,{mobile,dark,mode='managed'}){
   if(['fault','moving','enabled'].includes(mode))enabled=true;
   let reviews=0,applies=0,nativeSaves=0,probes=0,commissions=0,disables=0,releaseNative;const probedIds=[],savedKeys=['example-tailwind-key','example-deconz-key'];
   let keyDeletes=0;
-  if(mode.startsWith('key-delete')){savedKeys.push('unused-key');configuration.connections=[{id:'unused-bridge',type:'homebridge',name:'Unused bridge',baseUrl:'http://127.0.0.1:51999',credentialRef:'unused-key'}];}
+  if(mode.startsWith('key-delete')){savedKeys.push('unused-key');configuration.connections=[{id:'unused-bridge',type:'homebridge',name:'Unused bridge',baseUrl:'http://192.0.2.99:51999',credentialRef:'unused-key'}];}
   let blocks=mode==='initial'?[]:[{platform:'GDoorAndBoltCoordinator',name:'Custom name',_bridge:{username:'synthetic-bridge',port:12345},controllers:configuration.controllers,connections:configuration.connections??[]}];
   let localImports=0,debugReads=0,debugRecording=false,debugWrites=0;
   const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>{errors.push('Unexpected native dialog');void d.dismiss();});
@@ -181,7 +181,16 @@ try{
    }
    for(const mode of ['enabled','local-unavailable']){
      const x=await fixture(browser,{mobile,dark,mode}),p=x.page;
-     await p.locator('#general-tab').click();await p.locator('#shared-type').selectOption('homebridge');
+     await p.locator('#general-tab').click();
+     assert.equal(await p.locator('.connection-form').isVisible(),false);
+     await p.getByRole('button',{name:'Add device connection',exact:true}).click();
+     assert.equal(await p.locator('.connection-form').isVisible(),true);
+     assert.equal(await p.locator('#native-save').isEnabled(),true,'Opening the form does not create an unsaved change');
+     await p.getByRole('button',{name:'Cancel connection edit',exact:true}).click();
+     assert.equal(await p.locator('.connection-form').isVisible(),false);
+     assert.equal(await p.getByRole('button',{name:'Add device connection',exact:true}).evaluate(el=>el===document.activeElement),true);
+     await p.getByRole('button',{name:'Add device connection',exact:true}).click();
+     await p.locator('#shared-type').selectOption('homebridge');
      await p.waitForFunction(()=>document.querySelector('#shared-source option[value="local-bridge"]'));
      await p.locator('#shared-source').selectOption('local-bridge');
      assert.equal(await p.locator('#shared-address').inputValue(),'http://127.0.0.1:51001');
@@ -198,11 +207,14 @@ try{
        assert.equal(await p.locator('#shared-source').inputValue(),'local-bridge');
        assert.equal(await p.locator('.shared-connection').filter({hasText:'Configured devices'}).count(),0);
      }else{
-       await p.locator('.shared-connection').filter({hasText:'Configured devices'}).waitFor();
+       await p.locator('#notice').filter({hasText:'Local Homebridge bridge ready'}).waitFor();
+       assert.equal(await p.locator('.shared-connection').filter({hasText:'Configured devices'}).count(),0);
        assert.equal(x.localImports(),1);assert.equal(x.applies(),0);
        await review(p);await p.getByRole('button',{name:'Save configuration',exact:true}).click();await saved(p);
        assert.equal(x.configuration().connections.find(c=>c.type==='homebridge').credentialRef,'local-homebridge-test');
        assert.equal(x.blocks()[0].controllers[0].name,x.configuration().controllers[0].name);
+       assert.equal(await p.locator('.connection-form').isVisible(),false);
+       await p.getByRole('button',{name:'Add device connection',exact:true}).click();
        await p.locator('#shared-type').selectOption('deconz');
        await p.waitForFunction(()=>document.querySelector('#shared-source option[value="local-gateway"]'));
        await p.locator('#shared-source').selectOption('local-gateway');
@@ -461,8 +473,11 @@ try{
      const original=structuredClone(x.configuration().controllers);
      await p.locator('#general-tab').click();
      assert.equal(await p.locator('.shared-connection').count(),2,'Existing addresses migrate without re-entry');
+     assert.equal(await p.locator('article.shared-connection').count(),2,'Saved connections are named cards, with separate actions');
+     assert.equal(await p.locator('.connection-kind').count(),2);
+     assert.equal(await p.locator('.connection-form').isVisible(),false);
      assert.match(await p.locator('.connection-purposes').textContent(),/buttons and keypads/);
-     assert.match(await p.locator('.connection-purposes').textContent(),/separate from the web admin/);
+     assert.match(await p.locator('.connection-purposes').textContent(),/managed automatically/);
      await p.getByRole('button',{name:'Edit connection Tailwind 1',exact:true}).click();
      await p.locator('#shared-name').fill('Driveway Tailwind');
      await p.locator('#shared-door-count').selectOption('1');
@@ -470,6 +485,8 @@ try{
      await p.getByRole('button',{name:'Update connection',exact:true}).click();
      await p.locator('#notice').filter({hasText:'Review and save'}).waitFor();
      await review(p);
+     assert.equal(await p.locator('.connection-form').isVisible(),false);
+     await p.getByRole('button',{name:'Add device connection',exact:true}).click();
      await p.locator('#shared-name').fill('Unfinished next connection');
      assert.equal(await p.getByRole('button',{name:'Save configuration',exact:true}).count(),0,'A pending form invalidates an earlier review');
      assert.equal(await p.locator('#native-save').isDisabled(),true);
@@ -563,7 +580,7 @@ try{
      await p.getByLabel('Control source',{exact:true}).selectOption('homebridge');
      await p.waitForFunction(()=>document.querySelector('select[aria-label="Homebridge bridge"] option[value="local:local-bridge"]'));
      await p.getByLabel('Homebridge bridge',{exact:true}).selectOption('local:local-bridge');
-     await p.waitForFunction(()=>document.querySelector('select[aria-label="Homebridge bridge"]')?.value.startsWith('saved:'));
+     await p.waitForFunction(()=>document.querySelector('select[aria-label="Homebridge bridge"]')?.value==='local:local-bridge'&&!document.querySelector('select[aria-label="Homebridge bridge"]').disabled);
      assert.equal(x.localImports(),1);
      await p.getByRole('button',{name:'Find Homebridge devices',exact:true}).click();
      const pick=p.getByLabel('Discovered Homebridge button',{exact:true});
@@ -573,9 +590,31 @@ try{
      await p.locator('[data-control-save]').click();await saved(p);
      assert.equal(x.configuration().controllers[0].inputs[0].source.type,'homebridge');
      assert.equal(x.configuration().controllers[0].inputs[0].source.serviceId,'2.10');
-     assert.equal(x.configuration().connections.some(row=>row.type==='homebridge'),true);
+     assert.equal(x.configuration().connections.some(row=>row.type==='homebridge'),true,'Internal bridge settings remain available to existing runtime profiles');
+     assert.equal(await p.getByLabel('Homebridge bridge',{exact:true}).locator('option').count(),3,'The local bridge appears once, alongside Choose and Other instance');
+     await p.locator('#general-tab').click();
+     assert.equal(await p.locator('.shared-connection').filter({hasText:'Configured devices'}).count(),0,'Automatic local bridges do not appear as General connections');
+     await p.locator('#garages-tab').click();
+     assert.equal(await p.getByLabel('Homebridge bridge',{exact:true}).inputValue(),'local:local-bridge');
      assert.equal(x.probes(),0);assert.equal(x.commissions(),0);assert.deepEqual(x.errors,[]);
      assert.equal(await p.locator('body').evaluate(b=>b.scrollWidth<=innerWidth+1),true);
+     await p.close();
+   }
+   {
+     const x=await fixture(browser,{mobile,dark}),p=x.page;
+     await p.getByRole('button',{name:'Add opener device',exact:true}).click();
+     await p.getByLabel('Connection',{exact:true}).selectOption('homebridge');
+     await p.waitForFunction(()=>document.querySelector('select[aria-label="Homebridge bridge"] option[value="local:local-bridge"]'));
+     await p.getByLabel('Homebridge bridge',{exact:true}).selectOption('local:local-bridge');
+     await p.waitForFunction(()=>document.querySelector('select[aria-label="Homebridge bridge"]')?.value==='local:local-bridge'&&!document.querySelector('select[aria-label="Homebridge bridge"]').disabled);
+     assert.equal(x.localImports(),1);
+     await p.getByRole('button',{name:'Remove opener device',exact:true}).click();
+     await p.locator('#general-tab').click();
+     assert.equal(await p.locator('.shared-connection').count(),2,'Deleting an unsaved device leaves no local bridge card');
+     await p.getByRole('button',{name:'Discard changes',exact:true}).click();
+     assert.equal(await p.locator('.shared-connection').count(),2,'Discarding a local device also leaves no connection card');
+     assert.equal(x.configuration().connections.some(row=>row.type==='homebridge'),false);
+     assert.equal(x.applies(),0);assert.equal(x.probes(),0);assert.equal(x.commissions(),0);assert.deepEqual(x.errors,[]);
      await p.close();
    }
    {
