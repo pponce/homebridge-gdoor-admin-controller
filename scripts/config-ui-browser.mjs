@@ -473,7 +473,7 @@ try{
      assert.equal(await p.getByLabel('Tailwind connection',{exact:true}).locator('option:checked').textContent(),'Driveway Tailwind');
      assert.equal(await p.getByLabel('Tailwind door',{exact:true}).locator('option').count(),1);
      assert.equal(await p.getByLabel('Tailwind door',{exact:true}).locator('option:checked').textContent(),'Door 1');
-     await p.getByRole('button',{name:'Manage connections in General',exact:true}).first().click();
+     await p.getByRole('button',{name:'Manage connections',exact:true}).first().click();
      assert.equal(await p.locator('#general-page').isVisible(),true);
      await p.locator('#shared-type').selectOption('homebridge');
      assert.match(await p.locator('.connection-form .hint,.connection-form .help').last().textContent(),/accessory port/);

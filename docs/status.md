@@ -1,3 +1,7 @@
+# Unreleased: connection action layout
+
+Renamed the shared connection action to **Manage connections** and placed it immediately to the right of the saved connection dropdown in the garage opener and bolt sections (and other uses of the same connection picker). The row wraps on narrow panels. Navigation, connection selection and runtime behavior are unchanged. Updated the existing browser navigation selector for the shorter label. This is a source-only change for the next release; do not republish 0.4.20 from this revised checkout.
+
 # 0.4.20: package name transition
 
 Prepared `homebridge-gdoor-admin-controller@0.4.20` from 0.4.19. Changed npm/repository metadata, Homebridge plugin registration, release name validation, and visible UI title. Runtime platform alias, storage, manufacturer marker, UUID derivation, protocol and controller behavior are unchanged. No integrated web admin is included. Owner accepts a fresh setup. Old npm releases remain intact; deprecation is deferred until owner acceptance. Validation and source publication are recorded below when complete; npm publication and host installation are not yet established.

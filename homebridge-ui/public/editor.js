@@ -44,11 +44,11 @@ export class ProfileEditor {
     const matched=choices.find(row=>sameConnection(row,connection));
     const label=el('label',connectionTypes[type]+' connection');const select=el('select');select.setAttribute('aria-label',connectionTypes[type]+' connection');select.required=true;
     select.append(Object.assign(el('option','Choose a saved connection'),{value:'',disabled:true}));
-    for(const row of choices)select.append(Object.assign(el('option',row.name),{value:row.id}));select.value=matched?.id??'';label.append(select);this.grid(parent).append(label);
+    for(const row of choices)select.append(Object.assign(el('option',row.name),{value:row.id}));select.value=matched?.id??'';label.append(select);const row=this.grid(parent);row.classList.add('connection-picker-row');row.append(label);
+    if(this.manageConnections)row.append(this.button('Manage connections',()=>this.manageConnections(type)));
     select.onchange=()=>{const shared=choices.find(row=>row.id===select.value);if(!shared)return;selectConnection(connection,shared);this.change();this.render();};
     if(matched)parent.append(el('p',matched.baseUrl+' · Saved key: '+matched.credentialRef,'help connection-summary'));
     else parent.append(el('p','Create a '+connectionTypes[type]+' connection in General, then select it here.','help'));
-    if(this.manageConnections)parent.append(this.button('Manage connections in General',()=>this.manageConnections(type)));
     return matched;
   }
   connection(parent, obj, key, kind) {
