@@ -15,9 +15,11 @@ A Homebridge platform for coordinating **one garage door and a separate bolt/loc
 - No door-only, bolt-only, native HomeKit pairing, or Apple Home automation backend.
 - No dependency on HTTP Webhooks for the coordinator's accessories or state publication.
 
-## Owner test release: 0.4.25
+## Owner test release: 0.4.26
 
-Adds automatic LAN setup, live controller-default/device timing edits and specific Homebridge setup diagnostics. Both this plugin and homebridge-deconz require separate child bridges.
+Fixes startup and shutdown read failures that could leave enabled garages held after reboot. Saved enablement survives child/full Homebridge restarts, including interrupted travel; connection checks recover automatically without replaying movement. Original fault reasons now survive restarts and appear in the UI and diagnostics. See [restart recovery and Tailwind feedback limits](docs/restart-recovery.md).
+
+Retains automatic LAN setup, live controller-default/device timing edits and Homebridge setup diagnostics. Both this plugin and homebridge-deconz require separate child bridges.
 
 Includes the optional Node.js web administrator using the existing interface for deCONZ users, PINs, access grants, schedules, keypad protection, alarms, activity and web accounts. Enable it in General → Web admin interface and create the first administrator there. Additional accounts are managed in web Settings. The server is **off by default** and uses the saved deCONZ connections; existing controller configuration and HomeKit pairing are retained.
 
