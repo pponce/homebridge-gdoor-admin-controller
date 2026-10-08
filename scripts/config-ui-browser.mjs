@@ -24,7 +24,9 @@ async function fixture(browser,{mobile,dark,mode='managed'}){
   if(mode==='multiple'){const other=structuredClone(configuration.controllers[0]);other.id='second-garage';other.name='Second garage';other.door.doorIndex=1;other.bolt.resourceId='3';other.bolt.uniqueId='example-second-bolt';other.inputs=[];other.motorPaths=[];other.keypad=null;configuration.controllers.push(other);configuration=validateConfiguration(configuration);}
   if(['fault','moving','enabled'].includes(mode))enabled=true;
   let reviews=0,applies=0,nativeSaves=0,probes=0,commissions=0,disables=0,releaseNative;const probedIds=[],savedKeys=['example-tailwind-key','example-deconz-key'];
-  let blocks=mode==='initial'?[]:[{platform:'GDoorAndBoltCoordinator',name:'Custom name',_bridge:{username:'synthetic-bridge',port:12345},controllers:configuration.controllers}];
+  let keyDeletes=0;
+  if(mode.startsWith('key-delete')){savedKeys.push('unused-key');configuration.connections=[{id:'unused-bridge',type:'homebridge',name:'Unused bridge',baseUrl:'http://127.0.0.1:51999',credentialRef:'unused-key'}];}
+  let blocks=mode==='initial'?[]:[{platform:'GDoorAndBoltCoordinator',name:'Custom name',_bridge:{username:'synthetic-bridge',port:12345},controllers:configuration.controllers,connections:configuration.connections??[]}];
   let localImports=0,debugReads=0,debugRecording=false,debugWrites=0;
   const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>{errors.push('Unexpected native dialog');void d.dismiss();});
   await page.exposeFunction('testRequest',async(name,body)=>{
@@ -55,7 +57,7 @@ async function fixture(browser,{mobile,dark,mode='managed'}){
     if(name==='/commission'){assert.equal(body.previousControllerStopped,true);assert.equal(body.physicalSetupReviewed,true);enabled=true;commissions++;return{};}
     if(name==='/disable'){assert.equal(body.revision,revision);assert.equal(body.bootId,'synthetic-boot');enabled=false;disables++;return{};}
     if(name==='/credentials'){assert.equal(body.secret,'private-browser-test-key');const exists=savedKeys.includes(body.reference);if(body.mode==='create'&&exists)return{saved:false,reason:'exists'};if(!exists)savedKeys.push(body.reference);else enabled=false;return{saved:true};}
-    if(name==='/credentials/delete'){if(body.reference.startsWith('example-'))return{deleted:false,reason:'in-use'};savedKeys.splice(savedKeys.indexOf(body.reference),1);return{deleted:true};}
+    if(name==='/credentials/delete'){keyDeletes++;const used=v=>v&&typeof v==='object'&&(v.credentialRef===body.reference||Object.values(v).some(used));if(used(configuration)||used(blocks))return{deleted:false,reason:'in-use'};if(body.reference.startsWith('example-'))return{deleted:false,reason:'in-use'};savedKeys.splice(savedKeys.indexOf(body.reference),1);return{deleted:true};}
     if(name==='/deconz'){const row=configuration.controllers[0].motorPaths[0].connection;return{gatewayId:row.gatewayId,
       lights:[{name:'Synthetic Aqara opener',resourceId:row.resourceId,uniqueId:row.uniqueId,resourceType:row.resourceType,modelId:row.modelId,manufacturer:row.manufacturer}],sensors:[],alarms:[]};}
     throw Error('unsupported_browser_request');
@@ -64,7 +66,7 @@ async function fixture(browser,{mobile,dark,mode='managed'}){
   await page.exposeFunction('testUpdateConfig',value=>{blocks=structuredClone(value);});
   await page.exposeFunction('testNativeSave',async()=>{
     nativeSaves++;
-    if(mode==='native-failure'&&nativeSaves===1)throw Error('native save failed');
+    if(['native-failure','key-delete-native-failure'].includes(mode)&&nativeSaves===1)throw Error('native save failed');
     if(mode==='pending'&&nativeSaves===1)await new Promise(resolve=>{releaseNative=resolve;});
     return blocks;
   });
@@ -98,7 +100,7 @@ async function fixture(browser,{mobile,dark,mode='managed'}){
   assert.equal(await page.locator('#saved-keys .saved-key').count(),2);
   assert.equal(await page.locator('#credential-secret').inputValue(),'');
   await page.locator('#garages-tab').click();await page.locator('.garage-card').first().waitFor();
-  return{page,errors,probedIds,localImports:()=>localImports,debugReads:()=>debugReads,debugWrites:()=>debugWrites,reviews:()=>reviews,disables:()=>disables,configuration:()=>configuration,blocks:()=>blocks,applies:()=>applies,nativeSaves:()=>nativeSaves,probes:()=>probes,commissions:()=>commissions,release:()=>releaseNative?.()};
+  return{page,errors,probedIds,keyDeletes:()=>keyDeletes,savedKeys:()=>[...savedKeys],localImports:()=>localImports,debugReads:()=>debugReads,debugWrites:()=>debugWrites,reviews:()=>reviews,disables:()=>disables,configuration:()=>configuration,blocks:()=>blocks,applies:()=>applies,nativeSaves:()=>nativeSaves,probes:()=>probes,commissions:()=>commissions,release:()=>releaseNative?.()};
 }
 async function review(page){
   await page.getByRole('button',{name:'Review changes',exact:true}).click();
@@ -548,6 +550,39 @@ try{
        assert.equal(await p.getByRole('button',{name:'Disable '+base.name,exact:true}).isDisabled(),true);
      }
      assert.equal(await p.locator('body').evaluate(b=>b.scrollWidth<=innerWidth+1),true);
+     assert.deepEqual(x.errors,[]);await p.close();
+   }
+   for(const mode of ['key-delete','key-delete-native-failure']){
+     const x=await fixture(browser,{mobile,dark,mode}),p=x.page;
+     await p.locator('#general-tab').click();
+     const mark=async()=>{
+       await p.getByRole('button',{name:'Remove connection Unused bridge',exact:true}).click();
+       await p.getByRole('button',{name:'Delete key unused-key',exact:true}).click();
+       await p.getByRole('button',{name:'Delete saved key',exact:true}).click();
+       await p.getByRole('button',{name:'Undo deletion unused-key',exact:true}).waitFor();
+       assert.equal(x.keyDeletes(),0);
+       assert.ok(x.savedKeys().includes('unused-key'));
+     };
+     await mark();
+     await p.getByRole('button',{name:'Undo deletion unused-key',exact:true}).click();
+     assert.ok(x.savedKeys().includes('unused-key'));
+     await p.getByRole('button',{name:'Delete key unused-key',exact:true}).click();
+     await p.getByRole('button',{name:'Delete saved key',exact:true}).click();
+     await p.getByRole('button',{name:'Discard changes',exact:true}).click();
+     await p.getByRole('button',{name:'Remove connection Unused bridge',exact:true}).waitFor();
+     assert.equal(await p.getByRole('button',{name:'Undo deletion unused-key',exact:true}).count(),0);
+     assert.equal(x.keyDeletes(),0);
+     await mark();
+     await review(p);await p.getByRole('button',{name:'Save configuration',exact:true}).click();
+     if(mode==='key-delete-native-failure'){
+       await p.locator('#notice').filter({hasText:'Retry Homebridge save'}).waitFor();
+       assert.equal(x.keyDeletes(),0);assert.ok(x.savedKeys().includes('unused-key'));
+       await p.getByRole('button',{name:'Retry Homebridge save',exact:true}).click();
+     }
+     await saved(p);
+     assert.equal(x.keyDeletes(),1);assert.equal(x.savedKeys().includes('unused-key'),false);
+     await p.locator('#general-tab').click();
+     assert.equal(await p.getByRole('button',{name:'Delete key unused-key',exact:true}).count(),0);
      assert.deepEqual(x.errors,[]);await p.close();
    }
    for(const mode of ['initial','native-failure','pending','uncertain']){

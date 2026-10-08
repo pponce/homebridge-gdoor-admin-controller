@@ -1,3 +1,7 @@
+# Release 0.4.22: compact refresh and deferred key deletion
+
+Configured-connection refresh is a compact circular-arrow icon beside the dropdown for deCONZ and Homebridge. Keys removed from draft usage but still referenced by saved settings can be marked Pending deletion with Undo. They are deleted only after both the coordinator and Homebridge configuration saves succeed, with the server still checking both saved sources. Discard/reload cancels pending deletion; failed configuration saves leave keys intact. Failed key deletion retains a pending marker and supports retry without reporting deletion success. Existing fully unused keys retain immediate confirmed deletion. No movement or protocol changes. Publication, installation and validation are tracked separately.
+
 # Unreleased: compact configured-connection refresh
 
 Replaced the shared Refresh configured connections text button with a circular-arrow icon beside the configured connection selector. This covers both deCONZ and Homebridge add/edit connection forms. Tooltip and accessible name retain Refresh configured connections, with a 44px target. Tailwind hides the complete selector/refresh row as before. Discovery requests, selection guards and saved configuration are unchanged. JavaScript syntax check passed; npm publication and installation are pending.
