@@ -1,3 +1,7 @@
+## 2026-10-08 — README disclaimer
+
+Added the owner's requested plain-language disclaimer at the bottom of the README: personal use, testing every configured function and retesting after changes, possible software bugs, and as-is use with user responsibility. Documentation only; reviewed the appended wording and location. No runtime, package version, installation or device operation changed. The reported keypad open/stop/close/next-open issue remains under investigation.
+
 # 0.4.27: separate Enabled from health and recovery
 
 Implemented at the owner's request: Enabled is a durable user choice; configuration approval, active faults and command readiness are separate. Schema 1 approval migrates to the new schema 2 enablement map. Disable retains completed setup. Runtime faults, storage holds, unavailable dependencies, restart, maintenance and timing edits retain the saved choice. A changed device mapping/control policy or credential replacement requests setup review separately. Names and validated timing fields in the full configuration editor retain approval, as the web timing editor already does.
