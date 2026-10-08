@@ -28,9 +28,9 @@ Slow administration operations must not block movement coordination. Unsupported
 1. Rename the existing GitHub repository through repository Settings (the current connector has no rename operation); do not create a replacement repository.
 2. Check npm name availability and publish under the new package name using the owner's manual browser-approval workflow. Availability is not yet established.
 3. Update package metadata, runtime plugin registration, accessory registration, UI/release tooling and current documentation together.
-4. Retain GDoorAndBoltCoordinator platform alias, gdoorandbolt-coordinator storage directory, persistent instance ID, profile IDs and accessory UUID derivation. Audit plugin association and child-bridge configuration explicitly; unchanged UUIDs alone do not establish a safe migration.
-5. Verify an actual Homebridge upgrade fixture with existing cached accessories/configuration and child-bridge identity. No unpairing, duplicate coordinator or loss of saved credentials/data.
-6. Supply a pinned stop/migrate/install/start procedure after verification. Do not install old and new packages as concurrent coordinators.
+4. Owner explicitly accepts wiping this plugin's current setup and installing from scratch. Backward migration of platform alias, storage layout, controller identity, profiles and HomeKit accessory IDs is not required. Choose consistent new identifiers and document that reconfiguration and HomeKit setup may be necessary.
+5. Verify a fresh Homebridge installation and child-bridge setup with synthetic devices. Scope reset/removal to this project's configuration and data; do not wipe other Homebridge plugins, bridges or deCONZ gateway data/users/PINs. The owner did not request an immediate live wipe.
+6. Supply a pinned stop/remove-old/install-new/start procedure after verification, with clear reset scope. Do not install old and new packages as concurrent coordinators.
 7. Keep old npm releases intact; deprecation guidance can follow successful migration. Do not claim an npm package was renamed in place.
 
 ## Current state
