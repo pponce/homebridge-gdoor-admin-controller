@@ -89,3 +89,4 @@ window.ConfiguratorDemo = (() => {
   }
   return Object.freeze({request,reset(){keypadSimulations.clear();state=seed();retentionDays=30;persist();}});
 })();
+

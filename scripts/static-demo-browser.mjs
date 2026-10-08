@@ -48,8 +48,9 @@ try {
     await navigate('protection'); assert.equal(await page.locator('#lockout-threshold').inputValue(), '6');
     await navigate('alarm'); assert.equal(await page.locator('[data-alarm-timer]').count(), 9);
     await navigate('controller');
-    const selector = page.getByLabel('Garage Door', { exact: true });
+    const selector = page.locator('[data-controller-select]');
     await selector.waitFor(); assert.equal(await selector.locator('option').count(), 2);
+    assert.equal(await selector.evaluate(element => element.closest('label').firstChild.textContent.trim()), 'Garage Door');
     assert.ok((await selector.boundingBox()).width <= 321);
     const opening = page.locator('[data-default-group="feedback"][data-key="openingSeconds"]');
     await opening.fill('18');
