@@ -7,7 +7,7 @@ import { CoordinatorRuntime } from './runtime.js';
 import { acquireOwnership } from './ownership.js';
 import { CoordinatorAccessories } from './accessories.js';
 
-export const PLUGIN_NAME = 'homebridge-gdoorandbolt-coordinator';
+export const PLUGIN_NAME = 'homebridge-gdoor-admin-controller';
 export const PLATFORM_NAME = 'GDoorAndBoltCoordinator';
 export default function register(api) { api.registerPlatform(PLUGIN_NAME, PLATFORM_NAME, CoordinatorPlatform); }
 export class CoordinatorPlatform {

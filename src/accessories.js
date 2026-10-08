@@ -31,13 +31,13 @@ export class CoordinatorAccessories {
         // Seed cached and new accessories from one report, before registration.
         // Reading runtime memory here never reads or operates hardware.
         this.commit(v, this.report(v, this.runtime.status(p.id).state)); this.publish(v);
-        if (fresh) this.api.registerPlatformAccessories('homebridge-gdoorandbolt-coordinator', 'GDoorAndBoltCoordinator', [a]);
+        if (fresh) this.api.registerPlatformAccessories('homebridge-gdoor-admin-controller', 'GDoorAndBoltCoordinator', [a]);
         else this.api.updatePlatformAccessories([a]);
         v.initializing = false;
       }
     }
     const removed = new Map([...this.cached, ...[...this.active].map(([id,v]) => [id,v.accessory])]);
-    for (const [uuid,a] of removed) if (!retained.has(uuid)) { this.api.unregisterPlatformAccessories('homebridge-gdoorandbolt-coordinator', 'GDoorAndBoltCoordinator', [a]); this.active.delete(uuid); }
+    for (const [uuid,a] of removed) if (!retained.has(uuid)) { this.api.unregisterPlatformAccessories('homebridge-gdoor-admin-controller', 'GDoorAndBoltCoordinator', [a]); this.active.delete(uuid); }
     this.cached.clear();
   }
   fields(v) {

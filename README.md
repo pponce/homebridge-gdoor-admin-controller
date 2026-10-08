@@ -1,4 +1,4 @@
-# Garage Door and Bolt Coordinator
+# Garage Door Admin Controller
 
 A Homebridge platform for coordinating **one garage door and a separate bolt/lock per configured controller**. Multiple doors are supported by separate controller definitions. Multiple input profiles for the same physical door must share its coordinator.
 
@@ -15,14 +15,16 @@ A Homebridge platform for coordinating **one garage door and a separate bolt/loc
 - No door-only, bolt-only, native HomeKit pairing, or Apple Home automation backend.
 - No dependency on HTTP Webhooks for the coordinator's accessories or state publication.
 
-The separately installed [administration application](https://github.com/pponce/homebridge-deconzKeypadAlarm-admin) retains its own URL and accounts. The existing standalone installation remains a separate project. The owner will switch to the new standalone administrator and stop the existing one when both projects are ready.
+**Release 0.4.20 changes the npm package name and branding only.** Controller behavior is unchanged from 0.4.19. The integrated Node.js web admin is planned, not included. See [the package transition](docs/package-rename.md) before installing alongside an older release.
+
+The separately installed [administration application](https://github.com/pponce/homebridge-deconzKeypadAlarm-admin) retains its own URL and accounts. The existing standalone installation remains a separate project. The planned direction is to include that interface in this plugin with a Node.js backend; the current release does not implement that integration.
 
 ## Installation
 
 After npm publication, install on a Homebridge 2 / Node 22 or 24 host:
 
 ```sh
-sudo hb-service add homebridge-gdoorandbolt-coordinator@0.4.14
+sudo hb-service add homebridge-gdoor-admin-controller@0.4.20
 ```
 
 Use Homebridge settings to configure the plugin in its own child bridge. New garages remain disabled until checked and enabled. Follow the [owner installation guide](docs/owner-test.md) for taking over from an existing controller. This package does not install a separate system service.

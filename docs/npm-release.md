@@ -1,3 +1,7 @@
+# Current release: 0.4.20 package rename
+
+Package: `homebridge-gdoor-admin-controller@0.4.20`. Checkout: `~/devProjects/homebridge-gdoor-admin-controller`. This is a name-only release; see [transition instructions](package-rename.md). Older release notes and commands below are historical and must not be used to install the renamed package. Publication still uses `bash scripts/publish-npm.sh REVIEWED_COMMIT_SHA` from an interactive terminal.
+
 # Release 0.4.19
 
 Devices now contains opener connections, bolt and opener relays. Controls replaces Inputs, with explanatory text and per-control selection. Device movement behavior applies to linked toggle controls, while keypad PIN behavior remains separate. Saved divergent control behavior is preserved until explicitly reconciled.

@@ -9,7 +9,7 @@ import { PLUGIN_VERSION } from '../src/api.js';
 const manifestPath = process.argv[2];
 assert.ok(manifestPath, 'Usage: node scripts/check-package.mjs /path/to/pack.json');
 const pkg = JSON.parse(await readFile('package.json', 'utf8'));
-assert.equal(pkg.name, 'homebridge-gdoorandbolt-coordinator');
+assert.equal(pkg.name, 'homebridge-gdoor-admin-controller');
 assert.equal(pkg.private, undefined);
 assert.equal(pkg.publishConfig.registry, 'https://registry.npmjs.org/');
 assert.equal(pkg.publishConfig.access, 'public');

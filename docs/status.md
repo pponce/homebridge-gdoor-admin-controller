@@ -1,3 +1,7 @@
+# 0.4.20: package name transition
+
+Prepared `homebridge-gdoor-admin-controller@0.4.20` from 0.4.19. Changed npm/repository metadata, Homebridge plugin registration, release name validation, and visible UI title. Runtime platform alias, storage, manufacturer marker, UUID derivation, protocol and controller behavior are unchanged. No integrated web admin is included. Owner accepts a fresh setup. Old npm releases remain intact; deprecation is deferred until owner acceptance. Validation and source publication are recorded below when complete; npm publication and host installation are not yet established.
+
 # Development status
 
 ## General settings and garage status cards — 0.4.11
