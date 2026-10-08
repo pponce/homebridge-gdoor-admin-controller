@@ -1,6 +1,6 @@
-# Web admin Node port: private account storage and original frontend assets
+# Web admin Node port: original read-page backend
 
-Development branch only. The expanded sixteen checks pass locally; see web-admin-node-status.md for exact validation and missing functionality. Account/session foundations and twelve verified original frontend assets are now present. The optional web interface must default OFF and still has no Homebridge startup integration. No test install or live web cutover is ready yet. Standalone remains preserved.
+Development branch only. The current 37 checks pass locally, including exact Python read contracts and authenticated gateway/alarm dispatch. Original-UI desktop/mobile read-flow CI is being added; setup/history/transactions are synthetic ports in that browser check, not production implementations. See web-admin-node-status.md for remaining work and validation. The optional server still has no Homebridge startup hook and must default OFF. Non-controller pages are the current scope; the existing controller API will support a later timers/settings panel. No owner test install, npm publication or live cutover is ready yet. Standalone remains preserved.
 
 # 0.4.23 ready for maintainer publication
 
@@ -411,3 +411,4 @@ Admin compatibility commit 45e26c1d586bdcfa22b3b3b486485ba78ee4db6e passed all t
 
 
 0.4.20 source validation complete: [CI run 37707958298](https://github.com/pponce/homebridge-gdoor-admin-controller/actions/runs/37707958298) passed all five jobs on `c1503c3fe285a8df30efbaf0a3c02e45f43e84be`: 172 tests on Node 22/24, actual Homebridge 2.0/2.4, custom UI IPC and desktop Chromium/mobile WebKit. Package dry-run passed. This subsequent documentation-only revision preserves that implementation. npm publication, owner installation and physical acceptance remain outstanding.
+

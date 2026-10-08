@@ -1,8 +1,8 @@
-name: Web admin Node foundation
+name: Web admin Node port
 on:
   push:
     branches: [web-admin-node-port]
-    paths: ['src/web-admin-*.js', 'src/private-store.js', 'test/web-admin*.test.js', 'web-admin/public/**', 'docs/web-admin-assets.json', 'package.json', 'scripts/check-package.mjs', '.github/workflows/web-admin-node.yml']
+    paths: ['src/web-admin-*.js', 'src/private-store.js', 'test/web-admin*.test.js', 'test/fixtures/web-admin*.json', 'scripts/web-admin-*.mjs', 'scripts/web-admin-*.py', 'web-admin/public/**', 'docs/web-admin-assets.json', 'package.json', 'scripts/check-package.mjs', '.github/workflows/web-admin-node.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -22,3 +22,32 @@ jobs:
         run: |
           npm pack --ignore-scripts --json --pack-destination "$RUNNER_TEMP" > "$RUNNER_TEMP/admin-pack.json"
           node scripts/check-package.mjs "$RUNNER_TEMP/admin-pack.json"
+
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble
+      options: --init --ipc=host
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install browser tool
+        run: npm install --prefix "$RUNNER_TEMP/admin-browser" --no-save --package-lock=false --ignore-scripts playwright@1.58.2
+      - name: Original admin read flows on desktop and mobile
+        id: browser
+        env:
+          PLAYWRIGHT_MODULE: ${{ runner.temp }}/admin-browser/node_modules/playwright
+          PREVIEW_OUTPUT: ${{ runner.temp }}/admin-browser/screenshots
+        run: node scripts/web-admin-browser.mjs
+      - name: "Browser result: ${{ steps.browser.outputs.result || steps.browser.outcome }}"
+        if: always()
+        run: echo "Browser diagnostics are recorded in this step name."
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: web-admin-read-pages
+          path: ${{ runner.temp }}/admin-browser/screenshots
+

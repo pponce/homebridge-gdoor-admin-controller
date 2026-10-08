@@ -109,6 +109,11 @@ export class WebAdminAuth {
   session(token) {
     return this.serial(async () => { await this.refresh(); return { ...this.active(token) }; });
   }
+  authorized(token, operation) {
+    // Keep account disablement/role changes serialized with the authorized
+    // operation, matching the old broker's account + operation lock boundary.
+    return this.serial(async () => { await this.refresh(); return operation({ ...this.active(token) }); });
+  }
   logout(token) { return this.serial(() => { this.sessions.delete(token); }); }
   accounts(token) {
     return this.serial(async () => {

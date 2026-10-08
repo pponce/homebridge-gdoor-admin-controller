@@ -1,0 +1,515 @@
+{
+  "capabilities": {
+    "1": {
+      "alarm_timing_version": 1,
+      "global_users_version": 2,
+      "keypad_lockout_version": 1,
+      "managed": true,
+      "schedule_version": 1,
+      "schedules": true
+    },
+    "2": {
+      "alarm_timing_version": 1,
+      "global_users_version": 2,
+      "keypad_lockout_version": 1,
+      "managed": true,
+      "schedule_version": 1,
+      "schedules": true
+    }
+  },
+  "expected": {
+    "administration": {
+      "alarms": [
+        {
+          "id": 1,
+          "keypads": [
+            {
+              "endpoint": 1,
+              "name": "Synthetic keypad",
+              "source": "11223344556677"
+            },
+            {
+              "endpoint": 2,
+              "name": "Previously allowed keypad (not discovered)",
+              "source": "abcdef"
+            }
+          ],
+          "managed": true,
+          "name": "Alarm 1",
+          "state": "disarmed",
+          "users": [
+            {
+              "all_keypads": false,
+              "api_arm_disarm": true,
+              "arm": true,
+              "disarm": true,
+              "enabled": true,
+              "grant_enabled": true,
+              "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "keypads": [
+                {
+                  "endpoint": 2,
+                  "source": "abcdef"
+                }
+              ],
+              "name": "Owner",
+              "owner": true,
+              "remaining_uses": null,
+              "revision": 1,
+              "schedule": null,
+              "user_revision": 1
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "keypads": [
+            {
+              "endpoint": 1,
+              "name": "Synthetic keypad",
+              "source": "11223344556677"
+            }
+          ],
+          "managed": true,
+          "name": "Alarm 2",
+          "state": "disarmed",
+          "users": [
+            {
+              "all_keypads": false,
+              "api_arm_disarm": true,
+              "arm": true,
+              "disarm": true,
+              "enabled": true,
+              "grant_enabled": true,
+              "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "keypads": [],
+              "name": "Owner",
+              "owner": true,
+              "remaining_uses": null,
+              "revision": 1,
+              "schedule": null,
+              "user_revision": 1
+            }
+          ]
+        }
+      ],
+      "homebridge_available": false,
+      "homebridge_binding": null,
+      "homebridge_sync": false,
+      "identities": [
+        {
+          "enabled": true,
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "name": "Owner",
+          "revision": 1,
+          "user_revision": 1
+        }
+      ],
+      "keypads": [
+        {
+          "endpoint": 1,
+          "name": "Synthetic keypad",
+          "source": "11223344556677"
+        },
+        {
+          "endpoint": 2,
+          "name": "Previously allowed keypad (not discovered)",
+          "source": "abcdef"
+        }
+      ],
+      "managed": true,
+      "schedules": true,
+      "transaction": {
+        "stage": "none"
+      },
+      "users": [
+        {
+          "all_keypads": false,
+          "api_arm_disarm": true,
+          "arm": true,
+          "disarm": true,
+          "enabled": true,
+          "grant_enabled": true,
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "keypads": [
+            {
+              "endpoint": 2,
+              "source": "abcdef"
+            }
+          ],
+          "name": "Owner",
+          "owner": true,
+          "remaining_uses": null,
+          "revision": 1,
+          "schedule": null,
+          "user_revision": 1
+        }
+      ]
+    },
+    "alarm": {
+      "rest_activity": false,
+      "revision": "b9b2dc53fd2280d9563428c7a9870fd247b07fefee7a49564f216e3ae71b9fa0",
+      "seconds_remaining": 0,
+      "state": "disarmed",
+      "target": "disarmed",
+      "timing_supported": true,
+      "timings": {
+        "armed_away_entry_delay": 0,
+        "armed_away_exit_delay": 0,
+        "armed_away_trigger_duration": 0,
+        "armed_night_entry_delay": 0,
+        "armed_night_exit_delay": 0,
+        "armed_night_trigger_duration": 0,
+        "armed_stay_entry_delay": 0,
+        "armed_stay_exit_delay": 0,
+        "armed_stay_trigger_duration": 0
+      }
+    },
+    "inventory": {
+      "alarms": [
+        {
+          "id": 1,
+          "managed": true,
+          "name": "Alarm 1",
+          "state": "disarmed"
+        },
+        {
+          "id": 2,
+          "managed": true,
+          "name": "Alarm 2",
+          "state": "disarmed"
+        }
+      ],
+      "gateway": {
+        "id": "test",
+        "name": "Synthetic gateway"
+      },
+      "keypads": [
+        {
+          "address": {
+            "endpoint": 1,
+            "source": "11223344556677"
+          },
+          "alarm_ids": [
+            1,
+            2
+          ],
+          "id": "3",
+          "name": "Synthetic keypad",
+          "reachable": true
+        },
+        {
+          "address": null,
+          "alarm_ids": [
+            1,
+            2
+          ],
+          "id": "4",
+          "name": "Unrecognized radio",
+          "reachable": false
+        }
+      ]
+    },
+    "lockout": {
+      "keypads": [
+        {
+          "id": "3",
+          "known": true,
+          "level": 0,
+          "name": "Synthetic keypad",
+          "remaining_seconds": 0
+        },
+        {
+          "id": "4",
+          "known": false,
+          "level": null,
+          "name": "Unrecognized radio",
+          "remaining_seconds": null
+        }
+      ],
+      "managed": true,
+      "policy": {
+        "durations_seconds": [
+          60,
+          600,
+          1800
+        ],
+        "enabled": true,
+        "reset_seconds": 3600,
+        "revision": 1,
+        "threshold": 6,
+        "window_seconds": 60
+      },
+      "unmatched_keypads": [
+        {
+          "level": 1,
+          "remaining_seconds": 7
+        }
+      ]
+    },
+    "snapshot": {
+      "alarm": {
+        "rest_activity": false,
+        "revision": "b9b2dc53fd2280d9563428c7a9870fd247b07fefee7a49564f216e3ae71b9fa0",
+        "seconds_remaining": 0,
+        "state": "disarmed",
+        "target": "disarmed",
+        "timing_supported": true,
+        "timings": {
+          "armed_away_entry_delay": 0,
+          "armed_away_exit_delay": 0,
+          "armed_away_trigger_duration": 0,
+          "armed_night_entry_delay": 0,
+          "armed_night_exit_delay": 0,
+          "armed_night_trigger_duration": 0,
+          "armed_stay_entry_delay": 0,
+          "armed_stay_exit_delay": 0,
+          "armed_stay_trigger_duration": 0
+        }
+      },
+      "capabilities": {
+        "1": {
+          "keypad_lockout_version": 1,
+          "managed": true,
+          "schedule_version": 1,
+          "schedules": true
+        },
+        "2": {
+          "keypad_lockout_version": 1,
+          "managed": true,
+          "schedule_version": 1,
+          "schedules": true
+        }
+      },
+      "grants": {
+        "1": {
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": {
+            "all_keypads": false,
+            "api_arm_disarm": true,
+            "arm": true,
+            "disarm": true,
+            "enabled": true,
+            "grant_enabled": true,
+            "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "keypads": [
+              {
+                "endpoint": 2,
+                "source": "abcdef"
+              }
+            ],
+            "name": "Owner",
+            "owner": true,
+            "remaining_uses": null,
+            "revision": 1,
+            "schedule": null,
+            "user_revision": 1
+          }
+        },
+        "2": {
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": {
+            "all_keypads": false,
+            "api_arm_disarm": true,
+            "arm": true,
+            "disarm": true,
+            "enabled": true,
+            "grant_enabled": true,
+            "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "keypads": [],
+            "name": "Owner",
+            "owner": true,
+            "remaining_uses": null,
+            "revision": 1,
+            "schedule": null,
+            "user_revision": 1
+          }
+        }
+      },
+      "identities": {
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": {
+          "enabled": true,
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "name": "Owner",
+          "revision": 1,
+          "user_revision": 1
+        }
+      }
+    },
+    "users": [
+      {
+        "all_keypads": false,
+        "api_arm_disarm": true,
+        "arm": true,
+        "disarm": true,
+        "enabled": true,
+        "grant_enabled": true,
+        "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "keypads": [
+          {
+            "endpoint": 2,
+            "source": "abcdef"
+          }
+        ],
+        "name": "Owner",
+        "owner": true,
+        "remaining_uses": null,
+        "revision": 1,
+        "schedule": null,
+        "user_revision": 1
+      }
+    ]
+  },
+  "responses": {
+    "/alarmsystems": {
+      "1": {
+        "devices": {
+          "00:11:22:33:44:55:66:77-01-0501": {},
+          "synthetic-unknown": {}
+        },
+        "name": "Alarm 1",
+        "state": {
+          "armstate": "disarmed"
+        }
+      },
+      "2": {
+        "devices": {
+          "00:11:22:33:44:55:66:77-01-0501": {},
+          "synthetic-unknown": {}
+        },
+        "name": "Alarm 2",
+        "state": {
+          "armstate": "disarmed"
+        }
+      }
+    },
+    "/alarmsystems/1": {
+      "config": {
+        "armed_away_entry_delay": 0,
+        "armed_away_exit_delay": 0,
+        "armed_away_trigger_duration": 0,
+        "armed_night_entry_delay": 0,
+        "armed_night_exit_delay": 0,
+        "armed_night_trigger_duration": 0,
+        "armed_stay_entry_delay": 0,
+        "armed_stay_exit_delay": 0,
+        "armed_stay_trigger_duration": 0,
+        "armmode": "disarmed"
+      },
+      "state": {
+        "armstate": "disarmed",
+        "seconds_remaining": 0
+      }
+    },
+    "/alarmsystems/1/users": {
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": {
+        "all_keypads": false,
+        "api_arm_disarm": true,
+        "arm": true,
+        "disarm": true,
+        "enabled": true,
+        "grant_enabled": true,
+        "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "keypads": [
+          {
+            "endpoint": 2,
+            "source": "abcdef"
+          }
+        ],
+        "name": "Owner",
+        "owner": true,
+        "pin": "synthetic-never-project",
+        "remaining_uses": null,
+        "revision": 1,
+        "schedule": null,
+        "user_revision": 1
+      }
+    },
+    "/alarmsystems/1/users/capabilities": {
+      "alarm_timing_version": 1,
+      "global_users_version": 2,
+      "keypad_lockout_version": 1,
+      "managed": true,
+      "schedule_version": 1,
+      "schedules": true
+    },
+    "/alarmsystems/1/users/lockout": {
+      "keypads": [
+        {
+          "endpoint": 1,
+          "level": 0,
+          "locked_until": 0,
+          "remaining_seconds": 0,
+          "source": "11223344556677"
+        },
+        {
+          "endpoint": 3,
+          "level": 1,
+          "remaining_seconds": 7,
+          "source": "ffee"
+        }
+      ],
+      "policy": {
+        "durations_seconds": [
+          60,
+          600,
+          1800
+        ],
+        "enabled": true,
+        "reset_seconds": 3600,
+        "revision": 1,
+        "threshold": 6,
+        "window_seconds": 60
+      }
+    },
+    "/alarmsystems/2/users": {
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": {
+        "all_keypads": false,
+        "api_arm_disarm": true,
+        "arm": true,
+        "disarm": true,
+        "enabled": true,
+        "grant_enabled": true,
+        "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "keypads": [],
+        "name": "Owner",
+        "owner": true,
+        "pin": "synthetic-never-project",
+        "remaining_uses": null,
+        "revision": 1,
+        "schedule": null,
+        "user_revision": 1
+      }
+    },
+    "/alarmsystems/users": {
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": {
+        "enabled": true,
+        "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "name": "Owner",
+        "pin": "synthetic-never-project",
+        "revision": 1,
+        "user_revision": 1
+      }
+    },
+    "/sensors": {
+      "3": {
+        "config": {
+          "reachable": true
+        },
+        "name": "Synthetic keypad",
+        "type": "ZHAAncillaryControl",
+        "uniqueid": "00:11:22:33:44:55:66:77-01-0501"
+      },
+      "4": {
+        "config": {
+          "reachable": false
+        },
+        "name": "Unrecognized radio",
+        "type": "ZHAAncillaryControl",
+        "uniqueid": "synthetic-unknown"
+      }
+    }
+  },
+  "source": {
+    "commit": "45e26c1d586bdcfa22b3b3b486485ba78ee4db6e",
+    "repository": "pponce/homebridge-deconzKeypadAlarm-admin"
+  }
+}

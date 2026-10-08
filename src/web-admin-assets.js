@@ -1,6 +1,6 @@
 // Reuse the reviewed original interface. Only this finite asset map is served;
 // account files, gateway keys, installers and arbitrary filesystem paths cannot
-// become static routes. Domain endpoints remain unavailable until ported.
+// become static routes. Unimplemented domain endpoints remain unavailable.
 import { readFile } from 'node:fs/promises';
 const assets = [
   ['/', 'index.html', 'text/html'], ['/app.js', 'app.js', 'text/javascript'],

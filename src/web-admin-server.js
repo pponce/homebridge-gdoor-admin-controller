@@ -1,8 +1,10 @@
-// Session/account transport foundation. Unimplemented administration endpoints
-// fail explicitly. No Homebridge startup hook or device adapter is connected.
+// Authenticated original-browser API transport. Unimplemented administration
+// endpoints fail explicitly. Homebridge startup integration remains separate.
 import https from 'node:https';
 import { timingSafeEqual } from 'node:crypto';
 import { WebAdminError } from './web-admin-auth.js';
+import { parseWebJson } from './web-admin-common.js';
+import { webAdminRoute } from './web-admin-routes.js';
 
 const LIMIT = 65536;
 const requireValue = (condition, code) => { if (!condition) throw new WebAdminError(code); };
@@ -32,12 +34,12 @@ async function readBody(request) {
   for await (const chunk of request) { bytes += chunk.length; requireValue(bytes <= LIMIT && bytes <= length, 'body_rejected'); chunks.push(chunk); }
   requireValue(bytes === length, 'body_rejected');
   let body;
-  try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { throw new WebAdminError('body_rejected'); }
+  try { body = parseWebJson(new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks))); } catch { throw new WebAdminError('body_rejected'); }
   requireValue(body && typeof body === 'object' && !Array.isArray(body), 'body_rejected');
   return body;
 }
 
-export function createWebAdminHandler({ origin, auth, assets = new Map() }) {
+export function createWebAdminHandler({ origin, auth, assets = new Map(), backend, web }) {
   const publicUrl = new URL(origin);
   requireValue(publicUrl.protocol === 'https:' && publicUrl.origin === origin && !publicUrl.username && !publicUrl.password, 'web_origin_invalid');
   return async (request, response) => {
@@ -87,12 +89,17 @@ export function createWebAdminHandler({ origin, auth, assets = new Map() }) {
         const result = await auth.manageAccount(token, body);
         return send(200, result, { setCookie: result.sign_in_required ? cookie('') : undefined });
       }
+      if (backend) {
+        const route = webAdminRoute(request, body);
+        const result = await auth.authorized(token, principal => backend.dispatch(principal, route.operation, route.body));
+        return send(200, route.operation === 'installation_settings' ? { ...result, web: { ...web, origin } } : result);
+      }
       // Explicitly unavailable until the domain port and parity tests exist.
       return send(503, { error: 'operation_not_implemented' });
     } catch (error) {
       if (response.headersSent || response.destroyed) return;
       if (!(error instanceof WebAdminError)) return send(503, { error: 'service_unavailable_private_details_omitted' });
-      const status = ['login_required', 'login_failed'].includes(error.message) ? 401 : error.message === 'forbidden' ? 403 : 400;
+      const status = ['login_required', 'login_failed'].includes(error.message) ? 401 : error.message === 'forbidden' ? 403 : error.message === 'operation_not_implemented' ? 503 : 400;
       send(status, { error: error.message });
     }
   };

@@ -77,14 +77,31 @@ test('uncertain writes invalidate sessions instead of retaining old authorizatio
   const f = await fixture(); f.uncertain(); await assert.rejects(f.add());
   await assert.rejects(f.auth.session(f.token), /login_required/);
 });
+test('an in-flight authorized operation completes before account disablement, and subsequent work is denied', async () => {
+  const f = await fixture(); await f.add();
+  const guest = await f.auth.login('Guest', 'synthetic-guest-password'), guestRow = f.record().accounts.find(row => row.username === 'Guest');
+  let release, started;
+  const began = new Promise(resolve => { started = resolve; }), hold = new Promise(resolve => { release = resolve; });
+  const events = [];
+  const operation = f.auth.authorized(guest, async principal => { assert.equal(principal.role, 'regular'); events.push('started'); started(); await hold; events.push('finished'); });
+  await began;
+  const disable = f.auth.manageAccount(f.token, {
+    action: 'save', expected_revision: f.record().revision, current_password: password,
+    id: guestRow.id, username: guestRow.username, role: 'regular', enabled: false, password: '', repeat_password: '',
+  }).then(() => { events.push('disabled'); });
+  const queued = f.auth.authorized(guest, () => { throw Error('disabled account reached the backend'); });
+  release(); await Promise.all([operation, disable]);
+  await assert.rejects(queued, /login_required/);
+  assert.deepEqual(events, ['started', 'finished', 'disabled']);
+});
 
-async function transport(t, auth) {
-  const handler = createWebAdminHandler({ origin: 'https://admin.example.test', auth,
+async function transport(t, auth, options = {}) {
+  const handler = createWebAdminHandler({ origin: 'https://admin.example.test', auth, ...options,
     assets: new Map([['/', { type: 'text/html', content: '<!doctype html><title>Synthetic login</title>' }]]) });
   const server = http.createServer(handler); server.listen(0, '127.0.0.1'); await once(server, 'listening');
   t.after(() => new Promise(resolve => { server.closeAllConnections(); server.close(resolve); }));
-  return async (path, { method = 'GET', body, headers = {} } = {}) => {
-    const raw = body === undefined ? undefined : JSON.stringify(body);
+  return async (path, { method = 'GET', body, rawBody, headers = {} } = {}) => {
+    const raw = rawBody ?? (body === undefined ? undefined : JSON.stringify(body));
     return new Promise((resolve, reject) => {
       const request = http.request({ hostname: '127.0.0.1', port: server.address().port, path, method,
         headers: { Host: 'admin.example.test', ...(raw ? { Origin: 'https://admin.example.test', 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(raw) } : {}), ...headers },
@@ -118,4 +135,25 @@ test('unexpected failures are sanitized and listeners require explicit TLS confi
   const request = await transport(t, { session: async () => { throw Error('private token/path'); } });
   const result = await request('/api/session'); assert.equal(result.status, 503); assert.equal(result.text.includes('private token'), false);
   assert.throws(() => createWebAdminServer({ origin: 'https://admin.example.test' }), /tls_configuration_required/);
+});
+test('browser transport dispatches only authenticated scoped requests and rejects duplicate JSON keys before the backend', async t => {
+  const f = await fixture(), calls = [];
+  const request = await transport(t, f.auth, { backend: { dispatch: async (principal, operation, body) => {
+    calls.push({ principal, operation, body }); return { ok: true };
+  } } });
+  const login = await request('/api/login', { method: 'POST', body: { username: 'Owner', password } });
+  const headers = { Cookie: login.headers.get('set-cookie').split(';')[0], 'X-CSRF-Token': JSON.parse(login.text).csrf,
+    'X-Configurator-Gateway': 'test', 'X-Configurator-Alarm': '2' };
+  assert.equal((await request('/api/administration', { headers })).status, 200);
+  assert.equal(calls[0].principal.role, 'admin');
+  assert.equal(calls[0].operation, 'gateway_request');
+  assert.deepEqual(calls[0].body, { gateway: 'test', alarm: 2, operation: 'administration', body: {} });
+  for (const rawBody of ['{"reset":true,"reset":false}', '{"reset":true,"res\\u0065t":false}']) {
+    const result = await request('/api/lockout/reset', { method: 'POST', headers, rawBody });
+    assert.equal(result.status, 400); assert.equal(JSON.parse(result.text).error, 'body_rejected');
+  }
+  assert.equal(calls.length, 1);
+  f.external(record => { record.accounts[0].salt = 'f'.repeat(32); });
+  assert.equal((await request('/api/administration', { headers })).status, 401);
+  assert.equal(calls.length, 1);
 });
