@@ -1,3 +1,7 @@
+# Unreleased: save from Controls
+
+Added Save configuration next to the control creation area. It validates/prepares and saves through the existing serialized configuration transaction, preserves the selected garage/control and stays in the custom UI. The action explicitly saves all pending configuration changes. Disabled while clean, busy, noneditable or an unfinished connection form exists; the separate review route remains available. Existing control lists now say Add another control; empty lists retain Add control. Existing desktop/mobile browser scenario now exercises this direct save and checks no extra control is created and the editor stays open. npm release and installation are pending.
+
 # Unreleased: control setup order
 
 Control setup now shows Control source (deCONZ / Homebridge), the saved gateway/bridge connection, deCONZ control type where applicable, then device discovery. Control type no longer renders in the earlier name/enabled grid. The saved connection picker is shown once; shared device/bridge discovery remains unchanged for Devices. JavaScript syntax verification passed. No runtime or stored configuration changes. Included in the next release, not installed or published to npm yet.

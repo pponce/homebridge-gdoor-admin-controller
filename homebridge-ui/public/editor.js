@@ -11,10 +11,10 @@ export function newGarage() {
     motorPaths:[], inputs:[], keypad:null };
 }
 export class ProfileEditor {
-  constructor(root, { configuration, credentials = [], discover, discoverHomebridge, changed = () => {}, error = () => {}, renderCheckEnable, viewChanged = () => {}, getStatus, cardAction, manageConnections }) {
+  constructor(root, { configuration, credentials = [], discover, discoverHomebridge, changed = () => {}, error = () => {}, renderCheckEnable, viewChanged = () => {}, getStatus, cardAction, manageConnections, saveConfiguration }) {
     this.root=root; this.configuration=withConnections(configuration); this.credentials=credentials; this.discover=discover; this.discoverHomebridge=discoverHomebridge; this.changed=changed; this.error=error;
     this.renderCheckEnable=renderCheckEnable;this.viewChanged=viewChanged;this.getStatus=getStatus;this.cardAction=cardAction;
-    this.manageConnections=manageConnections;this.manualKeypad=new Set();this.expandedGarage=null;
+    this.saveConfiguration=saveConfiguration;this.manageConnections=manageConnections;this.manualKeypad=new Set();this.expandedGarage=null;
     this.selectedInputs=new Map();this.selected=0; this.step=0; this.render();
   }
   change() { this.changed(this.configuration); }
@@ -212,7 +212,8 @@ export class ProfileEditor {
         this.input(tg,label+' (seconds)',input.timing,key,{type:'number',min:key.includes('Retract')?0:1,max:300,step:.1,help,emptyUnset:true});
       }card.append(advanced);card.append(this.button('Remove control',()=>{p.inputs.splice(index,1);this.selectedInputs.set(p.id,p.inputs[Math.min(index,p.inputs.length-1)]?.id);this.change();this.render();},'danger'));
     });
-    inputs.append(this.button('Add control',()=>{p.inputs.push({id:freshId('input'),name:'Indoor button',enabled:true,source:{type:'deconz',kind:'button',baseUrl:p.bolt.baseUrl,gatewayId:p.bolt.gatewayId,resourceId:'',uniqueId:'',resourceType:'ZHASwitch',modelId:'',manufacturer:'',credentialRef:p.bolt.credentialRef},trigger:1002,action:'toggle',motorPath:p.motorPaths[0]?.id??'primary',busyBehavior:p.motorPaths[0]?.interruption==='stop-opening-reverse-closing'?'interrupt':'drop',rearmSeconds:1.5,timing:{}});this.selectedInputs.set(p.id,p.inputs.at(-1).id);this.change();this.render();}));
+    if(p.inputs.length&&this.saveConfiguration){const actions=el('div',undefined,'actions');const saveButton=this.button('Save configuration',()=>this.saveConfiguration(),'primary');saveButton.dataset.controlSave='true';actions.append(saveButton);inputs.append(actions,el('p','Saves all pending configuration changes and keeps this page open.','help'));}
+    inputs.append(this.button(p.inputs.length?'Add another control':'Add control',()=>{p.inputs.push({id:freshId('input'),name:'Indoor button',enabled:true,source:{type:'deconz',kind:'button',baseUrl:p.bolt.baseUrl,gatewayId:p.bolt.gatewayId,resourceId:'',uniqueId:'',resourceType:'ZHASwitch',modelId:'',manufacturer:'',credentialRef:p.bolt.credentialRef},trigger:1002,action:'toggle',motorPath:p.motorPaths[0]?.id??'primary',busyBehavior:p.motorPaths[0]?.interruption==='stop-opening-reverse-closing'?'interrupt':'drop',rearmSeconds:1.5,timing:{}});this.selectedInputs.set(p.id,p.inputs.at(-1).id);this.change();this.render();}));
     this.virtualKeypad(root,p);
   }
   virtualKeypad(root,p){

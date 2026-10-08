@@ -37,6 +37,7 @@ function refresh(){
   $('retry-save').hidden=save.phase!=='sync-pending';
   $('reload').textContent=save.canEdit?'Discard changes':'Reload saved settings';
   $('reload').disabled=['loading','sync-pending'].includes(save.phase)||save.phase==='saved'&&!formDirty;
+  for(const button of $('editor').querySelectorAll('[data-control-save]')){button.disabled=busy||!save.canEdit||save.phase==='saved'||formDirty;button.hidden=save.phase==='review';}
   editor?.refreshCards();garageOverview();placeReview();
 }
 async function action(fn,errorMessage='Could not complete the request. Check the coordinator connection and try again.'){
@@ -63,7 +64,7 @@ function buildEditor(configuration,position){
   editor=null;connectionEditor=null;
   editor=new ProfileEditor($('editor'),{configuration,credentials:loaded.credentials,changed,
     discoverHomebridge:body=>hb.request('/homebridge',body),discover:body=>hb.request('/deconz',body),error:message=>notice(message,true),
-    renderCheckEnable:commissioning,viewChanged:refresh,getStatus:garageStatus,cardAction:garageAction,manageConnections:type=>{showPage('general');connectionEditor?.focus(type);}});
+    saveConfiguration:()=>persist(true),renderCheckEnable:commissioning,viewChanged:refresh,getStatus:garageStatus,cardAction:garageAction,manageConnections:type=>{showPage('general');connectionEditor?.focus(type);}});
   if(position){editor.selected=Math.min(position.selected,Math.max(0,configuration.controllers.length-1));editor.step=position.step;editor.expandedGarage=position.expandedGarage;editor.selectedInputs=new Map(position.selectedInputs??[]);editor.render();}
   connectionEditor=new ConnectionEditor($('shared-connections'),{configuration:()=>editor.configuration,credentials:()=>loaded.credentials,
     request:(path,body)=>hb.request(path,body),run:action,changed:configuration=>{changed(configuration);editor.render();},refresh:()=>{if(connectionEditor?.dirty&&save.phase==='review')save.changed(editor.configuration);refresh();},message:notice,
@@ -166,8 +167,14 @@ async function reviewChanges(controllerId=null){
   if(save.phase==='review'&&!reviewPanel.hidden){reviewPanel.querySelector('h2').focus({preventScroll:true});reviewPanel.scrollIntoView({behavior:'smooth',block:'nearest'});}
 }
 $('review-button').onclick=()=>reviewChanges();
-async function persist(){
+async function persist(prepare=false){
+  let preparing=prepare===true;
   return action(async()=>{
+    if(preparing){
+      if(connectionEditor?.dirty){notice('Finish or cancel the connection form before saving.',true);return;}
+      if(!save.canEdit||save.phase==='saved')return;
+      await save.prepare(editor.configuration);preparing=false;
+    }
     await save.save();
     // Confirm success before refreshing. Failed refresh is not a failed write.
     reviewPanel.hidden=true;
@@ -175,7 +182,7 @@ async function persist(){
     const message=connected?'Configuration saved. Use Homebridge’s Save button below to close these settings.':'Setup saved. Click Homebridge’s Save button below, then restart the coordinator child bridge.';
     notice(message);toast('Configuration saved.');
     try{connectionChecks.clear();checkForms.clear();await load();}catch{notice(message+' Reopen settings to refresh connection status.');}
-  },()=>save.phase==='sync-pending'?(save.connected?'Controller settings are saved, but the Homebridge save did not complete. Click Retry Homebridge save.':'The Homebridge save did not complete. Click Retry Homebridge save.'): 'Could not confirm the configuration save. Reload saved settings before trying again.');
+  },()=>preparing?'Could not save configuration. Check device addresses, selected devices and required fields.':save.phase==='sync-pending'?(save.connected?'Controller settings are saved, but the Homebridge save did not complete. Click Retry Homebridge save.':'The Homebridge save did not complete. Click Retry Homebridge save.'): 'Could not confirm the configuration save. Reload saved settings before trying again.');
 }
 $('retry-save').onclick=persist;
 $('credential-form').onsubmit=event=>{event.preventDefault();void action(async()=>{

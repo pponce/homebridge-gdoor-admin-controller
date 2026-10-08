@@ -241,7 +241,7 @@ try{
    await page.locator('.input-choice').nth(0).click();
    assert.equal(await page.getByLabel('Control name',{exact:true}).inputValue(),'Edited indoor button');
    await page.getByLabel('Control name',{exact:true}).fill(originalInputName);
-   await page.getByRole('button',{name:'Add control',exact:true}).click();
+   await page.getByRole('button',{name:'Add another control',exact:true}).click();
    assert.equal(await page.locator('.input-choice').count(),3);
    assert.equal(await page.locator('.input-choice').last().getAttribute('aria-pressed'),'true');
    await page.getByRole('button',{name:'Remove control',exact:true}).click();
@@ -265,9 +265,12 @@ try{
    await page.getByText('Selected: lumi.switch.acn047 · resource 2',{exact:true}).waitFor();
    await page.getByRole('button',{name:'03 Behavior'}).click();
    await page.getByLabel('Before opening (seconds)',{exact:true}).fill('3');
-   await review(page);assert.equal(f.applies(),0);
+   await page.getByRole('button',{name:'02 Controls'}).click();
+   assert.equal(f.applies(),0);
    assert.equal(await page.locator('#native-save').isDisabled(),true);
-   await page.getByRole('button',{name:'Save configuration',exact:true}).click();await saved(page);
+   await page.locator('[data-control-save]').click();await saved(page);
+   assert.equal(await page.locator('.input-profile').count(),1,'Save keeps the control editor open');
+   assert.equal(await page.locator('.input-choice').count(),2,'Save does not add a control');
    assert.equal(f.applies(),1);assert.equal(f.nativeSaves(),1);
    assert.equal(f.configuration().controllers[0].timing.openRetractSettleSeconds,3);
    assert.deepEqual(f.blocks()[0]._bridge,{username:'synthetic-bridge',port:12345});
