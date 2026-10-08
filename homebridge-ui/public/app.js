@@ -81,7 +81,7 @@ function buildEditor(configuration,position){
   if(position){editor.selected=Math.min(position.selected,Math.max(0,configuration.controllers.length-1));editor.step=position.step;editor.expandedGarage=position.expandedGarage;editor.selectedInputs=new Map(position.selectedInputs??[]);editor.render();}
   connectionEditor=new ConnectionEditor($('shared-connections'),{configuration:()=>editor.configuration,credentials:()=>loaded.credentials,
     request:(path,body)=>hb.request(path,body),run:action,changed:configuration=>{changed(configuration);editor.render();},refresh:()=>{if(connectionEditor?.dirty&&save.phase==='review')save.changed(editor.configuration);refresh();},message:notice,
-    keyRetired:reference=>{if(!usesKey(editor.configuration,reference))pendingKeyDeletes.add(reference);},
+    keyRetired:reference=>{if(!usesKey(editor.configuration,reference)){pendingKeyDeletes.add(reference);connectionKeys();}},
     keyCreated:reference=>{if(!loaded.credentials.includes(reference))loaded.credentials.push(reference);editor.credentials=loaded.credentials;connectionKeys();}});
 
 }
