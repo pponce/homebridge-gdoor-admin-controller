@@ -19,12 +19,16 @@ A Homebridge platform for coordinating **one garage door and a separate bolt/loc
 
 The separately installed [administration application](https://github.com/pponce/homebridge-deconzKeypadAlarm-admin) retains its own URL and accounts. The existing standalone installation remains a separate project. The planned direction is to include that interface in this plugin with a Node.js backend; the current release does not implement that integration.
 
+## Current UI release: 0.4.22
+
+Configure credentials within connections, select local Homebridge bridges directly from device/control setup, and choose individual devices from the Devices row. Unused credentials are removed only after configuration save succeeds. Existing settings and HomeKit pairing are preserved. The integrated Node.js web admin remains a separate development effort.
+
 ## Installation
 
 After npm publication, install on a Homebridge 2 / Node 22 or 24 host:
 
 ```sh
-sudo hb-service add homebridge-gdoor-admin-controller@0.4.20
+sudo hb-service add homebridge-gdoor-admin-controller@0.4.22
 ```
 
 Use Homebridge settings to configure the plugin in its own child bridge. New garages remain disabled until checked and enabled. Follow the [owner installation guide](docs/owner-test.md) for taking over from an existing controller. This package does not install a separate system service.

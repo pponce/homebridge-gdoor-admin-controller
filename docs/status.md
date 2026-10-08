@@ -1,3 +1,11 @@
+# 0.4.22 ready for maintainer publication
+
+All five jobs passed in [CI run 37715458224](https://github.com/pponce/homebridge-gdoor-admin-controller/actions/runs/37715458224) on implementation `0ca0463c5900d19d959415eb04bef117b35df216`: 172 tests on Node 22/24, actual Homebridge 2.0/2.4, custom UI IPC and desktop Chromium/mobile WebKit. Browser coverage includes direct local bridge/accessory selection without crypto.randomUUID, connection-owned key replacement staged until save, automatic unused-key deletion, Undo/Discard/native-save failure protection, compact refresh, device selection/addition/removal/draft retention and overflow. The earlier save/color/order improvements remain included. Screenshots are CI artifacts; this is not a claim of live owner-host acceptance.
+
+Update the existing `homebridge-gdoor-admin-controller` package to 0.4.22. Preserve configuration, private data and HomeKit pairing: no uninstall, bridge removal or storage archive is required. Publish the exact reviewed checkout with `bash scripts/publish-npm.sh REVIEWED_COMMIT_SHA`, verify the downloadable npm artifact, then `sudo hb-service stop`, `sudo hb-service add homebridge-gdoor-admin-controller@0.4.22`, `sudo hb-service start`. Leave Homebridge stopped on install failure. Publication and owner installation remain unconfirmed until performed.
+
+The separate Node.js web-admin effort has begun on `web-admin-node-port` with pinned references and a route/module inventory. It is not included in this UI release.
+
 # 0.4.22 additions: selectable Devices and Garage Door labels
 
 Devices now uses a selectable row: Garage Door opener, Bolt / Lock, then each additional opener, followed by Add opener device. Only the selected device's settings render below. Add creates and selects a new draft device; switching preserves edits and saving preserves the selection. Renaming updates its selector immediately. Garage detail labels are Garage Door Details and Garage Door name.
