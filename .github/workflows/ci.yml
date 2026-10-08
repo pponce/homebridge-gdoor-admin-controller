@@ -76,11 +76,15 @@ jobs:
           PREVIEW_OUTPUT: ${{ runner.temp }}/coordinator-browser/screenshots
         run: node scripts/config-ui-browser.mjs
       - name: Original web admin pages and production save flows
+        id: webflows
         env:
           PLAYWRIGHT_MODULE: ${{ runner.temp }}/coordinator-browser/node_modules/playwright
         run: |
           node scripts/web-admin-browser.mjs
           node scripts/web-admin-write-browser.mjs
+      - name: "Web flow result: ${{ steps.webflows.outputs.result || steps.webflows.outcome }}"
+        if: always()
+        run: echo "Web flow diagnostics are recorded in this step name."
       - name: Automatic web setup and live controller timing editor
         id: websettings
         env:

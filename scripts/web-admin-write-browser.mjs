@@ -43,11 +43,12 @@ try {
       await page.goto(f.origin); await page.locator('#username').fill('Owner'); await page.locator('#password').fill(f.password); await page.locator('#login button').click();
       const ready = () => page.waitForFunction(() => !document.querySelector('#settings-gear').disabled);
       await page.locator('#user-list [data-id]').first().waitFor(); await ready();
+      await page.locator('#user-list [data-id]').first().click(); await ready();
       assert.equal(await page.locator('#hb-use').isVisible(), true);
       assert.equal(await page.locator('#hb-use').isDisabled(), true);
       await page.getByText('Run homebridge-deconz in its own child bridge, separate from Garage Door Admin Controller.', { exact: true }).waitFor();
       async function navigate(id) { if (phone) await page.locator('#mobile-menu').click(); await page.locator('[data-page="' + id + '"]').click(); await page.locator('#' + id).waitFor({ state: 'visible' }); await ready(); }
-      await page.locator('#user-list [data-id]').first().click(); await page.locator('#name').fill('Owner renamed');
+      await page.locator('#name').fill('Owner renamed');
       await page.locator('#editor button.primary').click(); await page.getByText('Saved. A private recovery snapshot was created before the change.', { exact: true }).waitFor();
       assert.equal(f.data.responses['/alarmsystems/users']['a'.repeat(32)].name, 'Owner renamed');
       await page.locator('#pin').fill('5678'); await page.locator('#pin-repeat').fill('5678'); await page.locator('#editor button.primary').click();
