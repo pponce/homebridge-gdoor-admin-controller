@@ -1,3 +1,9 @@
+# Unreleased: clearer General device connections
+
+The connection form starts collapsed behind Add device connection. Add and Edit reveal it; successful Add/Update and Cancel close it again. A blank form can be cancelled without first typing, and opening it does not create an unsaved change. Manage connections still opens the relevant form and preserves an existing draft. Saved connections are named cards with a type label, address, masked-key status and a separate action footer. The primary Add button is visually distinct from existing connections. No credential lifetime, configuration-save or device-control behavior changes.
+
+Desktop/mobile browser coverage now exercises the collapsed form, open/cancel focus, unchanged save status, edit/add completion and draft retention. Validation pending. This is source work for the next release; do not republish 0.4.22. npm publication, installation and owner acceptance remain separate.
+
 # 0.4.22 ready for maintainer publication
 
 All five jobs passed in [CI run 37715458224](https://github.com/pponce/homebridge-gdoor-admin-controller/actions/runs/37715458224) on implementation `0ca0463c5900d19d959415eb04bef117b35df216`: 172 tests on Node 22/24, actual Homebridge 2.0/2.4, custom UI IPC and desktop Chromium/mobile WebKit. Browser coverage includes direct local bridge/accessory selection without crypto.randomUUID, connection-owned key replacement staged until save, automatic unused-key deletion, Undo/Discard/native-save failure protection, compact refresh, device selection/addition/removal/draft retention and overflow. The earlier save/color/order improvements remain included. Screenshots are CI artifacts; this is not a claim of live owner-host acceptance.

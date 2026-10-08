@@ -181,7 +181,16 @@ try{
    }
    for(const mode of ['enabled','local-unavailable']){
      const x=await fixture(browser,{mobile,dark,mode}),p=x.page;
-     await p.locator('#general-tab').click();await p.locator('#shared-type').selectOption('homebridge');
+     await p.locator('#general-tab').click();
+     assert.equal(await p.locator('.connection-form').isVisible(),false);
+     await p.getByRole('button',{name:'Add device connection',exact:true}).click();
+     assert.equal(await p.locator('.connection-form').isVisible(),true);
+     assert.equal(await p.locator('#native-save').isEnabled(),true,'Opening the form does not create an unsaved change');
+     await p.getByRole('button',{name:'Cancel connection edit',exact:true}).click();
+     assert.equal(await p.locator('.connection-form').isVisible(),false);
+     assert.equal(await p.getByRole('button',{name:'Add device connection',exact:true}).evaluate(el=>el===document.activeElement),true);
+     await p.getByRole('button',{name:'Add device connection',exact:true}).click();
+     await p.locator('#shared-type').selectOption('homebridge');
      await p.waitForFunction(()=>document.querySelector('#shared-source option[value="local-bridge"]'));
      await p.locator('#shared-source').selectOption('local-bridge');
      assert.equal(await p.locator('#shared-address').inputValue(),'http://127.0.0.1:51001');
@@ -203,6 +212,8 @@ try{
        await review(p);await p.getByRole('button',{name:'Save configuration',exact:true}).click();await saved(p);
        assert.equal(x.configuration().connections.find(c=>c.type==='homebridge').credentialRef,'local-homebridge-test');
        assert.equal(x.blocks()[0].controllers[0].name,x.configuration().controllers[0].name);
+       assert.equal(await p.locator('.connection-form').isVisible(),false);
+       await p.getByRole('button',{name:'Add device connection',exact:true}).click();
        await p.locator('#shared-type').selectOption('deconz');
        await p.waitForFunction(()=>document.querySelector('#shared-source option[value="local-gateway"]'));
        await p.locator('#shared-source').selectOption('local-gateway');
@@ -461,6 +472,9 @@ try{
      const original=structuredClone(x.configuration().controllers);
      await p.locator('#general-tab').click();
      assert.equal(await p.locator('.shared-connection').count(),2,'Existing addresses migrate without re-entry');
+     assert.equal(await p.locator('article.shared-connection').count(),2,'Saved connections are named cards, with separate actions');
+     assert.equal(await p.locator('.connection-kind').count(),2);
+     assert.equal(await p.locator('.connection-form').isVisible(),false);
      assert.match(await p.locator('.connection-purposes').textContent(),/buttons and keypads/);
      assert.match(await p.locator('.connection-purposes').textContent(),/separate from the web admin/);
      await p.getByRole('button',{name:'Edit connection Tailwind 1',exact:true}).click();
@@ -470,6 +484,8 @@ try{
      await p.getByRole('button',{name:'Update connection',exact:true}).click();
      await p.locator('#notice').filter({hasText:'Review and save'}).waitFor();
      await review(p);
+     assert.equal(await p.locator('.connection-form').isVisible(),false);
+     await p.getByRole('button',{name:'Add device connection',exact:true}).click();
      await p.locator('#shared-name').fill('Unfinished next connection');
      assert.equal(await p.getByRole('button',{name:'Save configuration',exact:true}).count(),0,'A pending form invalidates an earlier review');
      assert.equal(await p.locator('#native-save').isDisabled(),true);
