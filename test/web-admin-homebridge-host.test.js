@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile, readFile, rm, stat, symlink } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, rm, stat, symlink, chmod } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { WebHomebridgeHost, homebridgeAlarmContext, editedHomebridgeCache, replaceHomebridgeCache } from '../src/web-admin-homebridge-host.js';
@@ -54,6 +54,43 @@ test('readiness reports a fixed prerequisite reason and never leaks private exce
   f.host.verifySources = async () => { throw Error('private fixture path and credential'); };
   assert.deepEqual(await f.host.readiness(), { configured: false, error: 'homebridge_sources_unavailable' });
   assert.equal(await f.host.available(), false); assert.deepEqual(f.calls, []);
+});
+
+test('readiness identifies the configuration file and failed policy without exposing its host path or contents', async t => {
+  const f = await fixture(t), file = path.join(f.root, 'config.json');
+  await chmod(file, 0o664);
+  assert.deepEqual(await f.host.readiness(), { configured: false, error: 'homebridge_file_unavailable',
+    file_check: { scope: 'configuration', file: 'config.json', reason: 'writable_by_others' } });
+  await chmod(file, 0o600);
+  assert.deepEqual(await f.host.readiness(), { configured: true, error: null });
+  await rm(file);
+  const missing = await f.host.readiness();
+  assert.deepEqual(missing, { configured: false, error: 'homebridge_file_unavailable',
+    file_check: { scope: 'configuration', file: 'config.json', reason: 'missing' } });
+  assert.equal(JSON.stringify(missing).includes(f.root), false); assert.deepEqual(f.calls, []);
+});
+
+test('readiness identifies a missing reviewed source file without relaxing the source checks', async t => {
+  const f = await fixture(t), plugin = path.join(f.root, 'node_modules', 'homebridge-deconz');
+  const library = path.join(plugin, 'node_modules', 'homebridge-lib');
+  await mkdir(library, { recursive: true });
+  await writeFile(path.join(plugin, 'package.json'), JSON.stringify({ name: 'homebridge-deconz', version: '1.3.5' }), { mode: 0o644 });
+  await writeFile(path.join(library, 'package.json'), JSON.stringify({ name: 'homebridge-lib', version: '8.1.5', main: 'index.js' }), { mode: 0o644 });
+  await writeFile(path.join(library, 'index.js'), '', { mode: 0o644 });
+  f.host.pluginRoot = () => plugin;
+  delete f.host.verifySources;
+  assert.deepEqual(await f.host.readiness(), { configured: false, error: 'homebridge_file_unavailable',
+    file_check: { scope: 'plugin', file: 'lib/DeconzService/AlarmSystem.js', reason: 'missing' } });
+  assert.deepEqual(f.calls, []);
+});
+
+test('readiness refuses arbitrary file diagnostic labels and reasons', async t => {
+  const f = await fixture(t);
+  f.host.verifySources = async () => {
+    const error = Error('homebridge_file_unavailable');
+    error.fileCheck = { scope: 'plugin', file: '/private/fixture-secret', reason: 'read_failed' }; throw error;
+  };
+  assert.deepEqual(await f.host.readiness(), { configured: false, error: 'homebridge_file_unavailable' });
 });
 
 test('offline cache transform changes only the precisely mapped alarm PIN', () => {

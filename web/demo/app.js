@@ -53,13 +53,13 @@
     }
     frame.hidden=false;remember();window.scrollTo(0,0);
   }
-  let demoMode=false, selectedGateway='', gateways=[], contextReady=false;
+  let demoMode=true, selectedGateway='', gateways=[], contextReady=false;
   // Keep navigation only, per tab. Never persist form drafts, PINs or session tokens.
-  function remember(){try{sessionStorage.setItem(demoMode?'configurator-demo-navigation':'configurator-navigation',JSON.stringify({page,selected,gateway:selectedGateway,alarm:selectedAlarm,...(page==='extension'?{extension:selectedExtension}:{})}));}catch(_){}}
+  function remember(){try{sessionStorage.setItem(demoMode?'gdoor-public-demo-navigation':'gdoor-public-demo-navigation',JSON.stringify({page,selected,gateway:selectedGateway,alarm:selectedAlarm,...(page==='extension'?{extension:selectedExtension}:{})}));}catch(_){}}
   function restoreNavigation(){
     selectedExtension=null;
     try{
-      const saved=JSON.parse(sessionStorage.getItem(demoMode?'configurator-demo-navigation':'configurator-navigation'));
+      const saved=JSON.parse(sessionStorage.getItem(demoMode?'gdoor-public-demo-navigation':'gdoor-public-demo-navigation'));
       if(typeof saved?.gateway==='string')selectedGateway=saved.gateway;
       if(Number.isInteger(saved?.alarm))selectedAlarm=saved.alarm;
       if(pages.includes(saved?.page))page=saved.page;
@@ -70,7 +70,7 @@
     }catch(_){if(page==='extension')page='users';}
   }
   async function showPage(){
-    if(page==='controller'&&(demoMode||!applicationSettings?.controller_settings_available))page='users';
+    if(page==='controller'&&(!applicationSettings?.controller_settings_available))page='users';
     if(regular&&!regularPages.includes(page))page='users';
     if(page==='extension'){
       // Resolve the saved ID through the current authorized registry, never a saved URL.
@@ -116,27 +116,7 @@
     update_failed_or_revision_conflict:'This user may have changed. Reload and review before saving again.',
     delete_failed_or_revision_conflict:'This user may have changed. Reload before trying deletion again.',
     nonexistent_expiry:'That local time does not exist during the daylight-saving change. Choose another time.'};
-  async function api(path, body, context={gateway:selectedGateway,alarm:selectedAlarm}, options={}) {
-    const controller=path==='controller'||path.startsWith('controller/');
-    if(controller&&demoMode)throw Error('Turn off demo data to edit controller settings.');
-    const auth=controller||path==='accounts'||path.startsWith('account/')||['login','logout','session','settings','account/password','setup/gateway','setup/application'].includes(path);
-    if(!auth&&!path.startsWith('history/')&&body!==undefined&&!contextReady)throw Error('Reload the selected gateway before making changes.');
-    if(demoMode&&!auth&&path!=='setup')return window.ConfiguratorDemo.request(path,body,context);
-    if(!auth&&path!=='setup'&&context.gateway?.startsWith('demo-'))throw Error('Demo targets cannot be sent to the server.');
-    const headers=body===undefined?{}:{'Content-Type':'application/json','X-CSRF-Token':csrf};
-    if(!auth&&!['gateways','activity-options','history/query','history/retention','history/clear','setup'].includes(path)){headers['X-Configurator-Gateway']=context.gateway;if(context.alarm!==null)headers['X-Configurator-Alarm']=String(context.alarm);}
-
-    if(['users/save','users/delete','users/rotate-pin','alarm/save','lockout/save','lockout/reset'].includes(path)){
-      if(!options.reviewed&&!confirm('Save this change? A policy snapshot will be retained. Remote gateway credentials require a separate backup by its administrator.'))throw Error('Change cancelled.');
-      body={...body,backup_acknowledged:true};
-    }
-    if(path==='overview')path='administration';
-    const response=await fetch('/api/'+path,{method:body===undefined?'GET':'POST',credentials:'same-origin',cache:'no-store',
-      headers,body:body===undefined?undefined:JSON.stringify(body)});
-    const result=await response.json();
-    if(!response.ok){ if(response.status===401) signedOut(); const error=new Error(errors[result.error]||'The request could not be completed ('+result.error+').');error.code=result.error;throw error; }
-    return result;
-  }
+  async function api(path, body, context={gateway:selectedGateway,alarm:selectedAlarm}) { return window.StaticDemo.request(path, body, context); }
   const controllerPanel=window.ConfiguratorController({root:$('#controller-settings'),api,readOnly:()=>applicationSettings?.access_mode!=='manage'});
   const homebridgeFlow=window.ConfiguratorHomebridgeFlow({api,extensions:()=>applicationSettings?.extensions||[],
     nativeHomebridge:()=>applicationSettings?.homebridge?.profile==='homebridge-child-bridge',
@@ -163,7 +143,7 @@
   let applicationSettings=null;
   async function loadApplication(){
     applicationSettings=await api('setup');
-    document.querySelector('[data-page="controller"]').hidden=regular||demoMode||!applicationSettings.controller_settings_available;
+    document.querySelector('[data-page="controller"]').hidden=regular||!applicationSettings.controller_settings_available;
     const nav=$('#extension-navigation');nav.replaceChildren();
     for(const extension of applicationSettings.extensions||[]){if(!extension.page)continue;const a=document.createElement('button');a.type='button';a.className='gp-button';a.dataset.extension=extension.id;a.textContent=extension.name;a.setAttribute('aria-pressed','false');a.onclick=()=>act(()=>openExtension(extension));nav.append(a);}
     $('#access-mode').textContent=applicationSettings.access_mode==='observe'?'Observation mode · changes and keypad commands are disabled.':'';
@@ -172,7 +152,7 @@
     document.body.classList.toggle('gp-regular',regular);
     document.querySelectorAll('[data-page]').forEach(b=>b.hidden=regular?!regularPages.includes(b.dataset.page):b.dataset.page==='debug'&&!$('#debug-mode').checked);
     for(const id of ['demo-mode','debug-mode'])$('#'+id).closest('label').hidden=regular;
-    demoMode=!regular&&sessionStorage.getItem('configurator-demo-active')==='true';restoreNavigation();if(regular&&!regularPages.includes(page))page='users';await loadGateways();await loadApplication();if(applicationSettings.onboarding_required){window.location.assign('/welcome.html');return;}$('#login').hidden=true;$('#application').hidden=false;$('#logout').hidden=false;$('#settings-gear').hidden=false;$('#mobile-menu').hidden=false;mobileLayout();if(!gateways.length){page=regular?'users':'gateway';contextReady=false;}else if(page!=='history')await loadInventory();else contextReady=true;await showPage();tell(demoMode?'Demo mode. Changes affect fictional data only.':'Connected to your local administration server.'); }
+    demoMode=true;restoreNavigation();if(regular&&!regularPages.includes(page))page='users';await loadGateways();await loadApplication();if(applicationSettings.onboarding_required){window.location.assign('/welcome.html');return;}$('#login').hidden=true;$('#application').hidden=false;$('#logout').hidden=false;$('#settings-gear').hidden=false;$('#mobile-menu').hidden=false;mobileLayout();if(!gateways.length){page=regular?'users':'gateway';contextReady=false;}else if(page!=='history')await loadInventory();else contextReady=true;await showPage();tell(demoMode?'Demo mode. Changes affect fictional data only.':'Connected to your local administration server.'); }
   $('#login').onsubmit=e=>{e.preventDefault();act(async()=>{let password=$('#password').value;$('#password').value='';try{const r=await api('login',{username:$('#username').value.trim(),password});csrf=r.csrf;}finally{password='';}await signedIn();});};
   $('#logout').onclick=()=>act(async()=>{await api('logout',{});signedOut();tell('Signed out.');});
   $('#settings-gear').onclick=()=>act(async()=>{if(demoMode)throw Error('Turn off demo data before opening installation settings.');if(pendingOperation())throw Error('Finish the pending operation before opening settings.');await window.ConfiguratorSettings.open(api,message=>{signedOut();tell(message);},updated=>{applicationSettings={...applicationSettings,...updated};},webAccount);});
@@ -183,7 +163,7 @@
     if(!selectedGateway)selectedGateway='';
     $('#gateway-select').innerHTML=gateways.map(g=>`<option value="${esc(g.id)}" ${g.id===selectedGateway?'selected':''}>${esc(g.name)}</option>`).join('');
     $('#demo-mode').checked=demoMode;$('#demo-banner').hidden=!demoMode;$('#demo-reset').hidden=!demoMode;
-    $('[data-page="controller"]').hidden=regular||demoMode||!applicationSettings?.controller_settings_available;
+    $('[data-page="controller"]').hidden=regular||!applicationSettings?.controller_settings_available;
     updateSelectorVisibility();
   }
   function clearContext(){clearInterruptedChange();userLoadGeneration++;cancelKeypad();$('#debug-output').value='';$('#protection').append($('#protection-editor'));$('#protection-editor').hidden=true;$('#protection-alarms').replaceChildren();$('#lockout-reset').disabled=true;contextReady=false;$('#gateway-inventory').replaceChildren();$('#grant-preview').replaceChildren();$('#activity').replaceChildren();overview=null;inventory=null;selected=null;selectedAlarm=null;adding=false;attaching=null;alarmSample=null;lockoutSample=null;current=null;$('#editor').replaceChildren();$('#homebridge-panel').replaceChildren();$('#alarm-form').replaceChildren();$('#lockout-form').replaceChildren();}
@@ -198,19 +178,8 @@
     try{sessionStorage.setItem('configurator-debug-visible',String(enabled));}catch(_){}
     if(!enabled&&page==='debug'){page='users';$('#debug-output').value='';await showPage();}
   });
-  $('#demo-mode').onchange=()=>act(async()=>{
-    const next=$('#demo-mode').checked;
-    try{
-    if(pendingOperation())throw Error('Finish the pending operation before switching demo mode.');
-    if(page==='controller'&&!controllerPanel.leave())return;
-    // Verify no active real transaction before hiding the live interface.
-    if(next&&selectedAlarm){const live=await api('transaction');if(!['none','complete'].includes(live.stage))throw Error('Finish the pending real operation first.');}
-    controllerPanel.clear();remember();clearContext();demoMode=next;selectedGateway=next?'demo-home':'';page='gateway';restoreNavigation();
-    $('#demo-mode').checked=demoMode;$('#demo-banner').hidden=!demoMode;$('#demo-reset').hidden=!demoMode;
-    $('[data-page="controller"]').hidden=regular||demoMode||!applicationSettings?.controller_settings_available;sessionStorage.setItem('configurator-demo-active',String(demoMode));await loadGateways();await loadInventory();await showPage();tell(demoMode?'Demo mode: only fictional data will change.':'Real setup reloaded. Demo edits were not applied.');
-    }finally{$('#demo-mode').checked=demoMode;}
-  });
-  $('#demo-reset').onclick=()=>act(async()=>{if(!demoMode)return;if(!confirm('Reset all fictional users and grants? Your real setup is unaffected.'))return;window.ConfiguratorDemo.reset();clearContext();await loadInventory();await showPage();tell('Demo data reset.');});
+  $('#demo-mode').onchange=()=>{$('#demo-mode').checked=true;};
+  $('#demo-reset').onclick=()=>act(async()=>{if(!demoMode)return;if(!confirm('Reset all fictional users and grants? Your real setup is unaffected.'))return;window.StaticDemo.reset();clearContext();await loadInventory();await showPage();tell('Demo data reset.');});
   function updateSelectorVisibility(){
     const gatewayField=$('#gateway-select').closest('label');
     const alarmField=$('#alarm-context-label');
@@ -647,7 +616,7 @@
   setInterval(()=>{if(csrf&&!busy&&!document.hidden)refreshGatewayConnections();},10000);
 
   let historyGateway='',historyAlarm='',historyOptions=[],historyPaused=true,historyRetention=90,historyCategories=['keypad','deconz','administration'];
-  function historyRemember(){try{sessionStorage.setItem(demoMode?'configurator-demo-history-filter':'configurator-history-filter',JSON.stringify({gateway:historyGateway,alarm:historyAlarm,categories:historyCategories}));}catch(_){}}
+  function historyRemember(){try{sessionStorage.setItem(demoMode?'gdoor-public-demo-history-filter':'configurator-history-filter',JSON.stringify({gateway:historyGateway,alarm:historyAlarm,categories:historyCategories}));}catch(_){}}
   function historyTitle(row){
     if(row.source==='Keypad'&&row.action==='Code rejected'&&row.user==='Unknown')return 'Rejected PIN';
     return row.user+' · '+row.action;
@@ -669,7 +638,7 @@
   }
   async function loadHistory(options=false){
     if(options){
-      try{const saved=JSON.parse(sessionStorage.getItem(demoMode?'configurator-demo-history-filter':'configurator-history-filter'));historyGateway=typeof saved?.gateway==='string'?saved.gateway:'';historyAlarm=typeof saved?.alarm==='string'?saved.alarm:'';historyCategories=Array.isArray(saved?.categories)?['keypad','deconz','administration'].filter(c=>saved.categories.includes(c)):['keypad','deconz','administration'];}catch(_){historyGateway='';historyAlarm='';historyCategories=['keypad','deconz','administration'];}
+      try{const saved=JSON.parse(sessionStorage.getItem(demoMode?'gdoor-public-demo-history-filter':'configurator-history-filter'));historyGateway=typeof saved?.gateway==='string'?saved.gateway:'';historyAlarm=typeof saved?.alarm==='string'?saved.alarm:'';historyCategories=Array.isArray(saved?.categories)?['keypad','deconz','administration'].filter(c=>saved.categories.includes(c)):['keypad','deconz','administration'];}catch(_){historyGateway='';historyAlarm='';historyCategories=['keypad','deconz','administration'];}
     }
     historyOptions=(await api('activity-options')).gateways;
       if(!historyOptions.some(g=>g.id===historyGateway)){historyGateway='';historyAlarm='';}

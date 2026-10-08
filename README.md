@@ -1,65 +1,118 @@
-# Garage Door Admin Controller
+# Homebridge Garage Door Admin Controller
 
-A Homebridge platform for coordinating **one garage door and a separate bolt/lock per configured controller**. Multiple doors are supported by separate controller definitions. Multiple input profiles for the same physical door must share its coordinator.
+Coordinate a **garage door opener and a separate motorized bolt** from Apple Home, physical controls, and a keypad. The plugin manages the sequence: retract the bolt before opening, then wait for the configured closed-door checks before extending it. Each door and bolt share one controller so requests from different controls use the same movement and locking rules.
 
-**Status: correcting issues found in initial owner testing.** The runtime, combined Garage Door and optional Lock accessories, generalized physical inputs, standalone-admin API and custom Homebridge settings UI are connected. Physical testing has exposed status and input failures; full original-controller parity is not established. New garages stay disabled until explicitly checked and enabled. See the [installation and test guide](docs/owner-test.md), [validated revisions and limits](docs/status.md), and [old-to-new field-name mapping](docs/settings-mapping.md).
+An optional **web administration interface** brings deCONZ users, PINs, access schedules, keypad lockout protection, alarms, and activity history into one place. It runs inside the Homebridge plugin; there is no separate web service to install.
 
-## Agreed product scope
+> **Custom deCONZ is currently required for the keypad and user-management setup described here.** It needs the alarm-user features in [pponce's custom deCONZ REST plugin](https://github.com/pponce/deconz-rest-plugin/tree/alarm-users-v1). The upstream proposal, [deCONZ PR #8661](https://github.com/dresden-elektronik/deconz-rest-plugin/pull/8661), is still an open draft as of October 8, 2026. Acceptance is **TBD**. A standard deCONZ installation does not currently provide these features, and installing this Homebridge plugin does not install or upgrade deCONZ for you.
 
-- Opener: a garage accessory supplied by another Homebridge plugin, or Tailwind's local API.
-- Bolt: a Lock, Switch, or Light accessory supplied by another Homebridge plugin, or direct deCONZ relay access.
-- Always publish a combined Garage Door accessory.
-- Optionally publish a separate Lock accessory for either bolt backend.
-- Configure sensor-based or explicitly estimated travel feedback, independent opening/closing times, settling delays, and per-input behavior.
-- Assign supported deCONZ or Homebridge buttons/switches to the primary opener or a named motor relay through the same coordinator. HomeKit and virtual keypad retain the primary opener route. See [input assignments](docs/input-routing.md) for implementation boundaries.
-- No door-only, bolt-only, native HomeKit pairing, or Apple Home automation backend.
-- No dependency on HTTP Webhooks for the coordinator's accessories or state publication.
+## What it does
 
-## Owner test release: 0.4.27
+- **One coordinated garage door in Apple Home.** Publishes a Garage Door accessory, with an optional separate Lock accessory for the bolt. Configure additional controllers for additional door-and-bolt pairs.
+- **Shared control rules.** HomeKit, supported buttons and switches, physical keypads, and the web keypad send requests through the same coordinator. Supported relay setups can use configurable stop/reverse behavior.
+- **Timing for your hardware.** Set opening and closing times, bolt delays, settling time, relay pulses, and timing overrides for individual controls. Feedback can use supported sensors or explicitly configured estimates.
+- **Persistent setup.** The saved Enabled setting survives Homebridge and child-bridge restarts. Current faults and device availability are shown separately. Startup checks current device state without replaying movement commands.
+- **deCONZ access administration.** Manage named users and PINs, per-alarm permissions, allowed keypads, schedules, validity periods, and usage limits. Configure failed-PIN lockout protection and inspect access activity.
+- **Web accounts and controller settings.** Manage web logins and edit controller defaults or device timing overrides in a browser. Timing changes apply to the next operation without restarting the plugin.
 
-Separates the saved **Enabled** setting from current device health. A fault, outage or reboot leaves setup and enablement intact. Startup checks fresh physical state, archives previous faults, and never replays movement. Both interfaces show Enabled alongside Ready, Checking devices, Device unavailable or Fault, with a separate **Check again** recovery action. Names and timing edits retain setup approval. See [restart recovery, saved-state migration and Tailwind feedback limits](docs/restart-recovery.md).
+## Requirements
 
-Retains automatic LAN setup, live controller-default/device timing edits and Homebridge setup diagnostics. Both this plugin and homebridge-deconz require separate child bridges.
+The full garage, keypad, and web-administration setup uses:
 
-Includes the optional Node.js web administrator using the existing interface for deCONZ users, PINs, access grants, schedules, keypad protection, alarms, activity and web accounts. Enable it in General → Web admin interface and create the first administrator there. Additional accounts are managed in web Settings. The server is **off by default** and uses the saved deCONZ connections; existing controller configuration and HomeKit pairing are retained.
+| Component | Requirement |
+| --- | --- |
+| Homebridge | **Homebridge 2.x** with the Homebridge UI. Run this plugin in its **own child bridge**. |
+| Node.js | **22.13 or later in the 22.x series, or 24.x**, for the full setup including the web interface. OpenSSL is needed to create its local HTTPS certificate. |
+| deCONZ | A working Zigbee gateway and the **custom alarm-user build** linked above, with a deCONZ API key. This is a separate prerequisite, not an npm dependency installed by this plugin. |
+| homebridge-deconz | Install and configure [homebridge-deconz](https://github.com/ebaauw/homebridge-deconz) on the same Homebridge host, in a **different child bridge**. It provides the Homebridge side of the deCONZ alarm integration. |
+| Physical keypad | The tested model is the **Xfinity/Comcast URC4450BC0-X-R**, paired with deCONZ and assigned to the intended alarm. Other compatible IAS ACE keypads **may work, but have not been hardware-tested with this setup**. Do not assume other Xfinity models behave identically. |
+| Garage hardware | A supported garage opener **and a separate bolt/lock** for each controller, with suitable feedback or explicitly configured timing estimates. See Supported connections below. |
+| Network access | Homebridge must be able to reach the configured devices and deCONZ gateway. Your browser must be able to reach Homebridge for setup and the plugin's HTTPS port for web administration. |
 
-The existing Homebridge coordinator remains responsible for movement. This release does not include the old Python controller or HTTP Webhooks integration. The Controller page supports live timing edits; see docs/controller-timings.md. The [standalone application](https://github.com/pponce/garageDoorController) remains preserved for use without Homebridge.
+**Both plugins require separate child bridges.** Do not run this plugin or `homebridge-deconz` on the main bridge, or put them together in one child bridge. This keeps the controller and web interface running when a confirmed alarm-PIN update restarts the deCONZ child bridge.
 
-See [web setup and the first functional test](docs/web-admin-setup.md) and [alarm-PIN restart requirements and recovery limits](docs/web-admin-alarm-pin.md). Existing Homebridge deCONZ alarm PIN synchronization requires explicit confirmation, a separate local deCONZ child bridge, and the reviewed compatible sources. This initial release has automated coverage; physical acceptance is still required.
+The physical keypad is needed for physical PIN entry; it is not needed to operate a configured garage from Apple Home. A garage controller using other supported connections can run without the optional deCONZ administration features.
 
-The configuration UI retains connection cards, direct local Homebridge selection, device/control selectors and in-place reviewed saves from 0.4.23. The [older package-name transition](docs/package-rename.md) applies only when moving from homebridge-gDoorAndBolt-coordinator.
+**Homebridge alarm-PIN synchronization has additional requirements:** Linux, a local HTTP Homebridge UI, writable Homebridge storage, and the reviewed `homebridge-deconz` **1.3.5** / `homebridge-lib` **8.1.5** sources. Other versions are not automatically accepted for this operation. See [alarm-PIN setup and compatibility](docs/web-admin-alarm-pin.md).
 
-## Installation
+## Supported connections
 
-After npm publication, install on a Homebridge 2 / Node 22 or 24 host:
+| Part | Supported connection |
+| --- | --- |
+| Garage opener | Tailwind local API, or a supported Garage Door accessory supplied by another Homebridge plugin. |
+| Separate bolt | Direct deCONZ relay, or a supported Lock, Switch, or Light accessory supplied by another Homebridge plugin. |
+| Additional opener relays | Supported deCONZ or Homebridge outputs, assigned to controls through the same coordinator. |
+| Physical controls | Supported deCONZ or Homebridge buttons/switches, plus the tested Xfinity keypad through the custom deCONZ alarm integration. |
 
-```sh
-sudo hb-service add homebridge-gdoor-admin-controller@0.4.25
+Direct Tailwind access needs its local control key. Direct deCONZ access needs its API key. Homebridge accessory connections use the source bridge's pairing PIN and require unpaired accessory control to be enabled. The setup UI stores credentials privately.
+
+Every configured garage needs both a door and a bolt; door-only and bolt-only controllers are not supported. Timed feedback is an estimate, and a relay's reported state is not proof of the bolt's physical position. Choose settings that match what your devices can actually report.
+
+## Install
+
+### Using the Homebridge UI
+
+1. Open **Plugins** in the Homebridge UI.
+2. Search for **`homebridge-gdoor-admin-controller`** and click **Install**.
+3. Open the plugin's settings and configure it to run in its **own child bridge**. Configure `homebridge-deconz` in a separate child bridge too.
+4. Restart when Homebridge prompts you, then follow First setup below. Pair the controller child bridge with Apple Home using the QR code shown by Homebridge.
+
+### Using hb-service
+
+On a host managed by `hb-service`, install the release from a terminal:
+
+```bash
+(
+  set -e
+  sudo hb-service stop
+  sudo hb-service add homebridge-gdoor-admin-controller@0.4.28
+  sudo hb-service start
+)
 ```
 
-**Required bridge setup:** run Garage Door Admin Controller in its own child bridge. Run `homebridge-deconz` in a separate child bridge. Do not place either on the main bridge or combine them in the same child bridge. This separation lets alarm PIN updates restart deCONZ while the controller and web administrator remain running. New garages remain disabled until checked and enabled. Follow the [owner installation guide](docs/owner-test.md) for taking over from an existing controller. This package does not install a separate system service.
+If installation fails, the block stops and leaves Homebridge stopped so you can resolve the error. Then open the Homebridge UI to configure the child bridges and plugin. This does not install deCONZ or `homebridge-deconz`.
 
-Maintainer publication instructions are in [npm-release.md](docs/npm-release.md). The GitHub repository can remain private while the npm package is public. No new open-source license is granted in this release (`UNLICENSED`).
+For an existing installation, update through the Homebridge UI or use the same pinned `hb-service` command. Keep your saved configuration and HomeKit pairing; there is no need to uninstall the plugin or remove its bridge from Apple Home. Check the [changelog](CHANGELOG.md) before upgrading or downgrading.
 
-## Development
+## First setup
 
-Node.js 22 or 24 and Homebridge 2. The optional web administrator requires Node 22.13+ or 24 and OpenSSL. Install runtime dependencies before testing; the schedule adapter uses @js-temporal/polyfill.
+1. In the plugin's **General** tab, add the connections and credentials for your deCONZ gateway, Tailwind controller, or existing Homebridge accessories.
+2. Add a garage. Under **Devices**, choose its opener, separate bolt, and any additional opener relays. Select the feedback and timing settings appropriate for your hardware.
+3. Under **Controls**, assign any buttons, switches, and physical keypads. Choose their actions and the opener they should use. Configure the web keypad if wanted.
+4. Review and save the configuration. Complete the device checks and explicitly **Enable** the garage when setup is ready. If replacing another controller, stop that controller and any competing automations before enabling this one.
+5. Test the full sequence under supervision: unlock, open, any configured stop/reverse action, close, lock, and restart recovery. Only one controller should operate a physical door-and-bolt assembly.
 
-```sh
-npm install --ignore-scripts --no-audit --no-fund
-npm test
-npm pack --dry-run --ignore-scripts
-```
+Enabled is your saved choice to use a configured garage. **Ready**, **Checking devices**, **Device unavailable**, and **Fault** describe its current condition. A fault can block commands without disabling the garage or erasing its setup. Use **Check again** after resolving the cause. See [restart recovery and feedback limits](docs/restart-recovery.md).
 
-Version 0.4.14 lets edited garage cards open Review changes and Save configuration in place; the bottom Review changes route remains available. Name-only edits keep the current enabled/disabled card color and show an unsaved-changes label. Both routes use one reviewed save.
+## Enable the web interface
 
-Version 0.4.13 adds reusable device connections in General for deCONZ, Tailwind and existing Homebridge accessories. Save a name, address and private-key reference once, then select that connection during garage setup. Existing connections import automatically; valid garage enablement is preserved. Tailwind door count is optional, and garage selections show Door 1/2/3. Shared address/key-reference edits update affected profiles through Review/Save and their existing check policy. Keys can be created inline and remain private. See [the configuration flow](docs/config-ui-experience.md). Update the separate administrator client before editing 0.4.13+ coordinator settings there. It includes the selectable [HomeKit reporting experiments](docs/homekit-reporting.md#next-experiments--049) from 0.4.9 with diagnostics starting OFF in 0.4.14 and available for on-demand re-enablement. Movement behavior is unchanged. Registry publication is performed by the maintainer after release checks pass. Examples contain synthetic devices and require real discovery/configuration. Uncommissioned startup and inventory make no hardware requests; commissioned operation reads devices. No startup, probe or discovery sends actuator commands. See [device checks](docs/device-checks.md) and the [behavior parity inventory](docs/behavior-parity.md).
+1. Open **General → Web admin interface** in the plugin settings.
+2. Check **Enable web admin** and create the first administrator account.
+3. Select the saved deCONZ connection if you have more than one, then click **Save web settings**.
+4. Click **Open web admin**. On a normal LAN, the plugin detects the Homebridge machine's IP and shows a URL such as `https://192.168.1.20:9443`. No domain name is required.
 
-Read the [implementation plan](docs/implementation-plan.md), [migration plan](docs/migration.md), [API contract](docs/api-v1.md), and [current status](docs/status.md).
+The web interface is off by default. Its local HTTPS certificate is self-signed, so your browser will need to trust it. If the host has several network interfaces or runs in Docker, use Advanced network settings to select the reachable host IP and port. See the [web setup guide](docs/web-admin-setup.md) for those cases and reverse proxies.
 
-## Xfinity keypad reference
+Web accounts are separate from Homebridge accounts and deCONZ PIN users. Manage additional web accounts and change your own web password in **Settings**. Use **Users** and **Access grants** for deCONZ identities and permissions, **Protection** for keypad lockout policy, and **Activity** for recorded access outcomes.
 
-See [what we have learned about the Xfinity keypad](docs/xfinity-keypad.md): the green entry light, extra digits after rejected and accepted codes, lockout request counting, and the limits of the latest physical test. Observations and unproven explanations are labeled separately.
+To use a deCONZ user's PIN for the Homebridge alarm, follow [Homebridge alarm-PIN setup](docs/web-admin-alarm-pin.md). This is a separate, explicitly confirmed operation that restarts only the deCONZ child bridge.
+
+Under **Controller**, select the **Garage Door**, edit controller defaults or device timing overrides, then review and apply. Save while the controller is idle; changes take effect on the next operation **without a Homebridge or child-bridge restart**. Hardware mappings and other controller configuration remain in the Homebridge plugin settings.
+
+## Interactive demo
+
+Explore the interface with fictional users, PIN policies, and garage timing settings. The [static demo and hosting instructions](web/README.md) are ready to publish on your own web server; a hosted demo URL will be added here when available. The demo cannot connect to deCONZ, Homebridge, or real hardware.
+
+## Help and reference
+
+- [Xfinity keypad guide and manual scans](docs/xfinity-keypad.md) — tested light and PIN-entry behavior, extra digits, lockout counting, and what is still unproven.
+- [Controller timing settings](docs/controller-timings.md).
+- [Physical controls and keypad stop/reverse](docs/input-routing.md).
+- [Restart recovery](docs/restart-recovery.md).
+- [Changelog](CHANGELOG.md) and [GitHub releases](https://github.com/pponce/homebridge-gdoor-admin-controller/releases).
+- [Report an issue](https://github.com/pponce/homebridge-gdoor-admin-controller/issues). Include the plugin version, device types, and relevant sanitized diagnostics; leave out PINs and credentials.
+
+Developer setup, implementation notes, and development history are kept in [developer documentation](docs/developer/README.md).
 
 ## A friendly disclaimer
 

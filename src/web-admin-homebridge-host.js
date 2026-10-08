@@ -23,16 +23,44 @@ const MAX_CACHE = 16 * 1024 * 1024;
 const require = createRequire(import.meta.url);
 
 export async function readHomebridgeFile(file, limit = MAX_CACHE) {
-  let handle;
+  let handle, reason = 'read_failed';
   try {
+    reason = 'linked_path';
     requireWeb(path.isAbsolute(file) && await realpath(file) === file, 'homebridge_file_path_invalid');
+    reason = 'read_failed';
     handle = await open(file, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
     const info = await handle.stat();
-    requireWeb(info.isFile() && info.nlink === 1 && !(info.mode & 0o022) && info.size <= limit &&
-      (!process.getuid || [0, process.getuid()].includes(info.uid)), 'homebridge_file_permissions_invalid');
+    reason = 'not_regular'; requireWeb(info.isFile(), 'homebridge_file_permissions_invalid');
+    reason = 'hard_link'; requireWeb(info.nlink === 1, 'homebridge_file_permissions_invalid');
+    reason = 'writable_by_others'; requireWeb(!(info.mode & 0o022), 'homebridge_file_permissions_invalid');
+    reason = 'unexpected_owner'; requireWeb(!process.getuid || [0, process.getuid()].includes(info.uid), 'homebridge_file_permissions_invalid');
+    reason = 'too_large'; requireWeb(info.size <= limit, 'homebridge_file_permissions_invalid');
+    reason = 'read_failed';
     const raw = await handle.readFile(); requireWeb(raw.length <= limit, 'homebridge_file_too_large'); return raw;
-  } catch { throw new WebAdminError('homebridge_file_unavailable'); }
+  } catch (cause) {
+    const error = new WebAdminError('homebridge_file_unavailable');
+    error.fileReason = cause.code === 'ENOENT' ? 'missing' : ['EACCES', 'EPERM'].includes(cause.code) ? 'unreadable' : reason;
+    throw error;
+  }
   finally { await handle?.close(); }
+}
+// Fixed package-relative labels only: never expose host paths or file contents.
+async function readPrerequisite(file, limit, scope, label, resolve = false) {
+  try { return await readHomebridgeFile(resolve ? await realpath(file) : file, limit); }
+  catch (cause) {
+    if (cause.code === 'ENOENT' || cause.code === 'EACCES' || cause.code === 'EPERM') {
+      const error = new WebAdminError('homebridge_file_unavailable');
+      error.fileReason = cause.code === 'ENOENT' ? 'missing' : 'unreadable'; cause = error;
+    }
+    if (cause.message === 'homebridge_file_unavailable') cause.fileCheck = { scope, file: label, reason: cause.fileReason };
+    throw cause;
+  }
+}
+function publicFileCheck(value) {
+  const files = value?.scope === 'configuration' ? ['config.json'] : ['package.json', ...Object.keys(reviewed[value?.scope]?.source_sha256 ?? {})];
+  const reasons = ['missing', 'unreadable', 'linked_path', 'not_regular', 'hard_link', 'writable_by_others', 'unexpected_owner', 'too_large', 'read_failed'];
+  if (!['configuration', 'plugin', 'library'].includes(value?.scope) || !files.includes(value?.file) || !reasons.includes(value?.reason)) return null;
+  return { scope: value.scope, file: value.file, reason: value.reason };
 }
 export function homebridgeAlarmContext(rows, identity, accessory) {
   requireWeb(Array.isArray(rows), 'homebridge_cache_schema_unsupported');
@@ -96,7 +124,7 @@ export class WebHomebridgeHost {
   }
   async configuration() {
     requireWeb(process.platform === 'linux', 'homebridge_local_linux_required');
-    const root = await realpath(this.storagePath), file = await realpath(this.configPath), raw = await readHomebridgeFile(file), config = json(raw);
+    const root = await realpath(this.storagePath), raw = await readPrerequisite(this.configPath, MAX_CACHE, 'configuration', 'config.json', true), config = json(raw);
     const platforms = config.platforms?.filter(row => row?.platform === 'deCONZ'), ui = config.platforms?.filter(row => row?.platform === 'config');
     requireWeb(platforms?.length === 1 && ui?.length === 1, 'one_homebridge_child_bridge_required');
     const bridge = platforms[0]._bridge?.username?.toUpperCase();
@@ -116,10 +144,10 @@ export class WebHomebridgeHost {
     const plugin = await realpath(await this.pluginRoot()), localRequire = createRequire(path.join(plugin, 'package.json'));
     const library = path.dirname(await realpath(localRequire.resolve('homebridge-lib')));
     for (const [kind, root] of [['plugin', plugin], ['library', library]]) {
-      const expected = reviewed[kind], packageJson = json(await readHomebridgeFile(path.join(root, 'package.json'), 1048576));
+      const expected = reviewed[kind], packageJson = json(await readPrerequisite(path.join(root, 'package.json'), 1048576, kind, 'package.json'));
       requireWeb(packageJson.name === expected.package && packageJson.version === expected.version, 'homebridge_source_changed_review_required');
       for (const [relative, digest] of Object.entries(expected.source_sha256)) {
-        requireWeb(hash(await readHomebridgeFile(path.join(root, relative), 1048576)) === digest, 'homebridge_source_changed_review_required');
+        requireWeb(hash(await readPrerequisite(path.join(root, relative), 1048576, kind, relative)) === digest, 'homebridge_source_changed_review_required');
       }
     }
   }
@@ -129,8 +157,10 @@ export class WebHomebridgeHost {
     catch (error) {
       const safe = new Set(['homebridge_local_linux_required', 'one_homebridge_child_bridge_required', 'homebridge_child_identity_invalid',
         'homebridge_plugin_disabled', 'homebridge_local_http_ui_required', 'homebridge_source_changed_review_required', 'homebridge_file_unavailable']);
+      const fileCheck = error.message === 'homebridge_file_unavailable' ? publicFileCheck(error.fileCheck) : null;
       return { configured: false, error: safe.has(error.message) ? error.message :
-        phase === 'sources' ? 'homebridge_sources_unavailable' : 'homebridge_configuration_unavailable' };
+        phase === 'sources' ? 'homebridge_sources_unavailable' : 'homebridge_configuration_unavailable',
+        ...(fileCheck ? { file_check: fileCheck } : {}) };
     }
   }
   async available() { return (await this.readiness()).configured; }

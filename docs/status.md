@@ -1,3 +1,11 @@
+# Developer status and validation history
+
+## 2026-10-08 — 0.4.28 release preparation
+
+Rewrote the README for plugin users with installation, first setup, explicit custom deCONZ / pending PR #8661 requirements, separate child bridges, and tested Xfinity model. Archived the previous README and publication narrative under docs/developer. Added a packaged changelog, matching GitHub release workflow, and a static demo generated from the actual web UI with fictional data, a local controller timing simulator, no live mode, and connect-src none. The compact Garage Door selector is included.
+
+The reported Homebridge-user selection error is a file-readiness failure, not an Owner-grant failure. Added allowlisted prerequisite file/reason diagnostics without changing file protections or exposing absolute paths. Eight focused host tests pass locally. Publication, full CI, and owner-host diagnosis are pending. npm access in this workspace returns HTTP 403; no npm publication or live-host change has occurred.
+
 ## 2026-10-08 — Compact Garage Door selector
 
 Renamed the web Controller page selector label from Garage to Garage Door and constrained its field to 20rem (320px at the default root font size), with max-width:100% for narrow layouts. The CSS is scoped to that selector; controller selection, live timing saves and recovery behavior are unchanged. JavaScript syntax and the two updated web-asset fingerprints were checked locally. Existing browser CI will cover the page flows; no local browser rendering is claimed. Source change only; npm publication and owner installation remain separate.

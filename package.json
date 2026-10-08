@@ -1,6 +1,6 @@
 {
   "name": "homebridge-gdoor-admin-controller",
-  "version": "0.4.27",
+  "version": "0.4.28",
   "description": "Coordinate garage doors and bolts with optional deCONZ keypad and alarm web administration",
   "type": "module",
   "main": "src/index.js",
@@ -20,6 +20,7 @@
     "config.schema.json",
     "docs/",
     "README.md",
+    "CHANGELOG.md",
     "homebridge-ui",
     "examples",
     "web-admin/public"
