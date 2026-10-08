@@ -3,6 +3,7 @@
 import { WebAdminError } from './web-admin-auth.js';
 import { WebAdminGateway, validateWebGateways } from './web-admin-gateway.js';
 import { WebAdminView } from './web-admin-view.js';
+import { WebAdminActivity } from './web-admin-activity.js';
 import { requireWeb, object, exact, integer } from './web-admin-common.js';
 
 const regularReads = new Set(['inventory', 'administration', 'lockout', 'transaction_status']);
@@ -14,11 +15,14 @@ function limitedTransaction(value) {
 }
 
 export class WebAdminBackend {
-  constructor({ registrations = [], accessMode = 'observe', setup, transactions, history, hiddenUsers = async () => [], gatewayFactory = row => new WebAdminGateway(row) }) {
+  constructor({ registrations = [], accessMode = 'observe', setup, transactions, history, connected = new Map(), hiddenUsers = async () => [], gatewayFactory = row => new WebAdminGateway(row) }) {
     this.registrations = new Map(validateWebGateways(registrations).map(row => [row.id, row]));
     requireWeb(['observe', 'manage'].includes(accessMode), 'candidate_read_only_required');
     Object.assign(this, { accessMode, setup, transactions, history, hiddenUsers, gatewayFactory });
-    this.connected = new Map(); this.catalog = new Map(); this.pending = Promise.resolve();
+    // Only the activity collector may set connection state. A successful REST
+    // read does not establish that the live event stream is connected.
+    this.connected = connected; this.catalog = new Map(); this.pending = Promise.resolve();
+    this.activity = new WebAdminActivity({ registrations: this.registrations, catalog: this.catalog, connected, history });
   }
   dispatch(session, operation, body) {
     const result = this.pending.then(() => this.execute(session, operation, body));
@@ -44,6 +48,14 @@ export class WebAdminBackend {
       const result = await this.execute(session, 'setup', {});
       return { ...result, homebridge_details: null };
     }
+    if (operation === 'activity_options') {
+      requireWeb(exact(body, []), 'invalid_request');
+      // The shared header polls this endpoint for both roles. Regular accounts
+      // receive only their already-visible gateway status, not history metadata.
+      if (regular) return this.execute(session, 'gateways', {});
+      return this.activity.options();
+    }
+    if (operation === 'history_query') { requireWeb(!regular, 'forbidden'); return this.activity.query(body); }
     if (operation !== 'gateway_request') { requireWeb(!regular, 'forbidden'); return this.unavailable(); }
     requireWeb(exact(body, ['gateway', 'alarm', 'operation', 'body']) && object(body.body), 'invalid_request');
     const { gateway, alarm, operation: action, body: payload } = body;
@@ -65,8 +77,7 @@ export class WebAdminBackend {
       requireWeb(exact(payload, []), 'invalid_request');
       if (!['inventory', 'discover'].includes(action)) requireWeb(integer(alarm, 1, 255), 'explicit_alarm_required');
       const registration = this.registrations.get(gateway), client = this.gatewayFactory(registration);
-      try { await client.verify(alarm); this.connected.set(gateway, true); }
-      catch (error) { this.connected.set(gateway, false); throw error; }
+      await client.verify(alarm);
       const view = new WebAdminView({ gatewayId: gateway, name: registration.name, alarm, client,
         onInventory: result => { this.catalog.set(gateway, result); },
         transactionStatus: this.transactions?.status ? id => this.transactions.status(id) : undefined });

@@ -23,6 +23,9 @@ record.accounts.push({ ...guest.accounts[0], role: 'regular' });
 const auth = new WebAdminAuth({ store: { read: async () => structuredClone(record), write: async () => { throw Error('No account writes in this read-only browser check'); } } });
 const calls = [];
 const backend = new WebAdminBackend({ registrations: [registration],
+  connected: new Map([['test', true]]),
+  history: { scopes: async () => [{ gateway: 'test', alarm: 1 }], days: async () => 90,
+    rows: async () => [{ seq: 1, time: '2026-01-01T12:00:00Z', user: 'Administrator', source: 'Configuration', action: 'Synthetic change', result: 'Verified fixture' }] },
   transactions: { status: async () => ({ stage: 'none' }) },
   setup: { public: async () => ({ deployment: { label: 'Synthetic Homebridge fixture' }, onboarding_required: false, revision: 'synthetic', restart_required: false,
     gateways: [{ id: registration.id, name: registration.name, identity: registration.identity, endpoint: registration.endpoint }],
@@ -92,6 +95,9 @@ try {
         await navigate('alarm');
         assert.equal(await page.locator('[data-alarm-timer]').count(), 9);
         assert.match(await page.locator('#alarm-state').textContent(), /Disarmed/);
+        await navigate('history');
+        assert.equal(await page.locator('#activity .gp-history-row').count(), 1);
+        assert.match(await page.locator('#activity').textContent(), /Verified fixture/);
       }
       await page.locator('#settings-gear').click();
       await page.locator('#settings-content').waitFor({ state: 'visible' });

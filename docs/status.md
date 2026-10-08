@@ -1,6 +1,6 @@
 # Web admin Node port: original read-page backend
 
-Development branch only. The current 37 checks pass locally, including exact Python read contracts and authenticated gateway/alarm dispatch. Original-UI desktop/mobile read-flow CI is being added; setup/history/transactions are synthetic ports in that browser check, not production implementations. See web-admin-node-status.md for remaining work and validation. The optional server still has no Homebridge startup hook and must default OFF. Non-controller pages are the current scope; the existing controller API will support a later timers/settings panel. No owner test install, npm publication or live cutover is ready yet. Standalone remains preserved.
+Development branch only. The current 40 checks pass locally, including exact Python read contracts and authenticated gateway/alarm dispatch. Initial Node 22/24 checks passed; browser validation found a missing header status route, now corrected with offline activity projection. Expanded original-UI desktop/mobile read-flow CI is pending; setup/history/transactions are synthetic ports in that browser check, not production implementations. See web-admin-node-status.md for remaining work and validation. The optional server still has no Homebridge startup hook and must default OFF. Non-controller pages are the current scope; the existing controller API will support a later timers/settings panel. No owner test install, npm publication or live cutover is ready yet. Standalone remains preserved.
 
 # 0.4.23 ready for maintainer publication
 

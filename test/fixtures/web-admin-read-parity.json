@@ -358,6 +358,129 @@
       }
     ]
   },
+  "history": {
+    "expected": {
+      "connected": false,
+      "limit": 200,
+      "retention_days": 90,
+      "rows": [
+        {
+          "action": "Lockout expired",
+          "alarm_id": 3,
+          "alarm_name": "Alarm 3",
+          "category": "deconz",
+          "gateway_id": "test",
+          "gateway_name": "Synthetic gateway",
+          "result": "Confirmed",
+          "seq": 1,
+          "source": "Keypad",
+          "time": "2099-01-01T12:00:02Z",
+          "user": "System"
+        },
+        {
+          "action": "Save user",
+          "alarm_id": 1,
+          "alarm_name": "Alarm 1",
+          "category": "administration",
+          "gateway_id": "test",
+          "gateway_name": "Synthetic gateway",
+          "result": "Verified",
+          "seq": 2,
+          "source": "Configuration",
+          "time": "2099-01-01T12:00:01Z",
+          "user": "Administrator"
+        },
+        {
+          "action": "Disarm",
+          "alarm_id": 1,
+          "alarm_name": "Alarm 1",
+          "category": "keypad",
+          "gateway_id": "test",
+          "gateway_name": "Synthetic gateway",
+          "result": "Accepted",
+          "seq": 1,
+          "source": "Keypad \u00b7 Synthetic",
+          "time": "2099-01-01T12:00:00Z",
+          "user": "Owner"
+        }
+      ]
+    },
+    "options": {
+      "gateways": [
+        {
+          "alarms": [
+            {
+              "id": 1,
+              "name": "Alarm 1",
+              "observed": true
+            },
+            {
+              "id": 2,
+              "name": "Alarm 2",
+              "observed": true
+            },
+            {
+              "id": 3,
+              "name": "Alarm 3",
+              "observed": false
+            }
+          ],
+          "connected": false,
+          "id": "test",
+          "name": "Synthetic gateway"
+        }
+      ]
+    },
+    "query": {
+      "alarm": null,
+      "categories": [
+        "keypad",
+        "deconz",
+        "administration"
+      ],
+      "gateway": null
+    },
+    "rows": {
+      "1": [
+        {
+          "action": "Save user",
+          "result": "Verified",
+          "seq": 2,
+          "source": "Configuration",
+          "time": "2099-01-01T12:00:01Z",
+          "user": "Administrator"
+        },
+        {
+          "action": "Disarm",
+          "result": "Accepted",
+          "seq": 1,
+          "source": "Keypad \u00b7 Synthetic",
+          "time": "2099-01-01T12:00:00Z",
+          "user": "Owner"
+        }
+      ],
+      "3": [
+        {
+          "action": "Lockout expired",
+          "result": "Confirmed",
+          "seq": 1,
+          "source": "Keypad",
+          "time": "2099-01-01T12:00:02Z",
+          "user": "System"
+        }
+      ]
+    },
+    "scopes": [
+      {
+        "alarm": 1,
+        "gateway": "test"
+      },
+      {
+        "alarm": 3,
+        "gateway": "test"
+      }
+    ]
+  },
   "responses": {
     "/alarmsystems": {
       "1": {

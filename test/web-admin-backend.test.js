@@ -49,10 +49,13 @@ test('gateway list stays private and read requests reach the captured reference 
   assert.deepEqual(await f.scoped('alarm'), reference.expected.alarm);
   assert.deepEqual(await f.scoped('lockout'), reference.expected.lockout);
   const catalog = await f.backend.dispatch(admin, 'gateways', {});
-  assert.equal(catalog.gateways[0].connected, true);
+  assert.equal(catalog.gateways[0].connected, false); // REST reads cannot prove a live collector.
   assert.equal(JSON.stringify(catalog).includes(registration.key), false);
   assert.equal(JSON.stringify(catalog).includes(registration.endpoint), false);
   assert.deepEqual(f.backend.catalog.get('test'), reference.expected.inventory);
+  f.backend.connected.set('test', true);
+  assert.equal((await f.backend.dispatch(admin, 'gateways', {})).gateways[0].connected, true);
+  assert.deepEqual(await f.backend.dispatch(regular, 'activity_options', {}), await f.backend.dispatch(regular, 'gateways', {}));
 });
 
 test('unknown/missing scope and unavailable mutations cannot choose another gateway or issue writes', async () => {

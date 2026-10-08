@@ -27,6 +27,7 @@ sys.path[:0] = [str(args.reference.resolve()), str((args.reference / 'configurat
 from configurator.core import Core
 from configurator.editing import Editor
 from configurator.presentation import overview
+from configurator.activity import Activity
 from test_editing import Model
 from support import config, IDENTITY, USER
 
@@ -61,9 +62,21 @@ with tempfile.TemporaryDirectory() as temp:
                 'lockout': view.lockout(), 'snapshot': Editor(view).snapshot(),
                 'administration': overview(view)}
     capabilities = {str(alarm): view.client.verify(alarm) for alarm in (1, 2)}
+    # Future, synthetic timestamps keep captures independent of the host clock
+    # and the reference database's automatic age pruning.
+    events = [(1, 'Owner', 'Keypad · Synthetic', 'Disarm', 'Accepted', '2099-01-01T12:00:00Z'),
+              (1, 'Administrator', 'Configuration', 'Save user', 'Verified', '2099-01-01T12:00:01Z'),
+              (3, 'System', 'Keypad', 'Lockout expired', 'Confirmed', '2099-01-01T12:00:02Z')]
+    for alarm, user, source, action, result, stamp in events:
+        core.history('test', alarm).add(user, source, action, result, stamp=stamp)
+    activity = Activity(core)
+    query = {'gateway': None, 'alarm': None, 'categories': ['keypad', 'deconz', 'administration']}
+    history = {'scopes': [{'gateway': 'test', 'alarm': alarm} for alarm in (1, 3)],
+               'rows': {str(alarm): core.history('test', alarm).rows(5000) for alarm in (1, 3)},
+               'query': query, 'options': activity.options(), 'expected': activity.query(query)}
     assert model.writes == []
     result = {'source': {key: provenance[key] for key in ('repository', 'commit')},
-              'responses': responses, 'capabilities': capabilities, 'expected': expected}
+              'responses': responses, 'capabilities': capabilities, 'expected': expected, 'history': history}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2, sort_keys=True) + '\n')
 print('Captured synthetic read-model contracts; no network or device writes.')
