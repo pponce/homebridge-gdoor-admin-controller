@@ -11,11 +11,11 @@ export function newGarage() {
     motorPaths:[], inputs:[], keypad:null };
 }
 export class ProfileEditor {
-  constructor(root, { configuration, credentials = [], discover, discoverHomebridge, changed = () => {}, error = () => {}, renderCheckEnable, viewChanged = () => {}, getStatus, cardAction, manageConnections, saveConfiguration }) {
+  constructor(root, { configuration, credentials = [], discover, discoverHomebridge, changed = () => {}, error = () => {}, renderCheckEnable, viewChanged = () => {}, getStatus, cardAction, manageConnections, saveConfiguration, localBridges, useLocalBridge }) {
     this.root=root; this.configuration=withConnections(configuration); this.credentials=credentials; this.discover=discover; this.discoverHomebridge=discoverHomebridge; this.changed=changed; this.error=error;
     this.renderCheckEnable=renderCheckEnable;this.viewChanged=viewChanged;this.getStatus=getStatus;this.cardAction=cardAction;
-    this.saveConfiguration=saveConfiguration;this.manageConnections=manageConnections;this.manualKeypad=new Set();this.expandedGarage=null;
-    this.selectedInputs=new Map();this.selected=0; this.step=0; this.render();
+    this.localBridges=localBridges;this.useLocalBridge=useLocalBridge;this.saveConfiguration=saveConfiguration;this.manageConnections=manageConnections;this.manualKeypad=new Set();this.expandedGarage=null;
+    this.selectedDevices=new Map();this.selectedInputs=new Map();this.selected=0; this.step=0; this.render();
   }
   change() { this.changed(this.configuration); }
   button(text, action, cls='secondary') { const b=el('button',text,cls);b.type='button';b.addEventListener('click',action);return b; }
@@ -40,6 +40,7 @@ export class ProfileEditor {
   grid(parent){const g=el('div',undefined,'field-grid');parent.append(g);return g;}
   panel(parent,title,subtitle){const p=el('section',undefined,'device-block');p.append(el('h3',title));if(subtitle)p.append(el('p',subtitle,'subtle small'));parent.append(p);return p;}
   sharedConnection(parent,connection){
+    if(connection.type==='homebridge'&&this.localBridges)return this.homebridgeConnection(parent,connection);
     const type=connection.type??'deconz';const choices=this.configuration.connections.filter(row=>row.type===type);
     const matched=choices.find(row=>sameConnection(row,connection));
     const label=el('label',connectionTypes[type]+' connection');const select=el('select');select.setAttribute('aria-label',connectionTypes[type]+' connection');select.required=true;
@@ -47,8 +48,40 @@ export class ProfileEditor {
     for(const row of choices)select.append(Object.assign(el('option',row.name),{value:row.id}));select.value=matched?.id??'';label.append(select);const row=this.grid(parent);row.classList.add('connection-picker-row');row.append(label);
     if(this.manageConnections)row.append(this.button('Manage connections',()=>this.manageConnections(type)));
     select.onchange=()=>{const shared=choices.find(row=>row.id===select.value);if(!shared)return;selectConnection(connection,shared);this.change();this.render();};
-    if(matched)parent.append(el('p',matched.baseUrl+' · Saved key: '+matched.credentialRef,'help connection-summary'));
+    if(matched)parent.append(el('p',matched.baseUrl,'help connection-summary'));
     else parent.append(el('p','Create a '+connectionTypes[type]+' connection in General, then select it here.','help'));
+    return matched;
+  }
+  homebridgeConnection(parent,connection){
+    const saved=this.configuration.connections.filter(row=>row.type==='homebridge'),matched=saved.find(row=>sameConnection(row,connection));
+    const row=this.grid(parent);row.classList.add('connection-picker-row');
+    const label=el('label','Homebridge bridge'),select=el('select');select.setAttribute('aria-label','Homebridge bridge');label.append(select);row.append(label);
+    const hint=el('p','Loading local bridges…','help');parent.append(hint);
+    const refresh=this.button('↻',()=>void populate(true),'secondary connection-refresh');refresh.title='Refresh configured connections';refresh.setAttribute('aria-label','Refresh configured connections');row.append(refresh);
+    let candidates=[];
+    const populate=async(force=false)=>{
+      select.replaceChildren(Object.assign(el('option','Choose a bridge'),{value:'',disabled:true}));
+      for(const item of saved)select.append(Object.assign(el('option',item.name),{value:'saved:'+item.id}));
+      select.value=matched?'saved:'+matched.id:'';
+      refresh.disabled=true;
+      try{
+        candidates=await this.localBridges(force);
+        for(const item of candidates)select.append(Object.assign(el('option',item.name+(item.canImportPin?'':' — manual setup needed')),{value:'local:'+item.id,disabled:!item.canImportPin}));
+        hint.textContent='Choose the bridge exposing your accessory. Its pairing PIN is handled privately.';
+      }catch{hint.textContent='Local bridges could not be read. Refresh or use another Homebridge connection.';}
+      finally{select.append(Object.assign(el('option','Other Homebridge instance…'),{value:'manual'}));refresh.disabled=false;}
+    };
+    select.onchange=async()=>{
+      if(select.value==='manual'){this.manageConnections?.('homebridge');return;}
+      const value=select.value;select.disabled=true;
+      try{
+        const shared=value.startsWith('saved:')?saved.find(row=>'saved:'+row.id===value):await this.useLocalBridge(candidates.find(row=>'local:'+row.id===value));
+        if(!row.isConnected)return;
+        if(!shared)throw Error('missing_bridge');if(!this.configuration.connections.some(item=>item.id===shared.id))this.configuration.connections.push(shared);selectConnection(connection,shared);this.change();this.render();
+      }catch{hint.textContent='Could not access this bridge. Check that it is running and allows accessory control, then refresh.';}
+      finally{select.disabled=false;}
+    };
+    void populate();
     return matched;
   }
   connection(parent, obj, key, kind) {
@@ -132,8 +165,14 @@ export class ProfileEditor {
   }
   devices(root,p){
     root.append(el('p','Devices operate or report on one part of your garage: the door or the bolt. Controls request a coordinated operation; the coordinator handles the door and bolt sequence.','help setup-model'));
-    const identity=this.panel(root,'Garage details');const grid=this.grid(identity);this.input(grid,'Garage name',p,'name');identity.append(el('p','Controller ID: '+p.id+' · Use this to link the standalone administrator.','help'));this.input(grid,'Show a separate bolt Lock tile',p,'exposeBoltLock',{type:'checkbox'});
-    const opener=this.panel(root,'Garage opener','The default opener connection and source of door position feedback. HomeKit and the virtual keypad use this device; other controls can choose it or an opener relay.');
+    const identity=this.panel(root,'Garage Door Details');const grid=this.grid(identity);this.input(grid,'Garage Door name',p,'name');identity.append(el('p','Controller ID: '+p.id+' · Use this to link the standalone administrator.','help'));this.input(grid,'Show a separate bolt Lock tile',p,'exposeBoltLock',{type:'checkbox'});
+    const choices=[{id:'primary',name:'Garage Door opener'},{id:'bolt',name:'Bolt / Lock'},...p.motorPaths.map(path=>({id:path.id,name:path.name}))];
+    if(!choices.some(item=>item.id===this.selectedDevices.get(p.id)))this.selectedDevices.set(p.id,'primary');
+    const selected=this.selectedDevices.get(p.id),selector=el('div',undefined,'input-selector device-selector');selector.setAttribute('aria-label','Devices for '+p.name);
+    for(const item of choices){const pick=this.button('',()=>{this.selectedDevices.set(p.id,item.id);this.render();},'secondary input-choice device-choice');pick.dataset.deviceId=item.id;pick.setAttribute('aria-label','Configure device '+item.name);pick.setAttribute('aria-pressed',String(selected===item.id));pick.append(el('strong',item.name));selector.append(pick);}
+    selector.append(this.button('Add opener device',()=>this.addOpenerDevice(p)));root.append(selector);
+    if(selected==='primary'){
+    const opener=this.panel(root,'Garage Door opener','The default opener connection and source of door position feedback. HomeKit and the virtual keypad use this device; other controls can choose it or an opener relay.');
     this.connection(opener,p,'door','garage');
     if(p.door.type==='homebridge')this.bridgeDevice(opener,p.door,'garage');else {
       const shared=this.sharedConnection(opener,p.door),dg=this.grid(opener);
@@ -141,8 +180,11 @@ export class ProfileEditor {
       const link=el('a','How to get a Tailwind local control key');link.href='https://gotailwind.zendesk.com/hc/en-us/articles/42573968819725-How-do-I-get-my-local-control-key-for-my-Tailwind-garage-door-controller';link.target='_blank';link.rel='noreferrer';opener.append(link);
     }
     opener.append(el('p','During movement: stop / reverse is unavailable through this garage opener connection. Use a compatible opener relay for that behavior.','help'));
-    const bolt=this.panel(root,'Separate bolt / lock','This is the output that retracts and extends the bolt.');this.connection(bolt,p,'bolt','bolt');this.device(bolt,p.bolt,'bolt');if(p.bolt.serviceType!=='lock')this.input(this.grid(bolt),'Relay ON means bolt extended',p.bolt,'lockedValue',{type:'checkbox',help:'Choose the mapping that matches your wiring. A relay report does not prove physical bolt position.'});
-    this.openerRelays(root,p);
+    }
+    if(selected==='bolt'){
+    const bolt=this.panel(root,'Bolt / Lock','This is the output that retracts and extends the bolt.');this.connection(bolt,p,'bolt','bolt');this.device(bolt,p.bolt,'bolt');if(p.bolt.serviceType!=='lock')this.input(this.grid(bolt),'Relay ON means bolt extended',p.bolt,'lockedValue',{type:'checkbox',help:'Choose the mapping that matches your wiring. A relay report does not prove physical bolt position.'});
+    }
+    if(!['primary','bolt'].includes(selected))this.openerRelays(root,p);
     root.append(this.button('Remove this garage door',()=>{
       const index=this.configuration.controllers.findIndex(profile=>profile.id===p.id);if(index<0)return;
       this.configuration.controllers.splice(index,1);this.selected=Math.max(0,index-1);
@@ -161,15 +203,19 @@ export class ProfileEditor {
   openerRelays(root,p){
     const paths=this.panel(root,'Additional opener devices','Optional opener relays, connected directly through deCONZ or mapped to an existing Homebridge switch. Each operates the door; the bolt has its own device.');
     p.motorPaths.forEach((path,index)=>{
-      const card=this.panel(paths,path.name);const g=this.grid(card);this.input(g,'Device name',path,'name');this.connection(card,path,'connection','motor');this.device(card,path.connection,'motor');this.input(this.grid(card),'Relay ON activates the opener',path.connection,'activeValue',{type:'checkbox'});if(path.connection.type==='homebridge')this.input(this.grid(card),'I verified OFF always releases this output, including repeated OFF commands',path.connection,'inactiveWriteIdempotent',{type:'checkbox',help:'A toggle-only switch cannot be used as the motor relay.'});
+      if(path.id!==this.selectedDevices.get(p.id))return;
+      const card=this.panel(paths,path.name);const g=this.grid(card);this.input(g,'Device name',path,'name').addEventListener('input',()=>{card.querySelector('h3').textContent=path.name;const pick=this.root.querySelector('.device-choice[aria-pressed="true"]');if(pick){pick.querySelector('strong').textContent=path.name||'Unnamed opener';pick.setAttribute('aria-label','Configure device '+(path.name||'Unnamed opener'));}});this.connection(card,path,'connection','motor');this.device(card,path.connection,'motor');this.input(this.grid(card),'Relay ON activates the opener',path.connection,'activeValue',{type:'checkbox'});if(path.connection.type==='homebridge')this.input(this.grid(card),'I verified OFF always releases this output, including repeated OFF commands',path.connection,'inactiveWriteIdempotent',{type:'checkbox',help:'A toggle-only switch cannot be used as the motor relay.'});
       const times=this.grid(card);for(const [k,l] of [['openPulseSeconds','Opening pulse (seconds)'],['closePulseSeconds','Closing pulse (seconds)']])this.input(times,l,path,k,{type:'number',min:.1,max:2,step:.1});
       this.input(times,'During movement',path,'interruption',{options:[['disabled','No stop / reverse'],['stop-opening-reverse-closing','Stop opening / reverse closing']],help:'Enable only for a relay and opener verified to support this sequence. Applies to toggle buttons and switches using this device; keypad authorization is configured under Controls.'}).addEventListener('change',()=>{this.applyDeviceBehavior(p,path);this.change();this.render();});
       const mismatched=p.inputs.filter(input=>input.motorPath===path.id&&input.action==='toggle'&&input.busyBehavior!==(path.interruption==='stop-opening-reverse-closing'?'interrupt':'drop'));
       if(mismatched.length){card.append(el('p','Saved controls with different movement behavior: '+mismatched.map(input=>input.name).join(', ')+'. Existing behavior is preserved until you apply the device setting.','help'));card.append(this.button('Apply device behavior to linked controls',()=>{this.applyDeviceBehavior(p,path);this.change();this.render();}));}
-      card.append(this.button('Remove opener device',()=>{p.motorPaths.splice(index,1);this.change();this.render();},'danger'));
+      card.append(this.button('Remove opener device',()=>{p.motorPaths.splice(index,1);this.selectedDevices.set(p.id,'primary');this.change();this.render();},'danger'));
     });
-    paths.append(this.button('Add opener relay',()=>{p.motorPaths.push({id:freshId('motor'),name:'Opener relay',type:'pulse-relay',connection:{type:'deconz',baseUrl:p.bolt.type==='deconz'?p.bolt.baseUrl:'',credentialRef:p.bolt.type==='deconz'?p.bolt.credentialRef:'garage-deconz',activeValue:true},openPulseSeconds:1,closePulseSeconds:1,interruption:'disabled'});delete p.motorPaths.at(-1).connection.lockedValue;p.motorPaths.at(-1).connection.resourceId='';p.motorPaths.at(-1).connection.uniqueId='';this.change();this.render();}));
   }
+  addOpenerDevice(p){
+    p.motorPaths.push({id:freshId('motor'),name:'Opener relay',type:'pulse-relay',connection:{type:'deconz',baseUrl:p.bolt.type==='deconz'?p.bolt.baseUrl:'',credentialRef:p.bolt.type==='deconz'?p.bolt.credentialRef:'garage-deconz',activeValue:true},openPulseSeconds:1,closePulseSeconds:1,interruption:'disabled'});delete p.motorPaths.at(-1).connection.lockedValue;p.motorPaths.at(-1).connection.resourceId='';p.motorPaths.at(-1).connection.uniqueId='';this.selectedDevices.set(p.id,p.motorPaths.at(-1).id);this.change();this.render();
+  }
+
   inputs(root,p){
     root.append(el('p','Controls request coordinated garage and bolt operation. A button, keypad or Homebridge switch is a control when we listen to it. Choose which opener device carries out its requests; the coordinator handles the bolt automatically.','help setup-model'));
     root.append(el('div','HomeKit + virtual keypad → '+(p.door.type==='tailwind'?'Tailwind API':'Garage opener (Homebridge)'),'route-note'));

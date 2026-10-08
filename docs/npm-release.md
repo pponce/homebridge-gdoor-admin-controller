@@ -1,3 +1,11 @@
+# 0.4.22 ready for maintainer publication
+
+All five jobs passed in [CI run 37715458224](https://github.com/pponce/homebridge-gdoor-admin-controller/actions/runs/37715458224) on implementation `0ca0463c5900d19d959415eb04bef117b35df216`: 172 tests on Node 22/24, actual Homebridge 2.0/2.4, custom UI IPC and desktop Chromium/mobile WebKit. Browser coverage includes direct local bridge/accessory selection without crypto.randomUUID, connection-owned key replacement staged until save, automatic unused-key deletion, Undo/Discard/native-save failure protection, compact refresh, device selection/addition/removal/draft retention and overflow. The earlier save/color/order improvements remain included. Screenshots are CI artifacts; this is not a claim of live owner-host acceptance.
+
+Update the existing `homebridge-gdoor-admin-controller` package to 0.4.22. Preserve configuration, private data and HomeKit pairing: no uninstall, bridge removal or storage archive is required. Publish the exact reviewed checkout with `bash scripts/publish-npm.sh REVIEWED_COMMIT_SHA`, verify the downloadable npm artifact, then `sudo hb-service stop`, `sudo hb-service add homebridge-gdoor-admin-controller@0.4.22`, `sudo hb-service start`. Leave Homebridge stopped on install failure. Publication and owner installation remain unconfirmed until performed.
+
+The separate Node.js web-admin effort has begun on `web-admin-node-port` with pinned references and a route/module inventory. It is not included in this UI release.
+
 # Release 0.4.21: configuration UI refinements
 
 Includes Manage connections beside the saved connection dropdown, Control source → saved connection → control type → device selection, Save configuration within Controls without closing the UI, Add another control wording, and red Not configured / amber Disabled / green Enabled garage cards and General overview. No controller movement or protocol changes. Existing configuration and pairing are retained on update from 0.4.20; do not archive/reset plugin data or remove its bridge.

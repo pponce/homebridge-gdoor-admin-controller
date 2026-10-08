@@ -1,0 +1,20 @@
+name: Web admin Node foundation
+on:
+  push:
+    branches: [web-admin-node-port]
+    paths: ['src/web-admin-*.js', 'test/web-admin.test.js', '.github/workflows/web-admin-node.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  foundation:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: ['22', '24']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: node --test test/web-admin.test.js

@@ -44,3 +44,7 @@ Fresh plugin setup is accepted; deletion of deCONZ gateway users/PINs or other H
 
 ## Status
 Inventory begun after the 0.4.22 release work. No web server, account migration, listener, gateway mutation or device operation has been enabled.
+
+
+## Standalone support decision
+The owner explicitly retained the original standalone web admin/controller as a working alternative for users without Homebridge. The Node.js Homebridge port does not replace or retire that distribution. Preserve its deployment path and regression tests separately; shared UI/domain fixes should be evaluated for both products. See standalone-preservation.md.

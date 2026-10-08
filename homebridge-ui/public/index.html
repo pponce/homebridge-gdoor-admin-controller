@@ -26,11 +26,11 @@
     <div id="general-page">
       <section class="panel">
         <div class="section-heading"><div><h2>Garage doors</h2><p class="subtle">View garage status. Configure each garage door and its controls under Garage doors.</p></div><button id="configure-garages" type="button" class="secondary">Configure garage doors</button></div>
-        <p id="no-garages" class="subtle small">No garage doors configured yet. Save your connection keys, then add a garage door.</p>
+        <p id="no-garages" class="subtle small">No garage doors configured yet. Add your device connections, then add a garage door.</p>
         <div id="garage-overview"></div>
       </section>
     <section class="panel" id="shared-connections" aria-label="Device connections"></section>
-    <section class="panel connection-panel">
+    <details class="panel connection-panel" id="advanced-keys"><summary>Advanced credential maintenance</summary>
       <div class="section-heading"><div><h2>Connection keys</h2><p class="subtle">Manage the private keys used by your device connections.</p></div><span class="badge neutral">Private</span></div>
       <h3 id="credential-form-title">Create a new connection key</h3>
       <form id="credential-form" class="field-grid">
@@ -42,7 +42,7 @@
       <div id="saved-keys" aria-label="Saved connection keys"></div>
       <p id="no-keys" class="subtle small">No connection keys saved yet.</p>
       <p class="help">Replacing a key pauses configured controls until you check and enable them again.</p>
-    </section>
+    </details>
       <section id="admin-setup" class="panel">
         <h2>Web admin interface</h2>
         <p class="subtle">Optional. Install the separate web admin application on this host for its on-screen keypad and deCONZ alarm administration.</p>

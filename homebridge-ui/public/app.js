@@ -11,12 +11,14 @@ const debug=new DebugPanel($('debug-page'),(path,body)=>hb.request(path,body));
 const reviewPanel=$('review');
 let reviewControllerId=null;
 let editor, connectionEditor, loaded, blocks=[], busy=false, themeChoice, currentPage='general';
+let localBridgeCache=null;
 const connectionChecks=new Map();
-const checkForms=new Map();let deletingKey=null;
+const checkForms=new Map();let deletingKey=null;const pendingKeyDeletes=new Set();
 
 function notice(message,error=false){$('notice').textContent=message;$('notice').dataset.error=String(error);hb?.fixScrollHeight?.();}
 function toast(message,type='success'){hb?.toast?.[type]?.(message);}
 function refresh(){
+  if(pendingKeyDeletes.size&&save.phase==='saved')save.phase='dirty';
   const formDirty=!!connectionEditor?.dirty;
   const clean=save.canClose&&!busy&&!formDirty;
   if(clean)hb?.enableSaveButton?.();else hb?.disableSaveButton?.();
@@ -63,11 +65,23 @@ function changed(configuration){
 function buildEditor(configuration,position){
   editor=null;connectionEditor=null;
   editor=new ProfileEditor($('editor'),{configuration,credentials:loaded.credentials,changed,
+    localBridges:async(force=false)=>{if(force||!localBridgeCache)localBridgeCache=hb.request('/local-connections',{}).catch(error=>{localBridgeCache=null;throw error;});return (await localBridgeCache).candidates.filter(row=>row.type==='homebridge');},
+    useLocalBridge:async candidate=>{
+      const fresh=(await hb.request('/local-connections',{})).candidates.find(row=>row.type==='homebridge'&&row.baseUrl===candidate.baseUrl&&row.name===candidate.name);
+      if(!fresh?.canImportPin)throw Error('local_bridge_unavailable');
+      const imported=await hb.request('/local-connections/import',{id:fresh.id});if(!imported.saved||imported.reference!==fresh.credentialRef)throw Error('local_bridge_unavailable');
+      if(!loaded.credentials.includes(imported.reference))loaded.credentials.push(imported.reference);
+      editor.credentials=loaded.credentials;connectionKeys();connectionEditor?.refreshKeys();
+      let shared=editor.configuration.connections.find(row=>row.type==='homebridge'&&row.baseUrl===fresh.baseUrl&&row.credentialRef===imported.reference);
+      if(!shared){shared={id:'connection-'+Array.from(crypto.getRandomValues(new Uint8Array(8)),n=>n.toString(16).padStart(2,'0')).join(''),name:fresh.name,type:'homebridge',baseUrl:fresh.baseUrl,credentialRef:imported.reference};}
+      return shared;
+    },
     discoverHomebridge:body=>hb.request('/homebridge',body),discover:body=>hb.request('/deconz',body),error:message=>notice(message,true),
     saveConfiguration:()=>persist(true),renderCheckEnable:commissioning,viewChanged:refresh,getStatus:garageStatus,cardAction:garageAction,manageConnections:type=>{showPage('general');connectionEditor?.focus(type);}});
-  if(position){editor.selected=Math.min(position.selected,Math.max(0,configuration.controllers.length-1));editor.step=position.step;editor.expandedGarage=position.expandedGarage;editor.selectedInputs=new Map(position.selectedInputs??[]);editor.render();}
+  if(position){editor.selected=Math.min(position.selected,Math.max(0,configuration.controllers.length-1));editor.step=position.step;editor.expandedGarage=position.expandedGarage;editor.selectedInputs=new Map(position.selectedInputs??[]);editor.selectedDevices=new Map(position.selectedDevices??[]);editor.render();}
   connectionEditor=new ConnectionEditor($('shared-connections'),{configuration:()=>editor.configuration,credentials:()=>loaded.credentials,
     request:(path,body)=>hb.request(path,body),run:action,changed:configuration=>{changed(configuration);editor.render();},refresh:()=>{if(connectionEditor?.dirty&&save.phase==='review')save.changed(editor.configuration);refresh();},message:notice,
+    keyRetired:reference=>{if(!usesKey(editor.configuration,reference)){pendingKeyDeletes.add(reference);connectionKeys();}},
     keyCreated:reference=>{if(!loaded.credentials.includes(reference))loaded.credentials.push(reference);editor.credentials=loaded.credentials;connectionKeys();}});
 
 }
@@ -109,11 +123,11 @@ function commissioning(root,profile){
   }
   fields.append(panel);
 }
-async function load(){
+async function load(keepPendingKeys=false){
   if(!hb){notice('Open this screen from the coordinator’s Settings in Homebridge.',true);return;}
   hb.hideSchemaForm?.();
   themeChoice=await hb.userCurrentLightingMode?.();applyTheme();
-  const position=editor&&{selected:editor.selected,step:editor.step,expandedGarage:editor.expandedGarage,selectedInputs:[...editor.selectedInputs]};
+  const position=editor&&{selected:editor.selected,step:editor.step,expandedGarage:editor.expandedGarage,selectedInputs:[...editor.selectedInputs],selectedDevices:[...editor.selectedDevices]};
   blocks=await hb.getPluginConfig();loaded=await hb.request('/load');
   if(!loaded.connected&&blocks[0]?.controllers)loaded.settings.configuration.controllers=blocks[0].controllers;
   loaded.settings.configuration=withConnections(loaded.settings.configuration);
@@ -131,6 +145,7 @@ async function load(){
   if(loaded.adminConnection){$('admin-address').value=loaded.adminConnection.baseUrl;$('admin-identity-file').value=loaded.adminConnection.identityFile;}
   $('connection').textContent=loaded.connected?'Coordinator connected':'Initial setup';
   $('connection').dataset.state=loaded.connected?'connected':'setup';
+  if(!keepPendingKeys){pendingKeyDeletes.clear();deletingKey=null;}
   buildEditor(loaded.settings.configuration,position);reviewPanel.hidden=true;connectionKeys();showPage(currentPage);
 }
 $('reload').onclick=()=>action(async()=>{await load();notice('Saved settings restored.');});
@@ -176,12 +191,18 @@ async function persist(prepare=false){
       await save.prepare(editor.configuration);preparing=false;
     }
     await save.save();
+    const failedKeyDeletes=[];
+    for(const name of [...pendingKeyDeletes]){
+      if(usesKey(save.configuration,name)){pendingKeyDeletes.delete(name);continue;}
+      try{const result=await hb.request('/credentials/delete',{reference:name});if(!result.deleted)throw Error('key_in_use');pendingKeyDeletes.delete(name);}catch{failedKeyDeletes.push(name);}
+    }
     // Confirm success before refreshing. Failed refresh is not a failed write.
     reviewPanel.hidden=true;
     const connected=save.connected;
     const message=connected?'Configuration saved. Use Homebridge’s Save button below to close these settings.':'Setup saved. Click Homebridge’s Save button below, then restart the coordinator child bridge.';
     notice(message);toast('Configuration saved.');
-    try{connectionChecks.clear();checkForms.clear();await load();}catch{notice(message+' Reopen settings to refresh connection status.');}
+    try{connectionChecks.clear();checkForms.clear();await load(true);}catch{notice(message+' Reopen settings to refresh connection status.');}
+    if(failedKeyDeletes.length)notice('Configuration saved, but some keys could not be deleted. They remain marked Pending deletion; save again to retry.',true);
   },()=>preparing?'Could not save configuration. Check device addresses, selected devices and required fields.':save.phase==='sync-pending'?(save.connected?'Controller settings are saved, but the Homebridge save did not complete. Click Retry Homebridge save.':'The Homebridge save did not complete. Click Retry Homebridge save.'): 'Could not confirm the configuration save. Reload saved settings before trying again.');
 }
 $('retry-save').onclick=persist;
@@ -272,14 +293,22 @@ function connectionKeys(){
     const button=document.createElement('button');button.type='button';button.className='secondary';button.textContent='Replace key';button.setAttribute('aria-label','Replace key '+name);
     button.onclick=()=>{deletingKey=null;connectionKeys();$('credential-form-title').textContent='Replace saved key: '+name;$('credential-reference').value=name;$('credential-reference').readOnly=true;$('credential-secret').value='';$('credential-save').textContent='Replace connection key';$('credential-cancel').hidden=false;$('credential-secret').focus();};
     const controls=document.createElement('div');controls.className='actions';controls.append(button);
+    if(pendingKeyDeletes.has(name)){
+      const pending=document.createElement('span');pending.textContent='Pending deletion';pending.className='help';
+      const undo=document.createElement('button');undo.type='button';undo.className='secondary';undo.textContent='Undo';undo.setAttribute('aria-label','Undo deletion '+name);
+      undo.onclick=()=>{pendingKeyDeletes.delete(name);save.changed(editor.configuration);connectionKeys();refresh();};
+      controls.replaceChildren(pending,undo);row.append(label,mask,controls);list.append(row);continue;
+    }
     const remove=document.createElement('button');remove.type='button';remove.className='danger';remove.textContent='Delete';remove.setAttribute('aria-label','Delete key '+name);
     remove.onclick=()=>{deletingKey=name;connectionKeys();};controls.append(remove);row.append(label,mask,controls);
     if(deletingKey===name){
       const confirm=document.createElement('div');confirm.className='key-delete';
       const used=[...editor.configuration.controllers.filter(p=>usesKey(p,name)).map(p=>p.name),...(editor.configuration.connections??[]).filter(row=>row.credentialRef===name).map(row=>row.name+' connection')];
-      const message=document.createElement('p');message.className='help';message.textContent=used.length?'Used by '+used.join(', ')+'. Change those connection or garage settings and save before deleting this key.':'Delete this saved key? This takes effect immediately.';
+      const savedUse=usesKey(loaded.settings.configuration,name)||blocks.some(block=>usesKey(block,name));
+      const message=document.createElement('p');message.className='help';message.textContent=used.length?'Used by '+used.join(', ')+'. Change those connection or garage settings and save before deleting this key.':savedUse?'Delete this key after the configuration is saved? Discarding changes keeps the key.':'Delete this saved key? This takes effect immediately.';
       confirm.append(message);
       if(!used.length){const accept=document.createElement('button');accept.type='button';accept.className='danger';accept.textContent='Delete saved key';accept.onclick=()=>action(async()=>{
+        if(savedUse){pendingKeyDeletes.add(name);deletingKey=null;save.changed(editor.configuration);connectionKeys();notice('Key marked Pending deletion. Save configuration to delete it after the connection removal is saved.');return;}
         const result=await hb.request('/credentials/delete',{reference:name});
         if(!result.deleted){notice('This key is still used by saved garage settings. Change those settings and save before deleting it.',true);return;}
         loaded.credentials=loaded.credentials.filter(key=>key!==name);editor.credentials=loaded.credentials;deletingKey=null;
