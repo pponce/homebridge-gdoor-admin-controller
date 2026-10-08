@@ -1,3 +1,7 @@
+# Unreleased: compact configured-connection refresh
+
+Replaced the shared Refresh configured connections text button with a circular-arrow icon beside the configured connection selector. This covers both deCONZ and Homebridge add/edit connection forms. Tooltip and accessible name retain Refresh configured connections, with a 44px target. Tailwind hides the complete selector/refresh row as before. Discovery requests, selection guards and saved configuration are unchanged. JavaScript syntax check passed; npm publication and installation are pending.
+
 # Release 0.4.21: configuration UI refinements
 
 Includes Manage connections beside the saved connection dropdown, Control source → saved connection → control type → device selection, Save configuration within Controls without closing the UI, Add another control wording, and red Not configured / amber Disabled / green Enabled garage cards and General overview. No controller movement or protocol changes. Existing configuration and pairing are retained on update from 0.4.20; do not archive/reset plugin data or remove its bridge.

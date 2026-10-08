@@ -14,8 +14,9 @@ export class ConnectionEditor {
     const field=(name,label,tag='input')=>{const wrap=el('label',label),node=el(tag);node.id='shared-'+name;node.setAttribute('aria-label',label);wrap.append(node);this.form.append(wrap);return node;};
     this.type=field('type','Connection type','select');for(const [value,label] of Object.entries(connectionTypes))this.type.append(Object.assign(el('option',label),{value}));
     this.source=field('source','Configured connection','select');
+    this.sourceRow=el('div',undefined,'configured-connection-row');this.source.parentElement.before(this.sourceRow);this.sourceRow.append(this.source.parentElement);
+    this.sourceRefresh=button('↻',()=>void this.run(()=>this.loadCandidates()),'secondary connection-refresh');this.sourceRefresh.title='Refresh configured connections';this.sourceRefresh.setAttribute('aria-label','Refresh configured connections');this.sourceRow.append(this.sourceRefresh);
     this.sourceHint=el('p',undefined,'help wide');this.form.append(this.sourceHint);
-    this.sourceRefresh=button('Refresh configured connections',()=>void this.run(()=>this.loadCandidates()));this.form.append(this.sourceRefresh);
     this.candidates=[];this.source.onchange=()=>this.chooseCandidate();
     this.name=field('name','Connection name');this.name.required=true;this.name.maxLength=64;this.name.placeholder='Garage deCONZ';
     this.address=field('address','Device address');this.address.required=true;this.address.placeholder='http://192.0.2.20:8080';
@@ -74,7 +75,7 @@ export class ConnectionEditor {
     const kind=this.type.value,candidate=this.candidate();
     if(this.key.value==='__configured__'&&(!candidate?.canImportPin||this.address.value!==candidate.baseUrl))this.key.value='';
     const newKey=this.key.value==='__new__';
-    this.source.parentElement.hidden=kind==='tailwind';this.sourceHint.hidden=kind==='tailwind';this.sourceRefresh.hidden=kind==='tailwind';
+    this.sourceRow.hidden=kind==='tailwind';this.sourceHint.hidden=kind==='tailwind';this.sourceRefresh.hidden=kind==='tailwind';
     this.sourceHint.textContent=candidate?.detail??(this.candidateError?'Configured connections could not be loaded. Enter the connection manually or refresh.':this.candidates.some(row=>row.type===kind)?'Choose a connection from this Homebridge configuration, or enter another address manually.':'No configured connections found. Enter the connection manually.');
     this.keyName.parentElement.hidden=!newKey;this.secret.parentElement.hidden=!newKey;this.keyName.required=newKey;this.secret.required=newKey;
     this.count.parentElement.hidden=kind!=='tailwind';
