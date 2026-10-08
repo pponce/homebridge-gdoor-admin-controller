@@ -15,24 +15,22 @@ A Homebridge platform for coordinating **one garage door and a separate bolt/loc
 - No door-only, bolt-only, native HomeKit pairing, or Apple Home automation backend.
 - No dependency on HTTP Webhooks for the coordinator's accessories or state publication.
 
-**Release 0.4.20 changes the npm package name and branding only.** Controller behavior is unchanged from 0.4.19. The integrated Node.js web admin is planned, not included. See [the package transition](docs/package-rename.md) before installing alongside an older release.
+## Owner test release: 0.4.24
 
-The separately installed [administration application](https://github.com/pponce/homebridge-deconzKeypadAlarm-admin) retains its own URL and accounts. The existing standalone installation remains a separate project. The planned direction is to include that interface in this plugin with a Node.js backend; the current release does not implement that integration.
+Adds an optional Node.js web administrator using the existing interface for deCONZ users, PINs, access grants, schedules, keypad protection, alarms, activity and web accounts. Enable it in General → Web admin interface and create the first administrator there. Additional accounts are managed in web Settings. The server is **off by default** and uses the saved deCONZ connections; existing controller configuration and HomeKit pairing are retained.
 
-## Current UI release: 0.4.23
+The existing Homebridge coordinator remains responsible for movement. This release does not include the old Python controller or HTTP Webhooks integration. A web panel for coordinator timers is a later addition. The [standalone application](https://github.com/pponce/garageDoorController) remains preserved for use without Homebridge.
 
-General shows named connection cards with separate actions and an Add device connection button that reveals the form. Local Homebridge bridges are selected directly in Devices/Controls and stay out of the General connection list, including after discarding or deleting a device draft. Existing configuration and pairing are preserved.
+See [web setup and the first functional test](docs/web-admin-setup.md) and [alarm-PIN restart requirements and recovery limits](docs/web-admin-alarm-pin.md). Existing Homebridge deCONZ alarm PIN synchronization requires explicit confirmation, a separate local deCONZ child bridge, and the reviewed compatible sources. This initial release has automated coverage; physical acceptance is still required.
 
-The upcoming integrated web interface will be optional and disabled by default. It remains in development and is not included in this release.
-
-Configure credentials within connections, select local Homebridge bridges directly from device/control setup, and choose individual devices from the Devices row. Unused credentials are removed only after configuration save succeeds. Existing settings and HomeKit pairing are preserved. The integrated Node.js web admin remains a separate development effort.
+The configuration UI retains connection cards, direct local Homebridge selection, device/control selectors and in-place reviewed saves from 0.4.23. The [older package-name transition](docs/package-rename.md) applies only when moving from homebridge-gDoorAndBolt-coordinator.
 
 ## Installation
 
 After npm publication, install on a Homebridge 2 / Node 22 or 24 host:
 
 ```sh
-sudo hb-service add homebridge-gdoor-admin-controller@0.4.23
+sudo hb-service add homebridge-gdoor-admin-controller@0.4.24
 ```
 
 Use Homebridge settings to configure the plugin in its own child bridge. New garages remain disabled until checked and enabled. Follow the [owner installation guide](docs/owner-test.md) for taking over from an existing controller. This package does not install a separate system service.
@@ -41,9 +39,10 @@ Maintainer publication instructions are in [npm-release.md](docs/npm-release.md)
 
 ## Development
 
-Node.js 22 or 24 and Homebridge 2. Unit tests use Node built-ins; the custom UI server depends on @homebridge/plugin-ui-utils.
+Node.js 22 or 24 and Homebridge 2. The optional web administrator requires Node 22.13+ or 24 and OpenSSL. Install runtime dependencies before testing; the schedule adapter uses @js-temporal/polyfill.
 
 ```sh
+npm install --ignore-scripts --no-audit --no-fund
 npm test
 npm pack --dry-run --ignore-scripts
 ```

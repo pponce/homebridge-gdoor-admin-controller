@@ -87,5 +87,7 @@ Seventeen focused client, offline-file and maintenance tests pass locally. Tests
 cover confirmation, permission/identity checks, no automatic retries, private
 backup modes, exact PIN-only changes, competing writes, source/config changes,
 grant protection and interrupted service requests. These use synthetic hosts;
-no household bridge or alarm was operated. Full CI and integrated desktop/mobile
-confirmation acceptance are pending. No npm test release has been published.
+no household bridge or alarm was operated. CI run 37731074464 passes Node 22/24
+regression/package checks and integrated desktop/mobile confirmation acceptance,
+including current-page/session retention. Actual Homebridge compatibility checks
+are the final 0.4.24 candidate gate. No npm test release has been published.
