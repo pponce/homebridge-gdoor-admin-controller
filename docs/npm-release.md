@@ -1,6 +1,7 @@
 # 0.4.25 owner update
 
-Includes automatic LAN web setup, live controller-default and physical-input timing edits, clearer Homebridge readiness failures, and the documented requirement for two separate child bridges. Runtime implementation `fef22deac7cc758455af5c1b9ad647c87d2a8799` passed all five jobs in [CI run 37796837930](https://github.com/pponce/homebridge-gdoor-admin-controller/actions/runs/37796837930). Release preparation changes only the package version and documentation. Existing controller profiles, web accounts, proxy settings and HomeKit pairing are retained.
+Includes automatic LAN web setup, live controller-default and physical-input timing edits, clearer Homebridge readiness failures, and the documented requirement for two separate child bridges. Runtime implementation `fef22deac7cc758455af5c1b9ad647c87d2a8799` passed all five jobs in [CI run 37796837930](https://github.com/pponce/homebridge-gdoor-admin-controller/actions/runs/37796837930). Release 0.4.25 also adds a visually separated Change your password section that names the currently signed-in web account. Existing controller profiles, web accounts, proxy settings and HomeKit pairing are retained.
+
 
 This owner-test release is on `web-admin-lan-controller-timings` (draft PR #1). Use the exact reviewed 0.4.25 release commit; pulling main alone does not include these changes. Fetch over SSH into the existing clean checkout and check out that pinned revision. Do not overwrite local edits.
 

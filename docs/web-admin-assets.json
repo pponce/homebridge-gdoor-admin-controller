@@ -54,8 +54,8 @@
       "path": "web-admin/public/index.html",
       "gitBlob": "1bf56e0be7d325300b2d01b4a942b0526719a3a6",
       "sha256": "6f3b8ba779fcb13904f390c9177ac8d458f41e283bf434ee5348a9f0e2586093",
-      "adaptedSha256": "a72bccb0a86a20997a67f5e66a8419a7008526abdabb6bbc83955790c7d1d452",
-      "adaptation": "Add the authorized Controller timing editor with admin-only navigation, demo isolation, and live save support; retain original gateway and account workflows."
+      "adaptedSha256": "90bf8f91ecca835b3c0a79b49366360667d2cb2c92f50f6dc80bf87301a94039",
+      "adaptation": "Add the authorized Controller timing editor with admin-only navigation, demo isolation, and live save support; retain original gateway and account workflows. Separate the signed-in account password section from web account management and identify the current user."
     },
     {
       "source": "configurator/static/keypad.js",
@@ -74,14 +74,16 @@
       "path": "web-admin/public/settings.js",
       "gitBlob": "b1fd7706a6a059f144fbccd0437316b0b08a3bd7",
       "sha256": "ba13a68a4217eb1265c5e8e20dc783ae6bda331a28f63a604997889e81237ed6",
-      "adaptedSha256": "cfeda4c234c0b48192e3b71757a39a6288a968c1cd4c7d759f56c22d3d072fcc",
-      "adaptation": "Display shared device connections managed in Homebridge General; distinguish the browser address from the HTTPS backend. Preserve account and separate homebridge-deconz alarm credential controls. Explain Homebridge readiness failures and retain the blocked user-level PIN selector."
+      "adaptedSha256": "431474af95cae3dc382fdbd1420cc8cabdf1f0ffa8aac4d099557dc0e5085a3f",
+      "adaptation": "Display shared device connections managed in Homebridge General; distinguish the browser address from the HTTPS backend. Preserve account and separate homebridge-deconz alarm credential controls. Explain Homebridge readiness failures and retain the blocked user-level PIN selector. Separate the signed-in account password section from web account management and identify the current user."
     },
     {
       "source": "configurator/static/style.css",
       "path": "web-admin/public/style.css",
       "gitBlob": "a989313e78d1454a31c6a9b7327647066e510942",
-      "sha256": "38bee5eb6eaa4bc8a7344fee7fbb6c790498ca46db3553cc3dc8ea76b10d93e8"
+      "sha256": "38bee5eb6eaa4bc8a7344fee7fbb6c790498ca46db3553cc3dc8ea76b10d93e8",
+      "adaptedSha256": "67496241e79348abefb7c0240eb666995cf2e7d6742e4bc2090f59ef3279d663",
+      "adaptation": "Separate the signed-in account password section from web account management and identify the current user."
     }
   ],
   "additions": [

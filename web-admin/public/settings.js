@@ -21,6 +21,7 @@
   function facts(rows){return '<dl class="gp-settings-facts">'+rows.map(([k,v])=>`<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')+'</dl>';}
   function renderAccounts(){
     $('#settings-account-name').textContent=principal.username?principal.username+' · '+(principal.role==='admin'?'Administrator':'Regular user'):'Choose a username for your existing administrator login.';
+    $('#settings-password-account').textContent=principal.username?'Change the web login password for '+principal.username+', the account you are currently signed in to.':'Change the password for the web account you are currently signed in to.';
     const box=$('#settings-account-management');box.replaceChildren();
     if(principal.role!=='admin')return;
     const current='<label class="gp-field">Confirm with your administrator password<input name="current_password" type="password" autocomplete="current-password" required maxlength="256"></label>';
@@ -87,6 +88,6 @@
   };
   window.ConfiguratorSettings={
     async open(api,onSignOut,onUpdate,account){principal=account;request=api;signOut=onSignOut;onSaved=onUpdate;const token=++generation;dirty=false;dirtyForms.clear();clearSecrets();$('#settings-content').hidden=true;message('Loading your installation…');dialog.showModal();try{const accountResult=await request('accounts');const result=principal.role==='admin'?await request('settings'):{};if(token!==generation||!dialog.open)return;accounts=accountResult;data=result;dialog.querySelectorAll('[data-settings-tab]').forEach(tab=>tab.hidden=principal.role==='regular'&&tab.dataset.settingsTab!=='security');render();if(principal.role==='regular'||!principal.username)$('#tab-security').click();$('#settings-content').hidden=false;message('');}catch(error){if(token===generation)message(error.message,true);}},
-    clear(){$('#settings-account-management').replaceChildren();$('#settings-account-name').textContent='';close(true);data=null;accounts=null;principal=null;$('#settings-content').hidden=true;$('#settings-gateways').replaceChildren();$('#settings-homebridge').replaceChildren();$('#settings-web').replaceChildren();}
+    clear(){$('#settings-account-management').replaceChildren();$('#settings-account-name').textContent='';$('#settings-password-account').textContent='';close(true);data=null;accounts=null;principal=null;$('#settings-content').hidden=true;$('#settings-gateways').replaceChildren();$('#settings-homebridge').replaceChildren();$('#settings-web').replaceChildren();}
   };
 })();
