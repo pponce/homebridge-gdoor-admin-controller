@@ -52,11 +52,11 @@ body{margin:0;background:var(--canvas);color:var(--ink);font:14px/1.55 -apple-sy
 #coordinator-ui .garage-status{font-size:12px;font-weight:650;color:var(--ink)}
 #coordinator-ui .card-help{padding:0 16px 14px}
 #coordinator-ui [data-state=enabled]:is(.garage-card,.overview-row){background:#edf8ef}
-#coordinator-ui [data-state=disabled]:is(.garage-card,.overview-row){background:#fff0f0}
-#coordinator-ui [data-state=attention]:is(.garage-card,.overview-row){background:#fff7df}
+#coordinator-ui [data-state=unconfigured]:is(.garage-card,.overview-row){background:#fff0f0}
+#coordinator-ui [data-state=disabled]:is(.garage-card,.overview-row){background:#fff7df}
 :root[data-theme=dark] #coordinator-ui [data-state=enabled]:is(.garage-card,.overview-row){background:#24382b}
-:root[data-theme=dark] #coordinator-ui [data-state=disabled]:is(.garage-card,.overview-row){background:#412c2d}
-:root[data-theme=dark] #coordinator-ui [data-state=attention]:is(.garage-card,.overview-row){background:#403821}
+:root[data-theme=dark] #coordinator-ui [data-state=unconfigured]:is(.garage-card,.overview-row){background:#412c2d}
+:root[data-theme=dark] #coordinator-ui [data-state=disabled]:is(.garage-card,.overview-row){background:#403821}
 #coordinator-ui .overview-row{padding:16px;border-radius:8px;margin-top:10px;border:1px solid var(--line)}
 #coordinator-ui .add-garage{align-self:center;justify-self:start}
 .steps{display:flex;gap:6px;background:var(--secondary);padding:5px;border:1px solid var(--line);border-radius:10px;margin-bottom:20px;overflow-x:auto}

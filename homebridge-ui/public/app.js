@@ -210,19 +210,19 @@ function showPage(page){
 function garageStatus(profile){
   const row=loaded?.controllers.find(row=>row.id===profile.id),status=row?.status;
   const savedProfile=loaded?.settings.configuration.controllers.find(p=>p.id===profile.id);
-  const warning=(label,detail='')=>({tone:'attention',label,detail,action:'Review setup',disabled:!save.canEdit});
-  if(!savedProfile)return warning('Setup needed','New garage door — not saved or enabled.');
+  const warning=(label,detail='')=>({tone:label==='Not configured'?'unconfigured':status?.actuationEnabled?'enabled':'disabled',label,detail,action:'Review setup',disabled:!save.canEdit});
+  if(!savedProfile)return warning('Not configured','New garage door — not saved or enabled.');
   if(!sameConfiguration(profile,savedProfile)){
     const nameOnly=sameConfiguration({...savedProfile,name:profile.name},profile);
     const attention=status?.held==='maintenance'||status?.state?.fault||status?.state?.unavailable||status?.state?.obstruction||connectionChecks.get(profile.id)===false||status?.held&&!['not-commissioned'].includes(status.held);
     const retainStatus=nameOnly&&loaded.connected&&status&&!attention;
-    return {tone:retainStatus?(status.actuationEnabled?'enabled':'disabled'):'attention',
+    return {tone:status?.actuationEnabled?'enabled':loaded.connected&&status?'disabled':'unconfigured',
       label:retainStatus?(status.actuationEnabled?'Enabled':'Disabled')+' · Unsaved changes':attention?'Needs attention · Unsaved changes':'Unsaved changes',
       action:'Review changes',disabled:!save.canEdit||!!connectionEditor?.dirty,
       detail:retainStatus&&status.actuationEnabled?'Name change pending. Saving the name keeps this garage door enabled.':status?.actuationEnabled?'Your saved garage door remains enabled. Review and save to apply these edits.':'Review and save this garage door’s changes.'};
   }
-  if(!loaded.connected)return warning('Setup needed','Start the coordinator child bridge to check connections.');
-  if(!status)return warning('Setup needed');
+  if(!loaded.connected)return warning('Not configured','Start the coordinator child bridge to check connections.');
+  if(!status)return warning('Not configured');
   if(status.held==='maintenance')return warning('Maintenance paused');
   if(status.state?.fault||status.state?.unavailable||status.state?.obstruction||connectionChecks.get(profile.id)===false||
     status.held&&!['not-commissioned'].includes(status.held))return warning('Needs attention');

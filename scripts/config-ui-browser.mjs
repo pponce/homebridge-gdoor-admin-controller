@@ -218,7 +218,7 @@ try{
    assert.equal(await page.locator('.garage-card').getAttribute('data-state'),'disabled');
    await page.getByRole('button',{name:'Add a garage door',exact:true}).click();
    assert.equal(await page.locator('.garage-card').count(),2);
-   assert.equal(await page.locator('.garage-card').last().getAttribute('data-state'),'attention');
+   assert.equal(await page.locator('.garage-card').last().getAttribute('data-state'),'unconfigured');
    await page.getByRole('button',{name:'Review setup My garage',exact:true}).click();
    await page.getByText('Save this garage door before checking its connections.',{exact:true}).waitFor();
    assert.equal(await page.getByRole('button',{name:'Check connections',exact:true}).count(),0);
@@ -285,7 +285,7 @@ try{
    assert.equal(await page.getByRole('button',{name:'Enable this garage door',exact:true}).isDisabled(),true);
    await page.getByRole('button',{name:'Check connections',exact:true}).click();
    await page.locator('.commission-result').filter({hasText:'Physical keypad: input_alarm_mapping_changed'}).waitFor();
-   assert.equal(await page.locator('.garage-card').getAttribute('data-state'),'attention');
+   assert.equal(await page.locator('.garage-card').getAttribute('data-state'),'disabled');
    assert.equal(f.probes(),1);assert.equal(await page.locator('.commission-result').filter({hasText:'Connections verified'}).count(),0);
    await page.getByRole('button',{name:'Check connections',exact:true}).click();
    await page.locator('.commission-result').filter({hasText:'Connections verified'}).waitFor();
@@ -415,7 +415,7 @@ try{
      // A control-setting edit still warns and reviews from the same card.
      await p.getByRole('button',{name:'03 Behavior'}).click();
      await p.getByLabel('Before opening (seconds)',{exact:true}).fill('9');
-     assert.equal(await p.locator('.garage-card').getAttribute('data-state'),'attention');
+     assert.equal(await p.locator('.garage-card').getAttribute('data-state'),'enabled');
      await p.getByRole('button',{name:'Review changes Final garage name',exact:true}).click();
      await p.locator('.garage-card #review').waitFor();
      assert.match(await p.locator('#review').textContent(),/1 garage door will need connection checks/);
@@ -430,7 +430,7 @@ try{
      const x=await fixture(browser,{mobile,dark,mode:'enabled'}),p=x.page;
      await p.getByRole('button',{name:'Add a garage door',exact:true}).click();
      assert.equal(await p.locator('.garage-card').first().getAttribute('data-state'),'enabled');
-     assert.equal(await p.locator('.garage-card').last().getAttribute('data-state'),'attention');
+     assert.equal(await p.locator('.garage-card').last().getAttribute('data-state'),'unconfigured');
      assert.equal(await p.locator('.garage-card').first().locator('.garage-status').textContent(),'Enabled');
      await p.getByRole('button',{name:'Remove this garage door',exact:true}).click();
      assert.equal(await p.locator('.garage-card').count(),1);
@@ -539,9 +539,9 @@ try{
        await p.getByRole('button',{name:'Enable '+base.name,exact:true}).click();
        await p.getByRole('button',{name:'Check connections',exact:true}).click();
        await p.locator('.commission-result').filter({hasText:'Connection check could not complete'}).waitFor();
-       assert.equal(await p.locator('.garage-card').getAttribute('data-state'),'attention');
+       assert.equal(await p.locator('.garage-card').getAttribute('data-state'),'disabled');
      }else if(mode==='fault'){
-       assert.equal(await p.locator('.garage-card').getAttribute('data-state'),'attention');
+       assert.equal(await p.locator('.garage-card').getAttribute('data-state'),'enabled');
        assert.equal(await p.locator('.garage-status').filter({hasText:'Needs attention'}).count(),2);
      }else{
        assert.equal(await p.locator('.garage-card').getAttribute('data-state'),'enabled');
