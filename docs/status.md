@@ -1,3 +1,9 @@
+# Release 0.4.21: configuration UI refinements
+
+Includes Manage connections beside the saved connection dropdown, Control source → saved connection → control type → device selection, Save configuration within Controls without closing the UI, Add another control wording, and red Not configured / amber Disabled / green Enabled garage cards and General overview. No controller movement or protocol changes. Existing configuration and pairing are retained on update from 0.4.20; do not archive/reset plugin data or remove its bridge.
+
+All five CI jobs passed on implementation `1844809381e2b0a87e5c186120dadafbceb063a1` in [run 37712640939](https://github.com/pponce/homebridge-gdoor-admin-controller/actions/runs/37712640939): Node 22/24, Homebridge 2.0/2.4, custom UI IPC and desktop/mobile browser checks. This release preparation changes the version and documentation only. npm publication, installation and owner-host acceptance are separate and unconfirmed.
+
 # Unreleased: garage status colors
 
 Garage cards and the General overview now use red for Not configured, amber for Disabled, and green for Enabled in light and dark themes. Unsaved edits retain the saved operational color while labels describe pending changes; fault and maintenance text remain visible. No enablement or actuation behavior changes. Existing desktop/mobile status assertions were updated for the new mapping. The preceding Controls save change passed all five CI jobs in run 37712340764, including the desktop/mobile direct-save checks. Publication and installation remain pending.
