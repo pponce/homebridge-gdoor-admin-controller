@@ -14,10 +14,10 @@ const playwright = await import(pathToFileURL(join(process.env.PLAYWRIGHT_MODULE
 const server = http.createServer(async (request, response) => {
   const routes = { '/web-admin.js': 'homebridge-ui/public/web-admin.js', '/controller.js': 'web-admin/public/controller.js',
     '/style.css': 'web-admin/public/style.css', '/setup.css': 'homebridge-ui/public/style.css' };
-  if (routes[request.url]) { response.setHeader('Content-Type', request.url.endsWith('.js') ? 'text/javascript' : 'text/css'); response.end(await readFile(routes[request.url])); return; }
-  response.setHeader('Content-Type', 'text/html');
-  response.end(request.url === '/setup' ? '<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/setup.css"><main><section id="panel" class="panel"></section></main><script type="module">import {WebAdminPanel} from "/web-admin.js";window.panel=new WebAdminPanel(document.querySelector("#panel"),{request:window.request});await panel.load(true);</script>' :
-    '<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/style.css"><script src="/controller.js"></script><div id="configurator-preview"><main class="gp-main"><h2>Controller</h2><div id="controller"></div></main></div><script>window.panel=ConfiguratorController({root:document.querySelector("#controller"),api:window.request,readOnly:()=>window.readOnly===true});panel.load();</script>');
+  if (routes[request.url]) { response.setHeader('Content-Type', request.url.endsWith('.js') ? 'text/javascript; charset=utf-8' : 'text/css; charset=utf-8'); response.end(await readFile(routes[request.url])); return; }
+  response.setHeader('Content-Type', 'text/html; charset=utf-8');
+  response.end(request.url === '/setup' ? '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/setup.css"><main><section id="panel" class="panel"></section></main><script type="module">import {WebAdminPanel} from "/web-admin.js";window.panel=new WebAdminPanel(document.querySelector("#panel"),{request:window.request});await panel.load(true);</script>' :
+    '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/style.css"><script src="/controller.js"></script><div id="configurator-preview"><main class="gp-main"><h2>Controller</h2><div id="controller"></div></main></div><script>window.panel=ConfiguratorController({root:document.querySelector("#controller"),api:window.request,readOnly:()=>window.readOnly===true});panel.load();</script>');
 });
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const origin = 'http://127.0.0.1:' + server.address().port;
@@ -86,6 +86,7 @@ try {
       await runtime.commission(id,{revision:runtime.state.revision,previousControllerStopped:true,physicalSetupReviewed:true});
       for (const listener of runtime.entry(id).listeners) listener.stop();
       failReads=true; await runtime.entry(id).engine.observe(); await editor.evaluate(()=>panel.load());
+      assert.equal(runtime.status(id).enabled,true); assert.equal(runtime.status(id).health.title,'Fault');
       await editor.getByText(/Enabled · Fault/).waitFor();
       assert.equal(await editor.getByRole('button',{name:'Check again',exact:true}).count(),1);
       failReads=false; await editor.getByRole('button',{name:'Check again',exact:true}).click();
