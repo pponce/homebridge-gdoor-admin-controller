@@ -11,6 +11,8 @@ Homebridge readiness now reports a specific prerequisite failure, and the user-l
 
 The owner also requested visual separation for the signed-in account password form. Security now has a divided Change your password section naming the current web account. Password submission and account-management behavior are unchanged. Web asset changes now trigger the existing CI checks.
 
+The final 0.4.25 package source `fafcb622c51219648ae7d36ab2e7576d3d7f0e8b`, including the signed-in account password section, passed all five jobs in [CI run 37804859346](https://github.com/pponce/homebridge-gdoor-admin-controller/actions/runs/37804859346). The owner update script pins that source, verifies the actual registry download, and only then runs Homebridge stop → pinned install → start. Simulated command checks confirm successful ordering, no service stop after a download failure, no restart after an install failure, and preservation of local edits. The subsequent updater/documentation commit does not change the pinned npm artifact.
+
 # 0.4.24 ready for owner-test publication
 
 All five jobs pass in [CI run 37731476101](https://github.com/pponce/homebridge-gdoor-admin-controller/actions/runs/37731476101) on implementation af338c806b389e6824f89e6d9a7d0733d88b849a: regression and exact npm package checks on Node 22/24, actual Homebridge 2.0/2.4 with synthetic hardware, actual custom-UI IPC, and desktop Chromium/mobile WebKit browser acceptance. Browser coverage includes original Admin/Regular read pages, first-admin setup, durable saves, lost-response recovery without replay, confirmed child-bridge alarm-PIN restart, page/session retention and existing Homebridge configuration flows. The final release checkpoint changes documentation only.
