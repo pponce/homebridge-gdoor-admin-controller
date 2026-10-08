@@ -12,6 +12,7 @@ import { DeconzInput, DeconzInputListener } from './deconz-input.js';
 import { HomebridgeDoor, HomebridgeBolt, HomebridgeMotorRelay, HomebridgeInput, HomebridgeInputListener } from './homebridge-devices.js';
 import { requestJson } from './transport.js';
 import { Fault, requireValue } from './fault.js';
+import { profileWithTimings } from './controller-timings.js';
 
 const hash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const normalize = value => validateConfiguration(value, { allowEmpty: true });
@@ -115,6 +116,43 @@ export class CoordinatorRuntime {
   inventory() { return inventory(this.configuration).map(row => ({ ...row, status: this.status(row.id) })); }
   routing(id) { const e = this.entry(id); return { ...routingInventory(e.profile), runtimeEnabled: this.status(id).actuationEnabled }; }
   settings() { return { revision: this.state.revision, configuration: structuredClone(this.configuration) }; }
+  async applyTimings(id, values, revision) {
+    requireValue(revision === this.state.revision, 'settings_revision_conflict');
+    const current = this.entry(id), draft = structuredClone(this.configuration);
+    draft.controllers = draft.controllers.map(profile => profile.id === id ? profileWithTimings(profile, values) : profile);
+    const configuration = normalize(draft), profile = configuration.controllers.find(value => value.id === id);
+    this.assertIdle(); this.guard();
+    requireValue([...this.entries.values()].every(entry => entry.router?.activeInput == null && !entry.engine?.partialOwner &&
+      ![...(entry.engine?.motorPaths.values() ?? [])].some(motor => motor.busy)), 'controller_busy');
+    const commissioned = this.state.commissioned[id] === hash(current.profile);
+    this.changing = true;
+    try {
+      this.state.configuration = configuration; this.state.revision++;
+      if (commissioned) this.state.commissioned[id] = hash(profile);
+      this.reviews.clear(); this.tickets.clear();
+      this.event(id, 'timings-applied'); await this.save();
+      current.profile = profile;
+      // Keep the same engine, journal, overrides, fault state and live subscriptions.
+      if (current.engine) {
+        Object.assign(current.engine.timing, timing(profile));
+        Object.assign(current.engine.feedback, profile.feedback);
+        for (const motor of profile.motorPaths) {
+          const driver = current.engine.motorPaths.get(motor.id);
+          driver.openPulseMs = motor.openPulseSeconds * 1000; driver.closePulseMs = motor.closePulseSeconds * 1000;
+        }
+      }
+      if (current.router) {
+        current.router.epoch++;
+        for (const input of profile.inputs) {
+          current.router.profiles.set(input.id, structuredClone(input));
+          current.router.gates.get(input.id).profile = structuredClone(input);
+        }
+      }
+      for (const listener of current.listeners) listener.profile = profile.inputs.find(input => input.id === listener.profile.id);
+      this.schedule(current);
+      return this.settings();
+    } finally { this.changing = false; this.publishStates(); }
+  }
   retainsCommissioning(profile) {
     const current = this.configuration.controllers.find(p => p.id === profile.id);
     // Keep the stored full-profile hash format. Only an explicitly reviewed

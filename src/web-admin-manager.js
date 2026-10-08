@@ -8,6 +8,7 @@ import { webGatewayExchange, validateWebGateways } from './web-admin-gateway.js'
 import { readCredentials } from './credentials.js';
 import { webDigest } from './web-admin-files.js';
 import { requireWeb, exact, integer, object } from './web-admin-common.js';
+import { webAdminNetwork } from './web-admin-network.js';
 
 const nodeSupported = () => { const [major, minor] = process.versions.node.split('.').map(Number); return major === 22 && minor >= 13 || major === 24; };
 const safeErrors = new Set(['web_account_setup_required', 'web_connection_unavailable', 'web_connections_changed', 'web_gateway_unavailable',
@@ -54,7 +55,7 @@ export class WebAdminManager {
     const row = await this.settings.read();
     let current = true; if (this.active) { try { await this.active.assertCurrent(); } catch { current = false; } }
     return { revision: row.revision, settings: row.settings, running: !!this.active, error: current ? this.error : 'web_connections_changed',
-      accountConfigured: await this.accounts.configured(), nodeSupported: nodeSupported(),
+      accountConfigured: await this.accounts.configured(), nodeSupported: nodeSupported(), network: webAdminNetwork(),
       connections: this.connections().map(({ id, name }) => ({ id, name })) };
   }
   async deactivate() { const active = this.active; this.active = null; if (active) await active.service.close(); }

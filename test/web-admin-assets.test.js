@@ -12,12 +12,15 @@ test('reused UI retains pinned source provenance and explicit Homebridge adaptat
     assert.equal(createHash('sha256').update(bytes).digest('hex'), entry.adaptedSha256 ?? entry.sha256, entry.path);
     if(entry.adaptedSha256)assert.ok(typeof entry.adaptation==='string'&&entry.adaptation.length>0);
   }
+  for (const entry of manifest.additions ?? []) {
+    assert.equal(createHash('sha256').update(await readFile(new URL('../' + entry.path, import.meta.url))).digest('hex'), entry.sha256);
+  }
 });
 test('only reviewed browser assets are exposed, with all initial page resources present', async () => {
   const assets = await loadWebAdminAssets();
   const index = assets.get('/').content.toString('utf8');
   assert.match(index, /Welcome back/);
-  assert.equal(assets.size, 13);
+  assert.equal(assets.size, 14);
   for (const match of index.matchAll(/(?:src|href)="([^"]+)"/g)) {
     assert.ok(assets.has(match[1]), match[1]);
   }

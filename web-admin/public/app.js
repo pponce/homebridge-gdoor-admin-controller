@@ -6,7 +6,7 @@
   let webAccount={role:'admin'}, regular=false;
   const regularPages=['users','access','protection'];
   let csrf='', overview=null, selected=null, adding=false, current=null, review=null, page='users', busy=false;
-  const pages=['gateway','access','users','history','protection','alarm','debug','keypad'];
+  const pages=['gateway','access','users','history','protection','alarm','debug','keypad','controller'];
   let selectedExtension=null;
   const phone=matchMedia('(max-width:760px), (max-width:950px) and (pointer:coarse)'),nav=$('#main-navigation'),menu=$('#mobile-navigation');
   let phoneDetail=history.state?.configuratorUser===true;
@@ -70,6 +70,7 @@
     }catch(_){if(page==='extension')page='users';}
   }
   async function showPage(){
+    if(page==='controller'&&(demoMode||!applicationSettings?.controller_settings_available))page='users';
     if(regular&&!regularPages.includes(page))page='users';
     if(page==='extension'){
       // Resolve the saved ID through the current authorized registry, never a saved URL.
@@ -78,7 +79,7 @@
       page='users';
     }
     selectedExtension=null;
-    $('#extension-host').hidden=true;document.querySelectorAll('[data-extension]').forEach(b=>b.setAttribute('aria-pressed','false'));closePageHelp();refreshGatewayConnections();if(page!=='keypad')cancelKeypad();if(page==='debug'&&!$('#debug-mode').checked)page='users';$('#'+page+' .gp-head').after($('#configuration-filters'));updateSelectorVisibility();$('#configuration-context').hidden=['gateway','history'].includes(page);$('#'+page+' .gp-head>div').append($('#configuration-context'));for(const id of pages)$('#'+id).hidden=id!==page;document.querySelectorAll('[data-page]').forEach(x=>x.setAttribute('aria-pressed',x.dataset.page===page));remember();if(page!=='history'&&page!=='gateway'&&!inventory)await loadInventory();updateContext();if(page==='gateway')await loadInventory();else if(page==='access'){$('#grant-preview').replaceChildren();overview=await api('overview');renderGrantPreview();}else if(page==='alarm')await loadAlarm();else if(page==='protection')await loadLockout();else if(page==='history')await loadHistory(true);else if(page==='debug')await loadDebug();else if(page==='keypad')await loadKeypad();else{adding=false;await loadUsers();}await checkInterruptedChange();}
+    $('#extension-host').hidden=true;document.querySelectorAll('[data-extension]').forEach(b=>b.setAttribute('aria-pressed','false'));closePageHelp();refreshGatewayConnections();if(page!=='keypad')cancelKeypad();if(page==='debug'&&!$('#debug-mode').checked)page='users';$('#'+page+' .gp-head').after($('#configuration-filters'));updateSelectorVisibility();$('#configuration-context').hidden=['gateway','history','controller'].includes(page);$('#'+page+' .gp-head>div').append($('#configuration-context'));for(const id of pages)$('#'+id).hidden=id!==page;document.querySelectorAll('[data-page]').forEach(x=>x.setAttribute('aria-pressed',x.dataset.page===page));remember();if(page!=='history'&&page!=='gateway'&&page!=='controller'&&!inventory)await loadInventory();updateContext();if(page==='controller')await controllerPanel.load();else if(page==='gateway')await loadInventory();else if(page==='access'){$('#grant-preview').replaceChildren();overview=await api('overview');renderGrantPreview();}else if(page==='alarm')await loadAlarm();else if(page==='protection')await loadLockout();else if(page==='history')await loadHistory(true);else if(page==='debug')await loadDebug();else if(page==='keypad')await loadKeypad();else{adding=false;await loadUsers();}await checkInterruptedChange();}
   let inventory=null, selectedAlarm=null, attaching=null;
   let alarmSample=null, alarmRevision=null;
   let lockoutPolicy=null, lockoutSample=null, lockoutSampleAt=0, lockoutKeypads=[], lockoutAlarmName='';
@@ -116,7 +117,9 @@
     delete_failed_or_revision_conflict:'This user may have changed. Reload before trying deletion again.',
     nonexistent_expiry:'That local time does not exist during the daylight-saving change. Choose another time.'};
   async function api(path, body, context={gateway:selectedGateway,alarm:selectedAlarm}, options={}) {
-    const auth=path==='accounts'||path.startsWith('account/')||['login','logout','session','settings','account/password','setup/gateway','setup/application'].includes(path);
+    const controller=path==='controller'||path.startsWith('controller/');
+    if(controller&&demoMode)throw Error('Turn off demo data to edit controller settings.');
+    const auth=controller||path==='accounts'||path.startsWith('account/')||['login','logout','session','settings','account/password','setup/gateway','setup/application'].includes(path);
     if(!auth&&!path.startsWith('history/')&&body!==undefined&&!contextReady)throw Error('Reload the selected gateway before making changes.');
     if(demoMode&&!auth&&path!=='setup')return window.ConfiguratorDemo.request(path,body,context);
     if(!auth&&path!=='setup'&&context.gateway?.startsWith('demo-'))throw Error('Demo targets cannot be sent to the server.');
@@ -134,6 +137,7 @@
     if(!response.ok){ if(response.status===401) signedOut(); const error=new Error(errors[result.error]||'The request could not be completed ('+result.error+').');error.code=result.error;throw error; }
     return result;
   }
+  const controllerPanel=window.ConfiguratorController({root:$('#controller-settings'),api,readOnly:()=>applicationSettings?.access_mode!=='manage'});
   const homebridgeFlow=window.ConfiguratorHomebridgeFlow({api,extensions:()=>applicationSettings?.extensions||[],
     nativeHomebridge:()=>applicationSettings?.homebridge?.profile==='homebridge-child-bridge',
     save:(request,context)=>api('users/rotate-pin',request,context,{reviewed:true}),
@@ -155,10 +159,11 @@
     act(async()=>{const tx=await api('transaction'),pending=tx.homebridge_pending?.[0];if(!pending)throw Error('No Homebridge update is waiting. Start user or PIN changes on Users.');await continueHomebridge({gateway:pending.gateway,alarm:pending.transaction.alarm},pending.transaction);});
   });
   async function act(fn) { if(busy)return; busy=true;const controls=['#settings-gear','#debug-mode','#demo-mode','#demo-reset','#gateway-select','#alarm-select','#access-alarm','#history-gateway','#history-alarm','#history-pause','#history-refresh','#history-clear','#history-retention','#history-keypad','#history-deconz','#history-administration'];controls.forEach(s=>{if($(s))$(s).disabled=true;});try{await fn();}catch(e){for(const id of ['pin','pin-repeat','password','recovery-pin']){const input=$('#'+id);if(input)input.value='';}tell(e.message||'Connection unavailable.',true);if(csrf)try{await checkInterruptedChange();}catch(_){};}finally{busy=false;controls.forEach(s=>{if($(s))$(s).disabled=false;});if($('#history-alarm'))$('#history-alarm').disabled=!historyGateway&&historyOptions.length!==1;if($('#editor').dataset.loading)$('#editor').querySelectorAll('input,select,button').forEach(x=>x.disabled=true);} }
-  function signedOut(){homebridgeFlow.clear();$('#user-list').replaceChildren();$('#mobile-user-summary').replaceChildren();for(const id of pages)$('#'+id).hidden=true;closeMenu();clearExtensionFrames();phoneDetail=false;history.replaceState(null,'');mobileLayout();$('#mobile-menu').hidden=true;clearInterruptedChange();window.ConfiguratorSettings.clear();$('#settings-gear').hidden=true;userLoadGeneration++;closePageHelp();gatewayStatusGeneration++;$('#gateway-connections').replaceChildren();$('#gateway-connections').hidden=true;cancelKeypad();$('#debug-output').value='';contextReady=false;inventory=null;$('#configuration-context').textContent='';$('#gateway-inventory').replaceChildren();$('#grant-preview').replaceChildren();csrf='';overview=null;current=null;review=null;selected=null;adding=false;$('#application').hidden=true;$('#logout').hidden=true;$('#login').hidden=false;$('#editor').replaceChildren();$('#activity').replaceChildren();lockoutPolicy=null;lockoutSample=null;$('#lockout-form').replaceChildren();$('#lockout-status').textContent='';$('#homebridge-panel').replaceChildren();alarmSample=null;alarmRevision=null;$('#alarm-form').replaceChildren();$('#alarm-state').textContent='Loading';$('#alarm-status').textContent='';}
+  function signedOut(){controllerPanel.clear();homebridgeFlow.clear();$('#user-list').replaceChildren();$('#mobile-user-summary').replaceChildren();for(const id of pages)$('#'+id).hidden=true;closeMenu();clearExtensionFrames();phoneDetail=false;history.replaceState(null,'');mobileLayout();$('#mobile-menu').hidden=true;clearInterruptedChange();window.ConfiguratorSettings.clear();$('#settings-gear').hidden=true;userLoadGeneration++;closePageHelp();gatewayStatusGeneration++;$('#gateway-connections').replaceChildren();$('#gateway-connections').hidden=true;cancelKeypad();$('#debug-output').value='';contextReady=false;inventory=null;$('#configuration-context').textContent='';$('#gateway-inventory').replaceChildren();$('#grant-preview').replaceChildren();csrf='';overview=null;current=null;review=null;selected=null;adding=false;$('#application').hidden=true;$('#logout').hidden=true;$('#login').hidden=false;$('#editor').replaceChildren();$('#activity').replaceChildren();lockoutPolicy=null;lockoutSample=null;$('#lockout-form').replaceChildren();$('#lockout-status').textContent='';$('#homebridge-panel').replaceChildren();alarmSample=null;alarmRevision=null;$('#alarm-form').replaceChildren();$('#alarm-state').textContent='Loading';$('#alarm-status').textContent='';}
   let applicationSettings=null;
   async function loadApplication(){
     applicationSettings=await api('setup');
+    document.querySelector('[data-page="controller"]').hidden=regular||demoMode||!applicationSettings.controller_settings_available;
     const nav=$('#extension-navigation');nav.replaceChildren();
     for(const extension of applicationSettings.extensions||[]){if(!extension.page)continue;const a=document.createElement('button');a.type='button';a.className='gp-button';a.dataset.extension=extension.id;a.textContent=extension.name;a.setAttribute('aria-pressed','false');a.onclick=()=>act(()=>openExtension(extension));nav.append(a);}
     $('#access-mode').textContent=applicationSettings.access_mode==='observe'?'Observation mode · changes and keypad commands are disabled.':'';
@@ -178,6 +183,7 @@
     if(!selectedGateway)selectedGateway='';
     $('#gateway-select').innerHTML=gateways.map(g=>`<option value="${esc(g.id)}" ${g.id===selectedGateway?'selected':''}>${esc(g.name)}</option>`).join('');
     $('#demo-mode').checked=demoMode;$('#demo-banner').hidden=!demoMode;$('#demo-reset').hidden=!demoMode;
+    $('[data-page="controller"]').hidden=regular||demoMode||!applicationSettings?.controller_settings_available;
     updateSelectorVisibility();
   }
   function clearContext(){clearInterruptedChange();userLoadGeneration++;cancelKeypad();$('#debug-output').value='';$('#protection').append($('#protection-editor'));$('#protection-editor').hidden=true;$('#protection-alarms').replaceChildren();$('#lockout-reset').disabled=true;contextReady=false;$('#gateway-inventory').replaceChildren();$('#grant-preview').replaceChildren();$('#activity').replaceChildren();overview=null;inventory=null;selected=null;selectedAlarm=null;adding=false;attaching=null;alarmSample=null;lockoutSample=null;current=null;$('#editor').replaceChildren();$('#homebridge-panel').replaceChildren();$('#alarm-form').replaceChildren();$('#lockout-form').replaceChildren();}
@@ -196,10 +202,12 @@
     const next=$('#demo-mode').checked;
     try{
     if(pendingOperation())throw Error('Finish the pending operation before switching demo mode.');
+    if(page==='controller'&&!controllerPanel.leave())return;
     // Verify no active real transaction before hiding the live interface.
     if(next&&selectedAlarm){const live=await api('transaction');if(!['none','complete'].includes(live.stage))throw Error('Finish the pending real operation first.');}
-    remember();clearContext();demoMode=next;selectedGateway=next?'demo-home':'';page='gateway';restoreNavigation();
-    $('#demo-mode').checked=demoMode;$('#demo-banner').hidden=!demoMode;$('#demo-reset').hidden=!demoMode;sessionStorage.setItem('configurator-demo-active',String(demoMode));await loadGateways();await loadInventory();await showPage();tell(demoMode?'Demo mode: only fictional data will change.':'Real setup reloaded. Demo edits were not applied.');
+    controllerPanel.clear();remember();clearContext();demoMode=next;selectedGateway=next?'demo-home':'';page='gateway';restoreNavigation();
+    $('#demo-mode').checked=demoMode;$('#demo-banner').hidden=!demoMode;$('#demo-reset').hidden=!demoMode;
+    $('[data-page="controller"]').hidden=regular||demoMode||!applicationSettings?.controller_settings_available;sessionStorage.setItem('configurator-demo-active',String(demoMode));await loadGateways();await loadInventory();await showPage();tell(demoMode?'Demo mode: only fictional data will change.':'Real setup reloaded. Demo edits were not applied.');
     }finally{$('#demo-mode').checked=demoMode;}
   });
   $('#demo-reset').onclick=()=>act(async()=>{if(!demoMode)return;if(!confirm('Reset all fictional users and grants? Your real setup is unaffected.'))return;window.ConfiguratorDemo.reset();clearContext();await loadInventory();await showPage();tell('Demo data reset.');});
@@ -208,7 +216,7 @@
     const alarmField=$('#alarm-context-label');
     gatewayField.hidden=gateways.length<=1;
     alarmField.hidden=['gateway','access','users','protection'].includes(page)||(inventory?.alarms.length||0)<=1;
-    $('#configuration-filters').hidden=['gateway','history','extension'].includes(page)||(gatewayField.hidden&&alarmField.hidden);
+    $('#configuration-filters').hidden=['gateway','history','extension','controller'].includes(page)||(gatewayField.hidden&&alarmField.hidden);
   }
   function updateContext(){
     updateSelectorVisibility();
@@ -852,7 +860,7 @@
   document.addEventListener('scroll',event=>{if(currentHelp&&!currentHelp.panel.contains(event.target)&&!currentHelp.button.matches(':hover')&&!currentHelp.panel.matches(':hover'))closePageHelp();},true);
   window.addEventListener('resize',closePageHelp);
 
-  document.querySelectorAll('[data-page]').forEach(b=>b.onclick=()=>act(async()=>{const next=b.dataset.page;if(next===page)return;if(!leaveUserDraft())return;if(phone.matches){phoneDetail=false;history.replaceState(null,'');mobileLayout();}if(page==='settings'&&review){tell('Use Back to editing or Discard changes before leaving the review.');return;}page=next;await showPage();if(phone.matches){const heading=$('#'+page+' h2');if(heading){heading.tabIndex=-1;heading.focus({preventScroll:true});}window.scrollTo(0,0);}}));
+  document.querySelectorAll('[data-page]').forEach(b=>b.onclick=()=>act(async()=>{const next=b.dataset.page;if(next===page)return;if(page==='controller'&&!controllerPanel.leave())return;if(!leaveUserDraft())return;if(phone.matches){phoneDetail=false;history.replaceState(null,'');mobileLayout();}if(page==='settings'&&review){tell('Use Back to editing or Discard changes before leaving the review.');return;}page=next;await showPage();if(phone.matches){const heading=$('#'+page+' h2');if(heading){heading.tabIndex=-1;heading.focus({preventScroll:true});}window.scrollTo(0,0);}}));
   setInterval(()=>{if(csrf&&!demoMode&&!busy&&!document.hidden)checkInterruptedChange().catch(()=>{});},15000);
   setInterval(()=>{if(csrf&&page==='history'&&!historyPaused&&!busy&&!document.hidden)act(loadHistory);},3000);
   act(async()=>{try{const session=await api('session');csrf=session.csrf;await signedIn();}catch(_){signedOut();tell('Sign in to continue.');}});

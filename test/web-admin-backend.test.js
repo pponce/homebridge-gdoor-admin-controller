@@ -8,6 +8,17 @@ import { webAdminRoute } from '../src/web-admin-routes.js';
 const reference = JSON.parse(await readFile(new URL('./fixtures/web-admin-read-parity.json', import.meta.url)));
 const admin = { role: 'admin' }, regular = { role: 'regular' };
 const registration = { id: 'test', name: 'Synthetic gateway', identity: '0011223344556677', endpoint: 'http://127.0.0.1:1', key: 'synthetic-private-key' };
+test('controller timing routes are global, admin-only, and writes require manage mode', async () => {
+  const calls = [], controller = { dispatch: async (...args) => { calls.push(args); return { saved: true }; } };
+  const backend = new WebAdminBackend({ controller, accessMode: 'manage' });
+  for (const operation of ['controller_settings', 'controller_timings_save']) await assert.rejects(backend.dispatch(regular, operation, {}), /forbidden/);
+  await backend.dispatch(admin, 'controller_settings', {}); await backend.dispatch(admin, 'controller_timings_save', { revision: 1 });
+  assert.equal(calls.length, 2);
+  const observe = new WebAdminBackend({ controller, accessMode: 'observe' });
+  await assert.rejects(observe.dispatch(admin, 'controller_timings_save', {}), /read_only/);
+  assert.equal(calls.length, 2);
+  assert.equal(webAdminRoute({ method: 'GET', url: '/api/controller', headers: { 'x-configurator-gateway': 'test' }, rawHeaders: ['X-Configurator-Gateway', 'test'] }, {}).operation, 'controller_settings');
+});
 function fixture(options = {}) {
   const data = structuredClone(reference), calls = [], transactions = { status: async () => ({ stage: 'none' }) };
   const backend = new WebAdminBackend({ registrations: [registration], transactions,

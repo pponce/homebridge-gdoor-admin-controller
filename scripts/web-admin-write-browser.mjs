@@ -31,8 +31,9 @@ try {
       });
       await page.goto('http://127.0.0.1:' + setupServer.address().port);
       await page.locator('[name="enabled"]').waitFor(); assert.equal(await page.locator('[name="enabled"]').isChecked(), false);
-      await page.locator('[name="enabled"]').check(); await page.locator('[name="publicUrl"]').fill(f.origin);
-      await page.getByText('HTTPS listener and reverse proxy', { exact: true }).click();
+      await page.locator('[name="enabled"]').check();
+      await page.getByText('Advanced network settings', { exact: true }).click();
+      await page.locator('[name="customNetwork"]').check(); await page.locator('[name="publicUrl"]').fill(f.origin);
       await page.locator('[name="port"]').fill(String(f.settings.port)); await page.locator('[name="origin"]').fill(f.origin);
       await page.locator('[name="connection"]').check();
       await page.locator('[name="username"]').fill('Owner'); await page.locator('[name="password"]').fill(f.password); await page.locator('[name="repeat"]').fill(f.password);

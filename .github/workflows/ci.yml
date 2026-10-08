@@ -75,6 +75,21 @@ jobs:
           PLAYWRIGHT_MODULE: ${{ runner.temp }}/coordinator-browser/node_modules/playwright
           PREVIEW_OUTPUT: ${{ runner.temp }}/coordinator-browser/screenshots
         run: node scripts/config-ui-browser.mjs
+      - name: Original web admin pages and production save flows
+        env:
+          PLAYWRIGHT_MODULE: ${{ runner.temp }}/coordinator-browser/node_modules/playwright
+        run: |
+          node scripts/web-admin-browser.mjs
+          node scripts/web-admin-write-browser.mjs
+      - name: Automatic web setup and live controller timing editor
+        id: websettings
+        env:
+          PLAYWRIGHT_MODULE: ${{ runner.temp }}/coordinator-browser/node_modules/playwright
+          PREVIEW_OUTPUT: ${{ runner.temp }}/coordinator-browser/screenshots
+        run: node scripts/web-admin-settings-browser.mjs
+      - name: "Web settings result: ${{ steps.websettings.outputs.result || steps.websettings.outcome }}"
+        if: always()
+        run: echo "Web settings diagnostics are recorded in this step name."
       - name: "Configuration UI result: ${{ steps.browser.outputs.result || steps.browser.outcome }}"
         if: always()
         run: echo "Configuration UI diagnostics are recorded in this step name."

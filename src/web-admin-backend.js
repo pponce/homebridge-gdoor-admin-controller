@@ -19,10 +19,10 @@ function limitedTransaction(value) {
 }
 
 export class WebAdminBackend {
-  constructor({ registrations = [], accessMode = 'observe', setup, transactions, history, backup, integration, keypadHook, assertCurrent = async () => {}, requestDiscovery = () => {}, connected = new Map(), hiddenUsers = async () => [], gatewayFactory = (row, options) => new WebAdminGateway(row, options) }) {
+  constructor({ registrations = [], accessMode = 'observe', setup, transactions, history, backup, integration, keypadHook, controller, assertCurrent = async () => {}, requestDiscovery = () => {}, connected = new Map(), hiddenUsers = async () => [], gatewayFactory = (row, options) => new WebAdminGateway(row, options) }) {
     this.registrations = new Map(validateWebGateways(registrations).map(row => [row.id, row]));
     requireWeb(['observe', 'manage'].includes(accessMode), 'candidate_read_only_required');
-    Object.assign(this, { accessMode, setup, transactions, history, backup, integration, keypadHook, assertCurrent, requestDiscovery, hiddenUsers, gatewayFactory });
+    Object.assign(this, { accessMode, setup, transactions, history, backup, integration, keypadHook, controller, assertCurrent, requestDiscovery, hiddenUsers, gatewayFactory });
     // Only the activity collector may set connection state. A successful REST
     // read does not establish that the live event stream is connected.
     this.connected = connected; this.catalog = new Map(); this.pending = Promise.resolve();
@@ -39,6 +39,12 @@ export class WebAdminBackend {
     requireWeb(session && ['admin', 'regular'].includes(session.role), 'forbidden');
     requireWeb(typeof operation === 'string' && object(body), 'invalid_request');
     const regular = session.role === 'regular';
+    if (['controller_settings', 'controller_timings_save'].includes(operation)) {
+      requireWeb(!regular, 'forbidden');
+      if (operation === 'controller_timings_save') requireWeb(this.accessMode === 'manage', 'candidate_read_only_required');
+      if (!this.controller) return this.unavailable();
+      return this.controller.dispatch(operation, body);
+    }
     if (operation === 'gateways') {
       requireWeb(exact(body, []), 'invalid_request');
       return { gateways: [...this.registrations].map(([id, row]) => ({ id, name: row.name, connected: this.connected.get(id) === true })) };
@@ -47,7 +53,7 @@ export class WebAdminBackend {
       requireWeb(exact(body, []), 'invalid_request');
       if (regular) return { access_mode: this.accessMode, extensions: [], onboarding_required: false };
       if (!this.setup?.public) return this.unavailable();
-      return { ...await this.setup.public(), access_mode: this.accessMode, extensions: [], gateway_count: this.registrations.size };
+      return { ...await this.setup.public(), access_mode: this.accessMode, controller_settings_available: Boolean(this.controller), extensions: [], gateway_count: this.registrations.size };
     }
     if (operation === 'installation_settings') {
       requireWeb(!regular, 'forbidden'); requireWeb(exact(body, []), 'invalid_request');

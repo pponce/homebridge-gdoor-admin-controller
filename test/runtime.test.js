@@ -8,7 +8,47 @@ import { CoordinatorRuntime } from '../src/runtime.js';
 import { loadIdentity } from '../src/storage.js';
 import { createManagementServer, listenLocal, closeServer } from '../src/api.js';
 import { hardwareFixture } from './support/hardware.mjs';
+import { controllerTimingValues } from '../src/controller-timings.js';
+import { WebAdminController } from '../src/web-admin-controller.js';
 const example = JSON.parse(await readFile(new URL('../examples/development-config.json', import.meta.url), 'utf8'));
+test('timing-only saves update the existing engine, retain overrides and enablement, persist and send no commands', async t => {
+  const f = await fixture(t, true); await f.commission();
+  const entry = f.runtime.entry(f.id), engine = entry.engine, router = entry.router, boot = f.runtime.bootId;
+  engine.state.externalUnlockOverride = true;
+  const other = structuredClone(f.runtime.configuration.controllers[1]);
+  const values = controllerTimingValues(entry.profile); values.timing.openRetractSettleSeconds = 0.3; values.feedback.closingSeconds = 14;
+  const port = new WebAdminController(f.runtime), before = port.read();
+  const result = await port.dispatch('controller_timings_save', { controllerId: f.id, revision: before.revision, values });
+  assert.equal(result.restart_required, false); assert.equal(result.saved, true);
+  assert.equal(f.runtime.bootId, boot); assert.equal(entry.engine, engine); assert.equal(entry.router, router);
+  assert.equal(engine.timing.openRetractSettleMs, 300); assert.equal(engine.timing.closingMs, 14000);
+  assert.equal(engine.state.externalUnlockOverride, true); assert.equal(f.runtime.status(f.id).actuationEnabled, true);
+  assert.deepEqual(f.runtime.configuration.controllers[1], other); assert.deepEqual(f.hardware.state.writes, []);
+  assert.equal(JSON.stringify(result).includes('credentialRef'), false); assert.equal(JSON.stringify(result).includes('baseUrl'), false);
+  await assert.rejects(f.runtime.applyTimings(f.id, values, before.revision), /revision_conflict/);
+  await f.runtime.stop();
+  const restored = new CoordinatorRuntime({ storagePath: f.storagePath, configuration: f.config, credentials: async () => f.hardware.credentials, clock: f.clock });
+  t.after(() => restored.stop()); await restored.start();
+  assert.equal(restored.status(f.id).actuationEnabled, true); assert.equal(restored.entry(f.id).engine.timing.closingMs, 14000);
+  assert.deepEqual(f.hardware.state.writes, []);
+});
+test('timing-only saves reject busy, maintenance, invalid numbers and non-timing changes without enabling disabled controllers', async t => {
+  const f = await fixture(t); let entry = f.runtime.entry(f.id);
+  let values = controllerTimingValues(entry.profile), revision = f.runtime.state.revision;
+  values.timing.openRetractSettleSeconds = 0.3;
+  await f.runtime.applyTimings(f.id, values, revision);
+  assert.equal(f.runtime.status(f.id).actuationEnabled, false);
+  await f.commission(); entry = f.runtime.entry(f.id); revision = f.runtime.state.revision; values = controllerTimingValues(entry.profile);
+  entry.engine.busy = true; await assert.rejects(f.runtime.applyTimings(f.id, values, revision), /controller_busy/); entry.engine.busy = false;
+  entry.router.activeInput = 'homekit'; await assert.rejects(f.runtime.applyTimings(f.id, values, revision), /controller_busy/); entry.router.activeInput = null;
+  entry.engine.partialOwner = 'button'; await assert.rejects(f.runtime.applyTimings(f.id, values, revision), /controller_busy/); entry.engine.partialOwner = null;
+  f.runtime.state.maintenance = { id: 'test' }; await assert.rejects(f.runtime.applyTimings(f.id, values, revision), /maintenance_held/); f.runtime.state.maintenance = null;
+  const before = f.runtime.settings();
+  for (const bad of [ { ...values, door: {} }, { ...values, feedback: { ...values.feedback, closing: 'timed' } },
+    { ...values, timing: { ...values.timing, operationPollSeconds: 0 } }, { ...values, timing: { ...values.timing, idlePollSeconds: NaN } } ])
+    await assert.rejects(f.runtime.applyTimings(f.id, bad, revision));
+  assert.deepEqual(f.runtime.settings(), before); assert.deepEqual(f.hardware.state.writes, []);
+});
 async function fixture(t, multiple = false) {
   const storagePath = await mkdtemp(path.join(os.tmpdir(), 'coordinator-runtime-')); const identity = await loadIdentity(storagePath);
   const hardware = await hardwareFixture(example.controllers[0]);

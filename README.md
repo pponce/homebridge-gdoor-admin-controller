@@ -19,7 +19,7 @@ A Homebridge platform for coordinating **one garage door and a separate bolt/loc
 
 Adds an optional Node.js web administrator using the existing interface for deCONZ users, PINs, access grants, schedules, keypad protection, alarms, activity and web accounts. Enable it in General → Web admin interface and create the first administrator there. Additional accounts are managed in web Settings. The server is **off by default** and uses the saved deCONZ connections; existing controller configuration and HomeKit pairing are retained.
 
-The existing Homebridge coordinator remains responsible for movement. This release does not include the old Python controller or HTTP Webhooks integration. A web panel for coordinator timers is a later addition. The [standalone application](https://github.com/pponce/garageDoorController) remains preserved for use without Homebridge.
+The existing Homebridge coordinator remains responsible for movement. This release does not include the old Python controller or HTTP Webhooks integration. The Controller page supports live timing edits; see docs/controller-timings.md. The [standalone application](https://github.com/pponce/garageDoorController) remains preserved for use without Homebridge.
 
 See [web setup and the first functional test](docs/web-admin-setup.md) and [alarm-PIN restart requirements and recovery limits](docs/web-admin-alarm-pin.md). Existing Homebridge deCONZ alarm PIN synchronization requires explicit confirmation, a separate local deCONZ child bridge, and the reviewed compatible sources. This initial release has automated coverage; physical acceptance is still required.
 

@@ -26,8 +26,8 @@
       "path": "web-admin/public/app.js",
       "gitBlob": "3de32986d0b5d0b68adf7baacb000441c21b794b",
       "sha256": "80be3155ddf2900c2e8eebc54936040bbca513223e4588f21903ba487d0a580a",
-      "adaptedSha256": "f85eb3ead966c31238ca52757e1bbb799a3a4dd510215db30e9b638264707494",
-      "adaptation": "Select the integrated Homebridge child-bridge confirmation flow."
+      "adaptedSha256": "ea0bdc2a816a8bf0d52727729493d534b4fc93045a5e1abb4a207b9d1314d827",
+      "adaptation": "Add the authorized Controller timing editor with admin-only navigation, demo isolation, and live save support; retain original gateway and account workflows."
     },
     {
       "source": "configurator/static/apple-touch-icon.png",
@@ -53,7 +53,9 @@
       "source": "configurator/static/index.html",
       "path": "web-admin/public/index.html",
       "gitBlob": "1bf56e0be7d325300b2d01b4a942b0526719a3a6",
-      "sha256": "6f3b8ba779fcb13904f390c9177ac8d458f41e283bf434ee5348a9f0e2586093"
+      "sha256": "6f3b8ba779fcb13904f390c9177ac8d458f41e283bf434ee5348a9f0e2586093",
+      "adaptedSha256": "a72bccb0a86a20997a67f5e66a8419a7008526abdabb6bbc83955790c7d1d452",
+      "adaptation": "Add the authorized Controller timing editor with admin-only navigation, demo isolation, and live save support; retain original gateway and account workflows."
     },
     {
       "source": "configurator/static/keypad.js",
@@ -80,6 +82,13 @@
       "path": "web-admin/public/style.css",
       "gitBlob": "a989313e78d1454a31c6a9b7327647066e510942",
       "sha256": "38bee5eb6eaa4bc8a7344fee7fbb6c790498ca46db3553cc3dc8ea76b10d93e8"
+    }
+  ],
+  "additions": [
+    {
+      "path": "web-admin/public/controller.js",
+      "sha256": "badfaf2f08a48efe3234720adf83ef68d161e171654dd517dad6fd961fe12a42",
+      "purpose": "Plugin-native editor for controller defaults and device timing overrides."
     }
   ]
 }

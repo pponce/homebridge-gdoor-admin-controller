@@ -12,6 +12,7 @@ import { createWebAdminServer } from './web-admin-server.js';
 import { loadWebAdminAssets } from './web-admin-assets.js';
 import { WebHomebridgeMaintenance, WebHomebridgeMaintenanceStore } from './web-admin-homebridge-maintenance.js';
 import { WebHomebridgeHost } from './web-admin-homebridge-host.js';
+import { WebAdminController } from './web-admin-controller.js';
 
 export async function createWebAdminService({ storagePath, configPath, coordinatorBridge, runtime, row, registrations, accounts, tls, assertCurrent, homebridgeHost }) {
   const application = new WebAdminApplication(storagePath); await application.load();
@@ -31,6 +32,7 @@ export async function createWebAdminService({ storagePath, configPath, coordinat
     application: async body => { await application.save(body); for (const value of registrations) collector.requestDiscovery(value.id); return setup.public(); },
   };
   const backend = new WebAdminBackend({ registrations, accessMode: row.settings.accessMode, setup, history, transactions, backup, assertCurrent, integration,
+    controller: new WebAdminController(runtime),
     hiddenUsers: gateway => integration.hiddenUsers(gateway),
     keypadHook: (registration, alarm, started) => webCoordinatorKeypad(runtime, registration, alarm)(started),
     requestDiscovery: gateway => collector.requestDiscovery(gateway) });
