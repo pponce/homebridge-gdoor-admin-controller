@@ -1,3 +1,11 @@
+# 0.4.23 ready for maintainer publication
+
+All five jobs passed in [CI run 37717601855](https://github.com/pponce/homebridge-gdoor-admin-controller/actions/runs/37717601855) on implementation `cb6fae2d3efd85b795d4588ffa9ff8b8edbbc156`: Node 22/24, actual Homebridge 2.0/2.4, custom UI IPC, desktop Chromium and mobile WebKit. The browser checks cover on-demand connection forms and focus, saved connection cards, local bridge selection without duplicate choices, local records hidden from General after saving/deleting/discarding device drafts, remote connection deletion, and existing credential/save protections. Earlier browser failures were a decorative-plus accessible-name mismatch and a manual-removal fixture incorrectly using a local address; both are resolved.
+
+Publish/install 0.4.23 as a normal update, retaining configuration, private data and HomeKit pairing. No uninstall or Home app bridge removal is needed. Source validation does not establish npm publication, owner installation or physical acceptance. Use the exact reviewed revision with scripts/publish-npm.sh, verify npm, then hb-service stop → add the pinned version → start; leave Homebridge stopped after installation failure.
+
+The optional Node.js web interface remains development work on web-admin-node-port and is not included in this release. It must default OFF and require explicit owner enablement when ready for testing. The original standalone deployment remains preserved.
+
 # Release 0.4.23 preparation
 
 Combines the on-demand General connection form, distinct saved-connection cards, and automatic local Homebridge bridge presentation. No movement behavior or public API schema changes. Existing pairing and configuration are retained. Integrated web administration remains separate development work and will require explicit enablement, disabled by default.
