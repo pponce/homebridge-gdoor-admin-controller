@@ -1,3 +1,7 @@
+# Unreleased: control setup order
+
+Control setup now shows Control source (deCONZ / Homebridge), the saved gateway/bridge connection, deCONZ control type where applicable, then device discovery. Control type no longer renders in the earlier name/enabled grid. The saved connection picker is shown once; shared device/bridge discovery remains unchanged for Devices. JavaScript syntax verification passed. No runtime or stored configuration changes. Included in the next release, not installed or published to npm yet.
+
 # Unreleased: connection action layout
 
 Renamed the shared connection action to **Manage connections** and placed it immediately to the right of the saved connection dropdown in the garage opener and bolt sections (and other uses of the same connection picker). The row wraps on narrow panels. Navigation, connection selection and runtime behavior are unchanged. Updated the existing browser navigation selector for the shorter label. This is a source-only change for the next release; do not republish 0.4.20 from this revised checkout.

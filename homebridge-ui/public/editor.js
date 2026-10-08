@@ -52,8 +52,8 @@ export class ProfileEditor {
     return matched;
   }
   connection(parent, obj, key, kind) {
-    const current=obj[key];const types=kind==='garage'?[['tailwind','Tailwind local API'],['homebridge','Existing Homebridge garage']]:[['deconz','deCONZ directly'],['homebridge','Existing Homebridge device']];
-    const choice=this.input(this.grid(parent),'Connection',current,'type',{options:types});
+    const current=obj[key];const isControl=key==='source';const types=isControl?[['deconz','deCONZ'],['homebridge','Homebridge']]:kind==='garage'?[['tailwind','Tailwind local API'],['homebridge','Existing Homebridge garage']]:[['deconz','deCONZ directly'],['homebridge','Existing Homebridge device']];
+    const choice=this.input(this.grid(parent),isControl?'Control source':'Connection',current,'type',{options:types});
     choice.addEventListener('change',()=>{
       obj[key]={type:current.type,baseUrl:'',credentialRef:'garage-'+current.type,...(kind==='garage'&&current.type==='tailwind'?{doorIndex:0}:{}),
         ...(kind==='bolt'?{lockedValue:true,...(current.type==='homebridge'?{serviceType:'switch'}:{})}:{}),...(kind==='motor'?{activeValue:true}:{}),
@@ -61,8 +61,8 @@ export class ProfileEditor {
       this.change();this.render();
     });
   }
-  bridgeDevice(parent,connection,kind){
-    this.sharedConnection(parent,connection);
+  bridgeDevice(parent,connection,kind,{showConnection=true}={}){
+    if(showConnection)this.sharedConnection(parent,connection);
     parent.append(el('p','Save this bridge’s pairing PIN as a private connection key. The selected Homebridge must allow unpaired accessory control (insecure mode). Native HomeKit accessories are not supported.','help'));
     const output=el('div',undefined,'discovery-results');parent.append(this.button('Find Homebridge devices',async()=>{
       if(!this.discoverHomebridge)return this.error('Discover Homebridge devices in the Homebridge plugin settings.');
@@ -79,9 +79,9 @@ export class ProfileEditor {
     if(connection.serviceId)parent.append(el('p','Selected service '+connection.serviceId+' · '+connection.bridgeId,'route-note'));
     const details=el('details');details.append(el('summary','Pinned device identity'));const g=this.grid(details);for(const [key,label]of [['bridgeId','Bridge identity'],['serviceId','Accessory / service ID'],['accessoryIdentity','Accessory identity fingerprint']])this.input(g,label,connection,key);parent.append(details);
   }
-  device(parent,connection,kind){
-    if(connection.type==='homebridge')return this.bridgeDevice(parent,connection,kind);
-    this.sharedConnection(parent,connection);
+  device(parent,connection,kind,{showConnection=true}={}){
+    if(connection.type==='homebridge')return this.bridgeDevice(parent,connection,kind,{showConnection});
+    if(showConnection)this.sharedConnection(parent,connection);
     const output=el('p','Choose a device to pin its identity.','help');
     parent.append(this.button('Find devices',async()=>{
       if(!this.discover)return this.error('Use Homebridge settings to discover and connect devices.');
@@ -194,10 +194,11 @@ export class ProfileEditor {
       const card=this.panel(inputs,input.name);card.classList.add('input-profile');const g=this.grid(card);
       this.input(g,'Control name',input,'name').addEventListener('input',()=>{refreshSelector();card.querySelector('h3').textContent=input.name||'Unnamed control';});this.input(g,'Use this control',input,'enabled',{type:'checkbox'}).addEventListener('change',refreshSelector);
       this.connection(card,input,'source',input.source.kind);
-      if(input.source.type==='deconz')this.input(g,'Control type',input.source,'kind',{options:[['button','deCONZ button'],['keypad','Physical deCONZ keypad']],rerender:true});
+      this.sharedConnection(card,input.source);
+      if(input.source.type==='deconz')this.input(this.grid(card),'Control type',input.source,'kind',{options:[['button','deCONZ button'],['keypad','Physical deCONZ keypad']],rerender:true});
       if(input.source.kind==='keypad'){if(input.action!=='keypad')input.busyBehavior='drop';input.action='keypad';input.trigger='native-outcome';input.source.alarmId??=1;}
       else {delete input.source.alarmId;if(input.action==='keypad')input.action='toggle';if(input.trigger==='native-outcome'||input.source.type==='homebridge'&&input.source.kind==='button'&&input.trigger>2)input.trigger=input.source.type==='homebridge'?0:1002;if(input.source.kind==='switch'&&typeof input.trigger!=='string')input.trigger='on';}
-      this.device(card,input.source,input.source.kind);const actions=this.grid(card);
+      this.device(card,input.source,input.source.kind,{showConnection:false});const actions=this.grid(card);
       if(input.source.kind==='keypad')this.input(actions,'Alarm system number',input.source,'alarmId',{type:'number',min:1,max:255,step:1});
       else {if(input.source.kind==='switch')this.input(actions,'Switch transition',input,'trigger',{options:[['on','Turns on'],['off','Turns off'],['either','Either transition']]});else this.input(actions,'Button event',input,'trigger',{type:'number',min:0,max:input.source.type==='homebridge'?2:65535,step:1,help:input.source.type==='homebridge'?'0: single press, 1: double press, 2: long press.':'For example, 1002 is the usual single press on many deCONZ buttons.'});this.input(actions,'Action',input,'action',{options:[['toggle','Open / close toggle'],['open','Open'],['close','Close']]}).addEventListener('change',()=>{input.busyBehavior=input.action==='toggle'&&p.motorPaths.find(path=>path.id===input.motorPath)?.interruption==='stop-opening-reverse-closing'?'interrupt':'drop';this.change();this.render();});}
       this.input(actions,'Operate garage through',input,'motorPath',{options:[['primary',openerLabel],...p.motorPaths.map(path=>[path.id,'Relay: '+path.name])],help:'Choose whether this control sends commands through the garage opener connection or pulses a relay.'}).addEventListener('change',()=>{const supported=p.motorPaths.find(path=>path.id===input.motorPath)?.interruption==='stop-opening-reverse-closing';input.busyBehavior=input.action==='toggle'&&supported?'interrupt':input.source.kind==='keypad'&&supported?input.busyBehavior:'drop';this.change();this.render();});
