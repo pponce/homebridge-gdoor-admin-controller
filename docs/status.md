@@ -1,4 +1,4 @@
-# Unreleased: automatic LAN setup and live Controller timing page
+# 0.4.25 prepared for owner publication: LAN setup and live timings
 
 The owner confirmed web access after correcting bind/origin settings in 0.4.24. New web setups now derive the LAN URL, listen address and strict backend origin together, preselect a single deCONZ connection, and show the saved running URL. Custom/proxy settings are retained behind Advanced network settings. Local address enumeration can fall back to manual IPv4 entry; no device probes or startup configuration mutations are introduced.
 
@@ -6,7 +6,7 @@ The new admin-only Controller page displays controller status, controller-defaul
 
 Validation complete: all five jobs passed in [CI run 37796837930](https://github.com/pponce/homebridge-gdoor-admin-controller/actions/runs/37796837930) on implementation `fef22deac7cc758455af5c1b9ad647c87d2a8799`: full regression and package checks on Node 22/24, actual Homebridge 2.0/2.4 with synthetic hardware, custom UI IPC, desktop Chromium and mobile WebKit. The 86 focused local checks cover persistence across restart, no device commands during saves, busy/stale/invalid rejection and an emulated WebSocket input flow after live per-device and pulse timing changes. Browser acceptance covers automatic LAN setup, custom-address retention, timing override inheritance, successive live saves, lost-response recovery without replay, read-only protection and existing user/PIN workflows. CI caught two browser-fixture issues (private-store initialization and opening mobile user details) and a stale timing-save success message; all were corrected before this passing run. Screenshots are CI artifacts; no manual visual inspection is claimed.
 
-Homebridge readiness now reports a specific prerequisite failure, and the user-level PIN selector remains visible but disabled while setup is blocked. The exact cause on the owner's installed host is not established by its previous generic message. Both plugins are explicitly documented to require separate child bridges. Development branch and draft PR #1 were pushed with owner authorization; this documentation-only checkpoint preserves the validated implementation. No npm publication, owner installation or physical acceptance is claimed.
+Homebridge readiness now reports a specific prerequisite failure, and the user-level PIN selector remains visible but disabled while setup is blocked. The exact cause on the owner's installed host is not established by its previous generic message. Both plugins are explicitly documented to require separate child bridges. Development branch and draft PR #1 were pushed with owner authorization; the 0.4.25 release preparation changes only package version and documentation beyond the validated implementation. No npm publication, owner installation or physical acceptance is claimed.
 
 # 0.4.24 ready for owner-test publication
 

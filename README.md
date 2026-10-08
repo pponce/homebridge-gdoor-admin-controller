@@ -15,9 +15,11 @@ A Homebridge platform for coordinating **one garage door and a separate bolt/loc
 - No door-only, bolt-only, native HomeKit pairing, or Apple Home automation backend.
 - No dependency on HTTP Webhooks for the coordinator's accessories or state publication.
 
-## Owner test release: 0.4.24
+## Owner test release: 0.4.25
 
-Adds an optional Node.js web administrator using the existing interface for deCONZ users, PINs, access grants, schedules, keypad protection, alarms, activity and web accounts. Enable it in General → Web admin interface and create the first administrator there. Additional accounts are managed in web Settings. The server is **off by default** and uses the saved deCONZ connections; existing controller configuration and HomeKit pairing are retained.
+Adds automatic LAN setup, live controller-default/device timing edits and specific Homebridge setup diagnostics. Both this plugin and homebridge-deconz require separate child bridges.
+
+Includes the optional Node.js web administrator using the existing interface for deCONZ users, PINs, access grants, schedules, keypad protection, alarms, activity and web accounts. Enable it in General → Web admin interface and create the first administrator there. Additional accounts are managed in web Settings. The server is **off by default** and uses the saved deCONZ connections; existing controller configuration and HomeKit pairing are retained.
 
 The existing Homebridge coordinator remains responsible for movement. This release does not include the old Python controller or HTTP Webhooks integration. The Controller page supports live timing edits; see docs/controller-timings.md. The [standalone application](https://github.com/pponce/garageDoorController) remains preserved for use without Homebridge.
 
@@ -30,7 +32,7 @@ The configuration UI retains connection cards, direct local Homebridge selection
 After npm publication, install on a Homebridge 2 / Node 22 or 24 host:
 
 ```sh
-sudo hb-service add homebridge-gdoor-admin-controller@0.4.24
+sudo hb-service add homebridge-gdoor-admin-controller@0.4.25
 ```
 
 **Required bridge setup:** run Garage Door Admin Controller in its own child bridge. Run `homebridge-deconz` in a separate child bridge. Do not place either on the main bridge or combine them in the same child bridge. This separation lets alarm PIN updates restart deCONZ while the controller and web administrator remain running. New garages remain disabled until checked and enabled. Follow the [owner installation guide](docs/owner-test.md) for taking over from an existing controller. This package does not install a separate system service.

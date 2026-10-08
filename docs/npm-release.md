@@ -1,3 +1,15 @@
+# 0.4.25 owner update
+
+Includes automatic LAN web setup, live controller-default and physical-input timing edits, clearer Homebridge readiness failures, and the documented requirement for two separate child bridges. Runtime implementation `fef22deac7cc758455af5c1b9ad647c87d2a8799` passed all five jobs in [CI run 37796837930](https://github.com/pponce/homebridge-gdoor-admin-controller/actions/runs/37796837930). Release preparation changes only the package version and documentation. Existing controller profiles, web accounts, proxy settings and HomeKit pairing are retained.
+
+This owner-test release is on `web-admin-lan-controller-timings` (draft PR #1). Use the exact reviewed 0.4.25 release commit; pulling main alone does not include these changes. Fetch over SSH into the existing clean checkout and check out that pinned revision. Do not overwrite local edits.
+
+Run the publisher from an interactive terminal as the normal user with stdin and stdout attached to `/dev/tty`. It prints npm's browser-approval URL without opening a browser and allows up to ten minutes for registry verification. It retains the exact archive, source revision and publication receipt in `.release/0.4.25/` and checks an existing publication before trying to publish. Retry with the same source revision and saved artifact after an interrupted publication.
+
+After publication verification, download the exact package through npm into `.release/0.4.25/download/` and compare its SHA-512 integrity to the saved release archive before stopping Homebridge. Install only in this order: `sudo hb-service stop`, `sudo hb-service add homebridge-gdoor-admin-controller@0.4.25`, `sudo hb-service start`. Stop on install failure and leave Homebridge stopped. No uninstall, removal from Apple Home, re-pairing or controller reconfiguration is needed for this package update. Keep the old standalone services stopped.
+
+The owner update script performs publication and installation only when run on the Homebridge host. No installed service or npm package was changed while preparing this source release.
+
 # 0.4.24 optional web admin publication
 
 All five acceptance jobs pass in CI run 37731476101 at af338c806b389e6824f89e6d9a7d0733d88b849a. Use the current status.md release checkpoint; the older commands below are historical. This release retains controller configuration/private data and HomeKit pairing. It adds the optional web administrator, disabled until explicitly configured in General. See web-admin-setup.md before enabling it.
