@@ -1,3 +1,7 @@
+## 2026-10-08 — Compact Garage Door selector
+
+Renamed the web Controller page selector label from Garage to Garage Door and constrained its field to 20rem (320px at the default root font size), with max-width:100% for narrow layouts. The CSS is scoped to that selector; controller selection, live timing saves and recovery behavior are unchanged. JavaScript syntax and the two updated web-asset fingerprints were checked locally. Existing browser CI will cover the page flows; no local browser rendering is claimed. Source change only; npm publication and owner installation remain separate.
+
 ## 2026-10-08 — Xfinity manual scans
 
 Added both supplied Quick Start Guide scans as repository JPEG images and embedded them in docs/xfinity-keypad.md with full-size links and descriptive alt text. Visually checked both rendered pages for legibility and complete content. The manual identifies the light as a status LED/proximity sensor, including proximity wake, so corrected the earlier dedicated-entry-indicator wording while retaining the observed typing behavior and explicitly unproven accepted-entry reset hypothesis. Checked image dimensions, binary blob hashes and relative links. Added only these two JPEG paths to the release checker's package allowlist. A temporary local checkout passed the package checker and archive-integrity check, and both packed images matched their source bytes. Documentation, images and the release allowlist only; no runtime, package version or installed-host change.

@@ -82,14 +82,14 @@
       "path": "web-admin/public/style.css",
       "gitBlob": "a989313e78d1454a31c6a9b7327647066e510942",
       "sha256": "38bee5eb6eaa4bc8a7344fee7fbb6c790498ca46db3553cc3dc8ea76b10d93e8",
-      "adaptedSha256": "67496241e79348abefb7c0240eb666995cf2e7d6742e4bc2090f59ef3279d663",
-      "adaptation": "Separate the signed-in account password section from web account management and identify the current user."
+      "adaptedSha256": "00797669103c365f5fe73babed02292de19294bed01a49379ebe7659404eca4f",
+      "adaptation": "Separate the signed-in account password section from web account management and identify the current user. Keep the Controller garage selector compact and responsive."
     }
   ],
   "additions": [
     {
       "path": "web-admin/public/controller.js",
-      "sha256": "1c71204df1be06f97fd8c0168bcf789d0d2b67b41d2c09ed05f742f1a4c84eda",
+      "sha256": "fcadf4da707fc7437db128ee13dcd742f3348e7881530dcc132f1798ebfb1a23",
       "purpose": "Plugin-native editor for controller defaults and device timing overrides."
     }
   ]

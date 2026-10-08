@@ -307,3 +307,6 @@ body.gp-extension-embedded{margin:0;padding:0;background:transparent}.gp-extensi
 
 /* Separate the signed-in account password from administrator account management. */
 #configurator-preview .gp-account-password-section{margin-top:28px;padding-top:24px;border-top:1px solid var(--gp-line)}
+
+/* Keep the garage selector compact while fitting narrow screens. */
+#configurator-preview .gp-controller-selector{width:20rem;max-width:100%}

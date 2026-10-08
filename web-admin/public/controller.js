@@ -24,7 +24,7 @@ window.ConfiguratorController = ({ root, api, readOnly }) => {
     if (!data.controllers.length) { root.innerHTML = '<p class="gp-note">Add a garage in the Homebridge plugin settings first.</p>'; return; }
     const row = profile(), values = row.values, fields = data.fields;
     const state = row.status.state;
-    root.innerHTML = `<label class="gp-field">Garage<select data-controller-select>${data.controllers.map(c => `<option value="${esc(c.id)}" ${c.id === selected ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>
+    root.innerHTML = `<label class="gp-field gp-controller-selector">Garage Door<select data-controller-select>${data.controllers.map(c => `<option value="${esc(c.id)}" ${c.id === selected ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>
       <p class="gp-note">${esc((row.status.enabled ?? row.status.actuationEnabled) ? 'Enabled' : 'Disabled')}${row.status.health?.title && row.status.health.title !== 'Disabled' ? ' · '+esc(row.status.health.title) : ''} · Door: ${esc(state.door)} · Bolt: ${esc(state.bolt)}${state.busy ? ' · Busy' : ''}. Status at last reload.</p>
       ${row.status.health?.detail ? `<p class="gp-note" role="status">${esc(row.status.health.detail)}${row.status.health.code ? ' Reason: '+esc(row.status.health.code)+'.' : ''}</p>` : ''}
       ${row.status.lastFault ? `<details class="gp-panel gp-body"><summary>Previous fault</summary><p class="gp-note">${esc(row.status.lastFault.reason.replaceAll('_', ' '))}${row.status.lastFault.at ? ' · '+esc(row.status.lastFault.at) : ''}. Historical record; current status is shown above.</p></details>` : ''}
