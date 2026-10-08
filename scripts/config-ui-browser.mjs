@@ -97,7 +97,7 @@ async function fixture(browser,{mobile,dark,mode='managed'}){
   await page.goto('http://127.0.0.1:'+server.address().port+'/index.html');
   await page.waitForFunction(()=>document.getElementById('coordinator-ui').getAttribute('aria-busy')==='false');
   assert.equal(await page.locator('#general-page').isVisible(),true);
-  assert.equal(await page.locator('#saved-keys .saved-key').count(),2);
+  assert.equal(await page.locator('#saved-keys .saved-key').count(),savedKeys.length);
   assert.equal(await page.locator('#credential-secret').inputValue(),'');
   await page.locator('#garages-tab').click();await page.locator('.garage-card').first().waitFor();
   return{page,errors,probedIds,keyDeletes:()=>keyDeletes,savedKeys:()=>[...savedKeys],localImports:()=>localImports,debugReads:()=>debugReads,debugWrites:()=>debugWrites,reviews:()=>reviews,disables:()=>disables,configuration:()=>configuration,blocks:()=>blocks,applies:()=>applies,nativeSaves:()=>nativeSaves,probes:()=>probes,commissions:()=>commissions,release:()=>releaseNative?.()};
