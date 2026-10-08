@@ -232,10 +232,21 @@ async function main() {
     state=await restart(true);assert.equal(state.actuationEnabled,true);assert.equal(state.state.phase,'position-unknown');
     assert.deepEqual(hardware.state.writes,writes,'Full Homebridge restart while open cannot move hardware');
     hardware.state.reachable=false;
-    state=await restart(false);assert.equal(state.held,'waiting-for-devices');assert.equal(state.commissioned,true);
+    state=await restart(false);assert.equal(state.held,'waiting-for-devices');assert.equal(state.commissioned,true);assert.equal(state.enabled,true);assert.equal(state.configurationValid,true);
     hardware.state.reachable=true;
     await until(async()=>(await management(endpoint+'/state')).status.actuationEnabled,12000);
     assert.deepEqual(hardware.state.writes,writes,'Late startup recovery cannot move hardware');
+    // A real fault blocks control, but never changes the saved Enabled setting.
+    hardware.state.blocked=true;
+    await until(async()=>(await management(endpoint+'/state')).status.state.fault==='door_blocked');
+    state=(await management(endpoint+'/state')).status;
+    assert.equal(state.enabled,true);assert.equal(state.configurationValid,true);assert.equal(state.actuationEnabled,false);
+    const writesBeforeFault=structuredClone(hardware.state.writes);
+    state=await restart(false);assert.equal(state.enabled,true);assert.equal(state.state.fault,'door_blocked');
+    hardware.state.blocked=false;
+    state=await restart(true);assert.equal(state.enabled,true);assert.equal(state.state.fault,null);
+    assert.equal(state.lastFault.reason,'door_blocked');assert.equal(state.actuationEnabled,true);
+    assert.deepEqual(hardware.state.writes,writesBeforeFault,'Rechecking a saved fault cannot move hardware');
     // Crash while a real Tailwind open operation is in progress. The new process
     // must retain enablement, report unknown position and never replay the write.
     hardware.state.closed=true;hardware.state.locked=true;

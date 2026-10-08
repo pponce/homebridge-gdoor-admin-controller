@@ -39,9 +39,9 @@ export class WebAdminBackend {
     requireWeb(session && ['admin', 'regular'].includes(session.role), 'forbidden');
     requireWeb(typeof operation === 'string' && object(body), 'invalid_request');
     const regular = session.role === 'regular';
-    if (['controller_settings', 'controller_timings_save'].includes(operation)) {
+    if (['controller_settings', 'controller_timings_save', 'controller_recover'].includes(operation)) {
       requireWeb(!regular, 'forbidden');
-      if (operation === 'controller_timings_save') requireWeb(this.accessMode === 'manage', 'candidate_read_only_required');
+      if (operation !== 'controller_settings') requireWeb(this.accessMode === 'manage', 'candidate_read_only_required');
       if (!this.controller) return this.unavailable();
       return this.controller.dispatch(operation, body);
     }

@@ -1,7 +1,7 @@
 // Browser administration API, including timing-only controller settings.
 import { requireWeb } from './web-admin-common.js';
 const routes = new Map([
-  ['GET /api/controller', 'controller_settings'], ['POST /api/controller/timings', 'controller_timings_save'],
+  ['GET /api/controller', 'controller_settings'], ['POST /api/controller/timings', 'controller_timings_save'], ['POST /api/controller/recover', 'controller_recover'],
   ['POST /api/setup/finish', 'setup_finish'], ['GET /api/debug', 'debug_status'], ['POST /api/debug/control', 'debug_control'],
   ['GET /api/administration', 'administration'], ['GET /api/activity-options', 'activity_options'],
   ['POST /api/history/query', 'history_query'], ['POST /api/history/clear', 'history_clear'], ['POST /api/history/retention', 'history_retention'],
@@ -15,7 +15,7 @@ const routes = new Map([
   ['POST /api/recovery/review', 'review_recovery'], ['POST /api/recovery/confirm', 'recover_transaction'], ['GET /api/settings', 'installation_settings'],
   ['POST /api/homebridge/authorize-recovery', 'homebridge_authorize_recovery'],
 ]);
-const global = new Set(['controller_settings', 'controller_timings_save', 'gateways', 'setup', 'setup_gateway', 'setup_application', 'setup_local_gateways', 'setup_probe', 'setup_connect', 'activity_options', 'history_query', 'history_clear', 'history_retention', 'installation_settings']);
+const global = new Set(['controller_settings', 'controller_timings_save', 'controller_recover', 'gateways', 'setup', 'setup_gateway', 'setup_application', 'setup_local_gateways', 'setup_probe', 'setup_connect', 'activity_options', 'history_query', 'history_clear', 'history_retention', 'installation_settings']);
 export function webAdminRoute(request, body) {
   let operation = routes.get(request.method + ' ' + request.url);
   requireWeb(!!operation, 'route_not_found');

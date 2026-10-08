@@ -19,10 +19,11 @@ test('unsupported diagnostics or snapshots spanning a restart cannot appear as a
 });
 test('diagnostics include fixed hold/fault reasons and original time while rejecting arbitrary strings',()=>{
  const x=input(),s=x.controllers[0].status;s.held='controller_requires_review';
+ s.enabled=true;s.actuationEnabled=false;s.configurationValid=true;s.lastFault={reason:'door_read_failed',at:'2026-10-08T17:00:00.000Z'};
  Object.assign(s.state,{fault:'bolt_write_ambiguous',faultAt:'2026-10-08T18:00:00.000Z',unavailable:'bolt_unreachable',reconciling:false});
- let row=debugReport(x).controllers[0];assert.equal(row.faultReason,'bolt_write_ambiguous');assert.equal(row.faultAt,s.state.faultAt);
+ let row=debugReport(x).controllers[0];assert.equal(row.enabled,true);assert.equal(row.actuationAvailable,false);assert.equal(row.configurationValid,true);assert.equal(row.previousFaultReason,'door_read_failed');assert.equal(row.faultReason,'bolt_write_ambiguous');assert.equal(row.faultAt,s.state.faultAt);
  assert.equal(row.heldReason,'controller_requires_review');assert.equal(row.unavailableReason,'bolt_unreachable');
- s.held=s.state.fault=s.state.unavailable=s.state.faultAt='PRIVATE';
+ s.lastFault={reason:'PRIVATE',at:'PRIVATE'};s.held=s.state.fault=s.state.unavailable=s.state.faultAt='PRIVATE';
  row=debugReport(x).controllers[0];assert.equal(JSON.stringify(row).includes('PRIVATE'),false);
  assert.equal(row.faultReason,null);assert.equal(row.faultAt,null);
 });

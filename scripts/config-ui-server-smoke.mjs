@@ -78,7 +78,14 @@ try{
  assert.deepEqual(hardware.state.writes,[]);
  const disabled=await request('/disable',{controller:hardware.config.id,revision:3,bootId:runtime.bootId});
  assert.equal(disabled.status.actuationEnabled,false);assert.deepEqual(hardware.state.writes,[]);
- await request('/commission',{controller:hardware.config.id,revision:3,previousControllerStopped:true,physicalSetupReviewed:true,recover:false});
+ assert.equal(runtime.status(hardware.config.id).enabled,false);assert.equal(runtime.status(hardware.config.id).configurationValid,true);
+ let current=runtime.status(hardware.config.id);
+ await request('/enable',{controller:hardware.config.id,revision:current.revision,bootId:current.bootId});
+ hardware.state.blocked=true;await runtime.entry(hardware.config.id).engine.observe();
+ current=runtime.status(hardware.config.id);assert.equal(current.enabled,true);assert.equal(current.actuationEnabled,false);
+ hardware.state.blocked=false;
+ const recovered=await request('/recover',{controller:hardware.config.id,revision:current.revision,bootId:current.bootId});
+ assert.equal(recovered.status.enabled,true);assert.equal(recovered.status.state.fault,null);assert.deepEqual(hardware.state.writes,[]);
  const [reference,secret]=Object.entries(hardware.credentials)[0];await request('/credentials',{reference,secret});assert.equal(runtime.status(hardware.config.id).actuationEnabled,false);assert.deepEqual(hardware.state.writes,[]);
  for(const secret of [identity.token,localPin,...Object.values(hardware.credentials)])assert.equal(logs.includes(secret),false);
  console.log('Real custom UI server IPC passed: discovery, complete control checks, public keypad membership, review/apply, commissioning, name-only enablement preservation, disabling and credential-change pause with no hardware writes.');

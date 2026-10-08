@@ -16,7 +16,7 @@ export function createManagementServer({ identity, configuration, diagnostics, r
     // are opt-in, so upgrading this plugin does not require upgrading a client.
     const statusView = value => {
       if (request.headers['x-coordinator-status'] === 'detailed' || !value?.state) return value;
-      const { health, state, ...status } = value;
+      const { health, enabled, configurationValid, lastFault, canRecover, state, ...status } = value;
       const { faultAt, reconciling, restartCloseAvailable, ...legacyState } = state;
       return { ...status, state: legacyState };
     };
@@ -90,6 +90,8 @@ export function createManagementServer({ identity, configuration, diagnostics, r
           if (command) { exact(['command','requestId','issuedAt','bootId']); return send(202, { ...envelope, operation: await runtime.submit(command[1], body) }); }
           const commission = /^\/v1\/controllers\/([a-z][a-z0-9-]{0,47})\/commission$/.exec(request.url);
           if (commission) { exact(['revision','previousControllerStopped','physicalSetupReviewed','recover']); return send(200, { ...envelope, status: statusView(await runtime.commission(commission[1], body)) }); }
+          const recovery = /^\/v1\/controllers\/([a-z][a-z0-9-]{0,47})\/(recover|enable)$/.exec(request.url);
+          if (recovery) { exact(['revision','bootId']); return send(200, { ...envelope, status: statusView(await runtime[recovery[2]](recovery[1], body)) }); }
           const disable = /^\/v1\/controllers\/([a-z][a-z0-9-]{0,47})\/disable$/.exec(request.url);
           if (disable) { exact(['revision','bootId']); return send(200, { ...envelope, status: statusView(await runtime.disable(disable[1], body)) }); }
           const maintenance = /^\/v1\/maintenance\/(preflight|pause|verify|resume|complete)$/.exec(request.url);

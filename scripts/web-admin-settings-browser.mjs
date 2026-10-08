@@ -64,24 +64,35 @@ try {
     config.controllers[0].inputs = [{ id: 'button', name: 'Indoor button', enabled: true,
       source: { type: 'deconz', kind: 'button', baseUrl: 'http://example.invalid', gatewayId: '0011223344556677', resourceId: '80', uniqueId: 'button-endpoint', resourceType: 'ZHASwitch', modelId: 'EXAMPLE', manufacturer: 'Example', credentialRef: 'example-key' },
       trigger: 1002, action: 'toggle', motorPath: 'primary', busyBehavior: 'drop', rearmSeconds: 1.5, timing: {} }];
-    const runtime = new CoordinatorRuntime({ storagePath, configuration: config }); await runtime.start();
+    let failReads = false; const hardwareWrites = [];
+    const drivers = async () => ({
+      door: { read: async () => ({door:'closed',blocked:failReads,obstruction:false,evidence:'closed-sensor'}), write:async()=>hardwareWrites.push('door') },
+      bolt: { read: async () => ({locked:true,evidence:'relay'}), write:async()=>hardwareWrites.push('bolt') },
+      motorPaths:{}, inputDrivers:new Map([['button',{inspect:async()=>({}),read:async()=>({})}]])
+    });
+    const runtime = new CoordinatorRuntime({ storagePath, configuration: config, drivers }); await runtime.start();
     const controller = new WebAdminController(runtime); let saves = 0, loseReply = false;
     const editor = await context.newPage(); editor.on('pageerror', error => errors.push(error.message)); editor.on('dialog', dialog => dialog.accept());
     await editor.exposeFunction('request', async (path, body) => {
       if (path === 'controller') return controller.dispatch('controller_settings', {});
+      if (path === 'controller/recover') return controller.dispatch('controller_recover', body);
       assert.equal(path, 'controller/timings'); saves++;
       const result = await controller.dispatch('controller_timings_save', body);
       if (loseReply) { loseReply = false; throw Error('simulated response loss'); } return result;
     });
     try {
       await editor.goto(origin + '/controller'); await editor.locator('[data-default-group="timing"]').first().waitFor();
-      const entry=runtime.entry(config.controllers[0].id);
-      entry.held='waiting-for-devices';entry.engine={snapshot:()=>({phase:'unavailable',unavailable:'bolt_unreachable'}),stop(){}};
-      await editor.evaluate(()=>panel.load());
-      await editor.getByRole('status').filter({hasText:'retrying automatically every 5 seconds'}).waitFor();
-      entry.held='controller_requires_review';entry.engine.snapshot=()=>({phase:'fault',fault:'bolt_write_ambiguous'});
-      await editor.evaluate(()=>panel.load());await editor.getByRole('status').filter({hasText:'bolt_write_ambiguous'}).waitFor();
-      entry.engine=null;entry.held='not-commissioned';await editor.evaluate(()=>panel.load());
+      const id=config.controllers[0].id;
+      await runtime.commission(id,{revision:runtime.state.revision,previousControllerStopped:true,physicalSetupReviewed:true});
+      for (const listener of runtime.entry(id).listeners) listener.stop();
+      failReads=true; await runtime.entry(id).engine.observe(); await editor.evaluate(()=>panel.load());
+      await editor.getByText(/Enabled · Fault/).waitFor();
+      assert.equal(await editor.getByRole('button',{name:'Check again',exact:true}).count(),1);
+      failReads=false; await editor.getByRole('button',{name:'Check again',exact:true}).click();
+      await editor.getByText('Device states checked. No movement command was sent.',{exact:true}).waitFor();
+      await editor.getByText(/Enabled · Ready · Closed/).waitFor();
+      for (const listener of runtime.entry(id).listeners) listener.stop();
+      assert.equal(runtime.status(id).enabled,true); assert.deepEqual(hardwareWrites,[]);
       await editor.locator('[data-default-group="timing"][data-key="openRetractSettleSeconds"]').fill('0.3');
       await editor.getByText('Indoor button', { exact: true }).click();
       await editor.locator('[data-inherit="0"][data-key="closeRetractSettleSeconds"]').uncheck();

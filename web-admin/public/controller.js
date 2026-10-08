@@ -25,8 +25,10 @@ window.ConfiguratorController = ({ root, api, readOnly }) => {
     const row = profile(), values = row.values, fields = data.fields;
     const state = row.status.state;
     root.innerHTML = `<label class="gp-field">Garage<select data-controller-select>${data.controllers.map(c => `<option value="${esc(c.id)}" ${c.id === selected ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>
-      <p class="gp-note">${esc(row.status.health?.title || (row.status.actuationEnabled ? 'Enabled' : 'Held: ' + (row.status.held || 'unavailable')))} · Door: ${esc(state.door)} · Bolt: ${esc(state.bolt)}${state.busy ? ' · Busy' : ''}. Status at last reload.</p>
+      <p class="gp-note">${esc((row.status.enabled ?? row.status.actuationEnabled) ? 'Enabled' : 'Disabled')}${row.status.health?.title && row.status.health.title !== 'Disabled' ? ' · '+esc(row.status.health.title) : ''} · Door: ${esc(state.door)} · Bolt: ${esc(state.bolt)}${state.busy ? ' · Busy' : ''}. Status at last reload.</p>
       ${row.status.health?.detail ? `<p class="gp-note" role="status">${esc(row.status.health.detail)}${row.status.health.code ? ' Reason: '+esc(row.status.health.code)+'.' : ''}</p>` : ''}
+      ${row.status.lastFault ? `<details class="gp-panel gp-body"><summary>Previous fault</summary><p class="gp-note">${esc(row.status.lastFault.reason.replaceAll('_', ' '))}${row.status.lastFault.at ? ' · '+esc(row.status.lastFault.at) : ''}. Historical record; current status is shown above.</p></details>` : ''}
+      ${row.status.canRecover ? `<button type="button" class="gp-button" data-controller-recover ${readOnly() ? 'disabled' : ''}>Check again</button>` : ''}
       <p class="gp-sub">All times are in seconds. Changes apply to the next operation without restarting Homebridge. Save when controllers are idle.</p>
       <p class="gp-sub">Opening feedback: ${esc(row.feedback.opening)} · Closing feedback: ${esc(row.feedback.closing)} · Bolt feedback: ${esc(row.feedback.bolt)}. Travel times are estimates when timed feedback is selected.</p>
       <p data-controller-message role="status" aria-live="polite"></p>
@@ -48,6 +50,22 @@ window.ConfiguratorController = ({ root, api, readOnly }) => {
       if (!leave()) { event.target.value = selected; return; } selected = event.target.value; dirty = false; render();
     };
     root.querySelector('[data-controller-reload]').onclick = async () => { if (leave()) { try { await load(); } catch { message('Could not reload. Check your connection and try again.'); } } };
+    const recover = root.querySelector('[data-controller-recover]');
+    if (recover) recover.onclick = async () => {
+      if (saving || readOnly() || !leave()) return;
+      saving = true; const turn = generation;
+      root.querySelectorAll('button,select').forEach(element => { element.disabled = true; });
+      try {
+        const result = await api('controller/recover', { controllerId: selected, revision: data.revision, bootId: row.status.bootId });
+        if (turn !== generation) return;
+        data = result; dirty = false; render(); message('Device states checked. No movement command was sent.');
+      } catch (error) {
+        if (turn !== generation) return;
+        uncertain = true;
+        message(explanations[error.code] || 'Could not confirm the check result. Reload to see the current status.');
+        root.querySelector('[data-controller-reload]').disabled = false;
+      } finally { saving = false; }
+    };
     form.oninput = () => {
       if (!uncertain) message('');
       dirty = true;

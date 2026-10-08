@@ -12,13 +12,15 @@ import { DeconzInput, DeconzInputListener } from './deconz-input.js';
 import { HomebridgeDoor, HomebridgeBolt, HomebridgeMotorRelay, HomebridgeInput, HomebridgeInputListener } from './homebridge-devices.js';
 import { requestJson } from './transport.js';
 import { Fault, requireValue } from './fault.js';
-import { profileWithTimings } from './controller-timings.js';
-import { controllerHealth } from './controller-faults.js';
+import { controllerTimingValues, profileWithTimings } from './controller-timings.js';
+import { controllerHealth, faultCode } from './controller-faults.js';
 
 const hash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const normalize = value => validateConfiguration(value, { allowEmpty: true });
-const stateValid = s => s?.schema === 1 && Number.isSafeInteger(s.revision) && s.revision > 0 && s.configuration &&
+const stateValid = s => (s?.schema === 1 || s?.schema === 2 && s.enabled && s.faults) && Number.isSafeInteger(s.revision) && s.revision > 0 && s.configuration &&
   s.commissioned && typeof s.commissioned === 'object' && Array.isArray(s.requests) && s.requests.length <= 256 && Array.isArray(s.events) && s.events.length <= 200 &&
+  (s.enabled === undefined || s.enabled && !Array.isArray(s.enabled) && typeof s.enabled === 'object' && Object.values(s.enabled).every(v => typeof v === 'boolean')) &&
+  (s.faults === undefined || s.faults && !Array.isArray(s.faults) && typeof s.faults === 'object' && Object.values(s.faults).every(v => v && faultCode(v.reason) && (v.at === null || typeof v.at === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(v.at)))) &&
   (s.maintenance === null || typeof s.maintenance?.id === 'string');
 const timing = p => ({ pollMs: p.timing.operationPollSeconds * 1000, boltTimeoutMs: p.timing.boltTimeoutSeconds * 1000,
   motionTimeoutMs: p.timing.motionTimeoutSeconds * 1000, openRetractSettleMs: p.timing.openRetractSettleSeconds * 1000,
@@ -35,13 +37,17 @@ export class CoordinatorRuntime {
     this.pendingWrites = Promise.resolve();
   }
   async save() { const snapshot = structuredClone(this.state); this.pendingWrites = this.pendingWrites.then(() => this.store.write(snapshot));
-    try { await this.pendingWrites; } catch (error) { this.storageFault = true; for (const e of this.entries.values()) { e.enabled = false; e.engine?.stop(); } throw error; } }
+    try { await this.pendingWrites; } catch (error) { this.storageFault = true; for (const e of this.entries.values()) { e.ready = false; e.engine?.stop(); } throw error; } }
   event(controllerId, type, detail = null) {
     this.state.events.push({ at: new Date().toISOString(), controllerId, type, detail }); this.state.events = this.state.events.slice(-200);
   }
   async start() {
     this.state = await this.store.read() ?? { schema: 1, revision: 1, configuration: this.bootstrap, commissioned: {}, maintenance: null, events: [], requests: [] };
     this.state.configuration = normalize(this.state.configuration);
+    // Migrate saved approval once. A runtime fault never changes this choice.
+    this.state.enabled ??= Object.fromEntries(this.configuration.controllers.map(p => [p.id, this.state.commissioned[p.id] === hash(p)]));
+    this.state.faults ??= {};
+    this.state.schema = 2; // Older releases must refuse this state, not re-enable a disabled controller.
     for (const request of this.state.requests) if (request.status === 'pending') {
       request.status = 'unknown'; this.event(request.controllerId, 'restart-observation');
     }
@@ -64,20 +70,26 @@ export class CoordinatorRuntime {
       return [i.id, new (i.source.type === 'deconz' ? DeconzInput : HomebridgeInput)(i.source, key(i.source.credentialRef))];
     })) };
   }
-  async build() {
-    for (const e of this.entries.values()) { clearTimeout(e.timer); e.engine?.stop(); for (const l of e.listeners ?? []) l.stop(); }
-    this.entries.clear();
-    for (const p of this.configuration.controllers) {
-      const entry = { profile: p, enabled: false, held: 'not-commissioned', listeners: [], inputStates: {}, job: null };
+  async build(onlyId = null, acknowledge = false) {
+    for (const e of this.entries.values()) if (!onlyId || e.profile.id === onlyId) { clearTimeout(e.timer); e.engine?.stop(); for (const l of e.listeners ?? []) l.stop(); }
+    if (onlyId) this.entries.delete(onlyId); else this.entries.clear();
+    for (const p of this.configuration.controllers.filter(p => !onlyId || p.id === onlyId)) {
+      const entry = { profile: p, ready: false, held: 'not-commissioned', listeners: [], inputStates: {}, job: null };
       this.entries.set(p.id, entry);
-      if (this.state.commissioned[p.id] !== hash(p) || this.state.maintenance) continue;
+      if (this.state.enabled[p.id] !== true || this.state.commissioned[p.id] !== hash(p) || this.state.maintenance) continue;
+      entry.held = 'checking-devices'; this.publish(p.id, this.status(p.id).state);
       try {
         const hw = await this.makeDrivers(p);
         const engine = new MovementEngine({ ...hw, journal: new StateJournal(this.storagePath, p.id), feedback: p.feedback, timing: timing(p),
           ...(this.clock ? { clock: this.clock } : {}), publish: snapshot => this.publish(p.id, snapshot) });
+        engine.recordFault = async fault => {
+          const previous = this.state.faults[p.id];
+          if (previous?.reason === fault.reason && previous?.at === fault.at) return;
+          this.state.faults[p.id] = fault; this.event(p.id, 'fault-recorded', fault.reason); await this.save();
+        };
         entry.engine = engine; entry.hardware = hw; entry.router = new InputRouter(engine, p.inputs, this.clock);
         entry.router.inhibited = () => this.stopped || this.changing || Boolean(this.state.maintenance) || Boolean(entry.job);
-        await this.initializeEntry(entry);
+        await this.initializeEntry(entry, acknowledge);
         this.schedule(entry);
       } catch (error) { entry.held = error instanceof Fault ? error.message : 'controller_unavailable'; }
     }
@@ -86,16 +98,16 @@ export class CoordinatorRuntime {
   current(entry) {
     return !this.stopped && !this.storageFault && !this.state.maintenance &&
       this.entries.get(entry.profile.id) === entry && !entry.engine?.stopped &&
-      this.state.commissioned[entry.profile.id] === hash(entry.profile);
+      this.state.enabled[entry.profile.id] === true && this.state.commissioned[entry.profile.id] === hash(entry.profile);
   }
-  async initializeEntry(entry) {
+  async initializeEntry(entry, acknowledge = false) {
     if (!this.current(entry) || entry.initializing) return;
     const task = (async () => {
-      await entry.engine.initialize();
+      await entry.engine.initialize({ acknowledge });
       if (!this.current(entry)) return;
-      entry.enabled = entry.engine.initialized;
-      entry.held = entry.enabled ? null : entry.engine.startupRetry ? 'waiting-for-devices' : 'controller_requires_review';
-      if (entry.enabled) for (const input of entry.profile.inputs.filter(i => i.enabled)) {
+      entry.ready = entry.engine.initialized;
+      entry.held = entry.ready ? null : entry.engine.startupRetry ? 'waiting-for-devices' : 'controller_requires_review';
+      if (entry.ready) for (const input of entry.profile.inputs.filter(i => i.enabled)) {
         const listener = new (input.source.type === 'deconz' ? DeconzInputListener : HomebridgeInputListener)({
           profile: input, driver: entry.hardware.inputDrivers.get(input.id), router: entry.router,
           ...(this.clock ? { clock: this.clock } : {}), onState: value => { entry.inputStates[input.id] = value; } });
@@ -108,11 +120,11 @@ export class CoordinatorRuntime {
   }
   schedule(entry) {
     clearTimeout(entry.timer);
-    if (!this.current(entry) || !entry.enabled && !entry.engine?.startupRetry) return;
+    if (!this.current(entry) || !entry.ready && !entry.engine?.startupRetry) return;
     entry.timer = setTimeout(async () => {
       try {
         if (!this.current(entry)) return;
-        if (!this.changing && !entry.enabled && entry.engine.startupRetry) {
+        if (!this.changing && !entry.ready && entry.engine.startupRetry) {
           await this.initializeEntry(entry); return;
         }
         if (!this.changing && !this.state.maintenance && !entry.job && !entry.engine.busy && entry.engine.initialized) {
@@ -128,12 +140,16 @@ export class CoordinatorRuntime {
   entry(id) { const e = this.entries.get(id); requireValue(e, 'controller_not_found'); return e; }
   status(id) {
     const e = this.entry(id); const sample = e.engine?.snapshot();
-    if (sample) sample.busy = sample.busy || Boolean(e.job) || e.router?.activeInput !== null;
-    const status = { controllerId: id, bootId: this.bootId, commissioned: this.state.commissioned[id] === hash(e.profile),
-      actuationEnabled: e.enabled && !this.storageFault && !this.state.maintenance && !this.changing && !this.stopped,
-      held: this.state.maintenance ? 'maintenance' : e.held, inputStates: { ...e.inputStates },
+    if (sample) sample.busy = sample.busy || Boolean(e.job) || e.router?.activeInput != null;
+    const enabled = this.state.enabled[id] === true, configurationValid = this.state.commissioned[id] === hash(e.profile);
+    const status = { controllerId: id, bootId: this.bootId, commissioned: enabled && configurationValid,
+      enabled, configurationValid, lastFault: this.state.faults[id] ?? null,
+      actuationEnabled: enabled && configurationValid && e.ready && Boolean(e.engine?.initialized) && !sample?.fault && !sample?.unavailable && !this.storageFault && !this.state.maintenance && !this.changing && !this.stopped,
+      held: this.state.maintenance ? 'maintenance' : this.storageFault ? 'private_storage_write_failed' : e.held, inputStates: { ...e.inputStates },
       state: sample ?? { phase: 'not-commissioned', door: 'unknown', bolt: 'unknown', busy: false, fault: null },
       revision: this.state.revision };
+    status.canRecover = enabled && configurationValid && !this.stopped && !this.storageFault && !this.changing && !this.state.maintenance &&
+      !sample?.busy && !e.initializing && Boolean(sample?.fault || sample?.unavailable || e.held && e.held !== 'checking-devices');
     status.health = controllerHealth(status); return status;
   }
   inventory() { return inventory(this.configuration).map(row => ({ ...row, status: this.status(row.id) })); }
@@ -178,10 +194,15 @@ export class CoordinatorRuntime {
   }
   retainsCommissioning(profile) {
     const current = this.configuration.controllers.find(p => p.id === profile.id);
-    // Keep the stored full-profile hash format. Only an explicitly reviewed
-    // name-only edit may carry a currently valid enablement record forward.
-    return Boolean(current && this.state.commissioned[profile.id] === hash(current) &&
-      hash({ ...current, name: profile.name }) === hash(profile));
+    // Names and the same validated timing fields editable on the web page do
+    // not change the approved device mapping or feedback/actuation policy.
+    if (!current || this.state.commissioned[profile.id] !== hash(current)) return false;
+    try {
+      const candidate = profileWithTimings(current, controllerTimingValues(profile));
+      candidate.name = profile.name;
+      for (const group of ['inputs', 'motorPaths']) for (const item of candidate[group]) item.name = profile[group].find(p => p.id === item.id)?.name;
+      return hash(candidate) === hash(profile);
+    } catch { return false; }
   }
   async review(value, revision) {
     requireValue(revision === this.state.revision, 'settings_revision_conflict'); const configuration = normalize(value);
@@ -199,6 +220,8 @@ export class CoordinatorRuntime {
     try {
       const retained = review.configuration.controllers.filter(p => this.retainsCommissioning(p));
       this.state.commissioned = Object.fromEntries(retained.map(p => [p.id, hash(p)]));
+      this.state.enabled = Object.fromEntries(review.configuration.controllers.map(p => [p.id, this.state.enabled[p.id] === true]));
+      this.state.faults = Object.fromEntries(Object.entries(this.state.faults).filter(([id]) => review.configuration.controllers.some(p => p.id === id)));
       this.state.configuration = review.configuration; this.state.revision++; this.tickets.clear();
       this.event(null, 'settings-applied'); await this.save(); await this.build(); return this.settings();
     } finally { this.changing = false; this.publishStates(); }
@@ -215,13 +238,38 @@ export class CoordinatorRuntime {
     requireValue(e.router?.activeInput == null, 'controller_busy');
     this.changing = true;
     try {
-      delete this.state.commissioned[id];
+      this.state.enabled[id] = false;
       for (const [token, ticket] of this.tickets) if (ticket.id === id) this.tickets.delete(token);
-      e.enabled = false; e.held = 'not-commissioned'; clearTimeout(e.timer);
+      e.ready = false; e.held = 'not-commissioned'; clearTimeout(e.timer);
       e.engine?.stop(); for (const listener of e.listeners) listener.stop();
       e.listeners = []; e.inputStates = {};
       this.event(id, 'controller-disabled'); await this.save();
       this.changing = false; return this.status(id);
+    } finally { this.changing = false; this.publishStates(); }
+  }
+  async enable(id, { revision, bootId }) {
+    this.assertIdle(); this.guard();
+    requireValue(revision === this.state.revision && bootId === this.bootId, 'settings_revision_conflict');
+    const e = this.entry(id);
+    requireValue(this.state.commissioned[id] === hash(e.profile), 'setup_review_required');
+    this.changing = true;
+    try {
+      this.state.enabled[id] = true; this.event(id, 'controller-enabled'); await this.save();
+      await this.build(id); this.changing = false; return this.status(id);
+    } finally { this.changing = false; this.publishStates(); }
+  }
+  async recover(id, { revision, bootId }) {
+    this.assertIdle(); this.guard();
+    requireValue(revision === this.state.revision && bootId === this.bootId, 'settings_revision_conflict');
+    const e = this.entry(id);
+    requireValue(this.state.enabled[id] === true && this.state.commissioned[id] === hash(e.profile), 'controller_not_enabled');
+    requireValue(e.router?.activeInput == null, 'controller_busy');
+    this.changing = true;
+    try {
+      this.event(id, 'recovery-check'); await this.save();
+      // Rebuild only this controller. Fresh read-only checks decide readiness;
+      // the saved enablement and configuration approval are never rewritten.
+      await this.build(id, true); this.changing = false; return this.status(id);
     } finally { this.changing = false; this.publishStates(); }
   }
   async commission(id, { revision, previousControllerStopped, physicalSetupReviewed, recover = false }) {
@@ -238,7 +286,7 @@ export class CoordinatorRuntime {
       const journal = new StateJournal(this.storagePath, id); const previous = await journal.read();
       requireValue(recover === true || !previous.fault && !previous.inProgress, 'recovery_confirmation_required');
       await journal.write({ inProgress: false, fault: false });
-      this.state.commissioned[id] = hash(e.profile); this.tickets.clear(); this.event(id, recover ? 'recovery-confirmed' : 'commissioned');
+      this.state.enabled[id] = true; this.state.commissioned[id] = hash(e.profile); this.tickets.clear(); this.event(id, recover ? 'recovery-confirmed' : 'commissioned');
       await this.save(); await this.build(); this.changing = false; return this.status(id);
     } finally { this.changing = false; this.publishStates(); }
   }
@@ -255,7 +303,7 @@ export class CoordinatorRuntime {
     if (duplicate) { requireValue(duplicate.controllerId === id && duplicate.command === body.command, 'command_request_conflict'); return { accepted: false, duplicate: true, requestId: body.requestId, status: duplicate.status }; }
     requireValue(Number.isFinite(body.issuedAt) && Math.abs(Date.now() - body.issuedAt) <= 15000, 'command_request_expired');
     requireValue(['open', 'close', 'lock', 'unlock', ...(source === 'automatic' ? ['observed-close'] : [])].includes(body.command), 'command_invalid');
-    requireValue(!this.stopped && !this.storageFault && !this.changing && !this.state.maintenance && e.enabled && e.engine.initialized && !e.engine.state.fault, 'controller_held');
+    requireValue(!this.stopped && !this.storageFault && !this.changing && !this.state.maintenance && e.ready && e.engine.initialized && !e.engine.state.fault && !e.engine.state.unavailable, 'controller_held');
     requireValue(e.engine.acceptsFreshCommand(body.command), 'controller_observing_movement');
     requireValue(!e.job && !e.engine.busy && e.router.activeInput === null, 'controller_busy');
     e.job = true;
@@ -267,13 +315,13 @@ export class CoordinatorRuntime {
       requireValue(!this.stopped && !this.state.maintenance, 'controller_held');
       const operation = ['open', 'close'].includes(body.command) ? e.router.builtin(source === 'virtual-keypad' ? source : 'homekit', body.command) : e.engine.execute(body.command);
       e.job = Promise.resolve(operation).then(result => { record.status = e.engine.state.reconciling ? 'unknown' : e.engine.state.fault || result?.accepted === false ? 'held' : 'complete'; this.event(id, record.status, body.command); return result; }, () => { record.status = 'held'; this.event(id, 'command-held'); })
-        .finally(async () => { try { await this.save(); } finally { e.job = null; this.publish(id, e.engine.snapshot()); } }).catch(() => { e.enabled = false; e.held = 'private_storage_write_failed'; });
+        .finally(async () => { try { await this.save(); } finally { e.job = null; this.publish(id, e.engine.snapshot()); } }).catch(() => { e.ready = false; e.held = 'private_storage_write_failed'; });
       return { accepted: true, duplicate: false, requestId: body.requestId, status: 'pending' };
     } catch (error) { e.job = null; throw error; }
   }
   guard() { requireValue(!this.stopped && !this.storageFault && !this.changing && !this.state.maintenance, 'maintenance_held'); return true; }
   async stationary() {
-    for (const p of this.configuration.controllers.filter(p => this.state.commissioned[p.id] === hash(p))) {
+    for (const p of this.configuration.controllers.filter(p => this.state.enabled[p.id] === true && this.state.commissioned[p.id] === hash(p))) {
       const hw = await this.makeDrivers(p, true); const [door, bolt] = await Promise.all([hw.door.read(), hw.bolt.read()]);
       requireValue(door.door === 'closed' && door.evidence === 'closed-sensor' && !door.blocked && !door.obstruction && bolt.locked,
         'physical_stationary_confirmation_required');
@@ -318,7 +366,7 @@ export class CoordinatorRuntime {
       }
       // Validate every commissioned assembly without moving anything. Keep the
       // durable pause until complete, even after a successful read-only verify.
-      for (const p of this.configuration.controllers.filter(p => this.state.commissioned[p.id] === hash(p))) {
+      for (const p of this.configuration.controllers.filter(p => this.state.enabled[p.id] === true && this.state.commissioned[p.id] === hash(p))) {
         const hw = await this.makeDrivers(p, true); const [door, bolt] = await Promise.all([hw.door.read(), hw.bolt.read()]);
         requireValue(!door.blocked && !door.obstruction && (door.door === 'closed' || !bolt.locked), 'maintenance_devices_require_review');
         for (const m of Object.values(hw.motorPaths)) await m.verifyIdle();

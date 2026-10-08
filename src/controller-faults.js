@@ -31,7 +31,7 @@ const codes = new Set([
 ]);
 export const faultCode = value => codes.has(value) ? value : null;
 
-// Used only before any movement, with a clean journal, or during idle reads.
+// Used during startup state checks or idle reads. No hardware writes are retried.
 // Identity mismatches, unknown physical states and write failures never qualify.
 export const retryableRead = value => [
   'door_read_failed', 'bolt_read_failed', 'bolt_unreachable', 'motor_read_failed',
@@ -41,29 +41,36 @@ export const retryableRead = value => [
 
 export function controllerHealth(status) {
   const state = status.state ?? {};
+  const enabled = status.enabled ?? status.actuationEnabled;
   const code = faultCode(state.fault || state.unavailable || status.held);
+  if (status.configurationValid === false) return { title: 'Setup review required',
+    detail: 'Review the saved device mapping and complete setup checks in the Homebridge plugin settings.', code: null };
+  if (!enabled) return { title: 'Disabled', detail: 'Control is disabled by the saved setting.', code: null };
   if (status.held === 'maintenance') return { title: 'Maintenance paused', detail: 'Complete maintenance to resume control.', code: null };
-  if (status.held === 'waiting-for-devices') return { title: 'Waiting for devices',
-    detail: 'Startup connection checks are retrying automatically every 5 seconds. Control resumes after all checks pass.', code };
+  if (status.held === 'checking-devices' || state.phase === 'starting') return { title: 'Checking devices',
+    detail: 'Reading current device states before accepting commands.', code: null };
+  if (status.held === 'waiting-for-devices' || state.unavailable) return { title: 'Device unavailable',
+    detail: 'Device checks retry automatically. Control resumes after fresh checks pass.', code };
   if (state.fault || status.held && status.held !== 'not-commissioned') {
     const explanations = {
-      previous_run_requires_review: 'An earlier fault or interrupted operation requires review. The older record does not identify the original cause.',
       startup_bolt_state_requires_review: 'The bolt reports locked while the door is not closed.',
       motor_relay_active_requires_review: 'A motor relay reports active.',
       operation_interrupted: 'An operation was interrupted before completion was confirmed.',
       journal_invalid: 'The saved operation record could not be verified.',
       journal_write_failed: 'The operation record could not be saved.',
+      door_blocked: 'The opener reports that the door is blocked.',
+      obstruction: 'The door reports an obstruction.',
     };
-    return { title: 'Needs review', detail: (explanations[code] ?? (code ? 'Controller fault: ' + code.replaceAll('_', ' ') + '.' : 'The controller is held.')) +
-      ' Check the physical setup and connections, then enable this garage door in the Homebridge plugin settings.', code };
+    return { title: 'Fault', detail: (explanations[code] ?? (code ? 'Controller fault: ' + code.replaceAll('_', ' ') + '.' : 'The controller is unavailable.')) +
+      ' Resolve the condition, then choose Check again. Setup and enablement are retained.', code };
   }
-  if (state.unavailable) return { title: 'Waiting for devices', detail: 'Device checks are retrying automatically. Control is unavailable until fresh state is received.', code };
-  if (status.actuationEnabled && state.reconciling && state.door === 'not-closed') return { title: 'Enabled · Position unconfirmed',
-    detail: 'Monitoring resumed after restart. This device confirms only closed; the old travel estimate was discarded.' +
-      (state.restartCloseAvailable ? ' You can send a new Close request from HomeKit. Relay toggle inputs wait for confirmed position.' : ' New commands wait for confirmed open or closed feedback.'), code: null };
-  if (status.actuationEnabled && state.reconciling) return { title: 'Enabled · Monitoring movement',
-    detail: 'The controller restarted during movement and is reading the current state. No movement command is replayed. New commands wait for confirmed open or closed feedback.', code: null };
-  if (status.actuationEnabled && state.phase === 'position-unknown') return { title: 'Enabled · Position unconfirmed',
+  if (state.reconciling && state.door === 'not-closed') return { title: 'Position unknown',
+    detail: 'Monitoring resumed. This device confirms only closed; the old travel estimate was discarded.' +
+      (state.restartCloseAvailable ? ' A new Close request is available from HomeKit. Relay toggle inputs wait for confirmed position.' : ' New commands wait for confirmed open or closed feedback.'), code: null };
+  if (state.reconciling) return { title: state.door === 'opening' ? 'Opening' : state.door === 'closing' ? 'Closing' : 'Monitoring movement',
+    detail: 'Reading current movement without replaying a command. New commands wait for confirmed open or closed feedback.', code: null };
+  if (state.phase === 'position-unknown') return { title: 'Position unknown',
     detail: 'The door is not closed. This device does not confirm whether it is fully open or moving; the previous travel estimate was not restored.', code: null };
-  return { title: status.actuationEnabled ? 'Enabled' : 'Disabled', detail: '', code: null };
+  if (state.busy || ['opening', 'closing'].includes(state.door)) return { title: state.phase === 'opening' ? 'Opening' : state.phase === 'closing' ? 'Closing' : 'Operating', detail: '', code: null };
+  return { title: state.door === 'closed' ? 'Ready · Closed' : state.door === 'open' ? 'Ready · Open' : 'Ready', detail: '', code: null };
 }

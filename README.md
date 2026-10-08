@@ -15,9 +15,9 @@ A Homebridge platform for coordinating **one garage door and a separate bolt/loc
 - No door-only, bolt-only, native HomeKit pairing, or Apple Home automation backend.
 - No dependency on HTTP Webhooks for the coordinator's accessories or state publication.
 
-## Owner test release: 0.4.26
+## Owner test release: 0.4.27
 
-Fixes startup and shutdown read failures that could leave enabled garages held after reboot. Saved enablement survives child/full Homebridge restarts, including interrupted travel; connection checks recover automatically without replaying movement. Original fault reasons now survive restarts and appear in the UI and diagnostics. See [restart recovery and Tailwind feedback limits](docs/restart-recovery.md).
+Separates the saved **Enabled** setting from current device health. A fault, outage or reboot leaves setup and enablement intact. Startup checks fresh physical state, archives previous faults, and never replays movement. Both interfaces show Enabled alongside Ready, Checking devices, Device unavailable or Fault, with a separate **Check again** recovery action. Names and timing edits retain setup approval. See [restart recovery, saved-state migration and Tailwind feedback limits](docs/restart-recovery.md).
 
 Retains automatic LAN setup, live controller-default/device timing edits and Homebridge setup diagnostics. Both this plugin and homebridge-deconz require separate child bridges.
 

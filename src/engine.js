@@ -14,8 +14,9 @@ const commandSampleMaxAgeMs = 1500;
  * No action in construction, initialization, observe(), or state publication.
  */
 export class MovementEngine {
-  constructor({ door, bolt, journal, feedback, timing = {}, motorPaths = {}, clock = systemClock, publish = () => {} }) {
+  constructor({ door, bolt, journal, feedback, timing = {}, motorPaths = {}, clock = systemClock, publish = () => {}, recordFault = async () => {} }) {
     this.door = door; this.bolt = bolt; this.journal = journal; this.clock = clock; this.publish = publish;
+    this.recordFault = recordFault;
     this.feedback = { ...feedback }; this.timing = { ...defaults, ...timing };
     requireValue(motorPaths && typeof motorPaths === 'object' && !Object.hasOwn(motorPaths, 'primary'), 'engine_motor_paths_invalid');
     this.motorPaths = new Map([['primary', door], ...Object.entries(motorPaths)]);
@@ -57,7 +58,7 @@ export class MovementEngine {
     requireValue(age >= 0 && age <= 1500, 'interruption_request_expired'); return true;
   }
 
-  async initialize() {
+  async initialize({ acknowledge = false } = {}) {
     requireValue(!this.initialized && !this.busy, 'engine_already_initialized');
     this.busy = true; this.startupRetry = false;
     let cleanJournal = false;
@@ -66,17 +67,16 @@ export class MovementEngine {
       const previous = await this.journal.read();
       this.checkRunning();
       requireValue(previous && typeof previous.inProgress === 'boolean' && typeof previous.fault === 'boolean', 'journal_invalid');
-      if (previous.fault) {
-        // Preserve the original fault and timestamp; legacy holds stay held.
-        this.update({ phase: 'fault', fault: faultCode(previous.reason) ?? 'previous_run_requires_review', faultAt: previous.at ?? null });
-        return this.snapshot();
-      }
+      if (previous.fault) await this.recordFault({ reason: faultCode(previous.reason) ?? 'previous_run_requires_review', at: previous.at ?? null });
       cleanJournal = true;
-      this.restartObservation = previous.inProgress;
+      this.restartObservation = previous.inProgress || previous.fault;
       const sample = await this.read();
       requireValue(sample.door === 'closed' || !sample.locked, 'startup_bolt_state_requires_review');
-      const reconciling = (previous.inProgress && !['closed', 'open'].includes(sample.door)) || ['opening', 'closing'].includes(sample.door);
-      if (previous.inProgress && !reconciling) await this.journal.write({ inProgress: false, fault: false });
+      // An old fault is history, not evidence of a current physical problem.
+      // Storage-integrity failures still need an explicit check after repair.
+      requireValue(acknowledge || !previous.fault || !['journal_invalid', 'journal_write_failed'].includes(previous.reason), previous.reason);
+      const reconciling = (this.restartObservation && !['closed', 'open'].includes(sample.door)) || ['opening', 'closing'].includes(sample.door);
+      if (this.restartObservation) await this.journal.write({ inProgress: reconciling, fault: false });
       this.update({ phase: ['closed', 'open', 'opening', 'closing'].includes(sample.door) ? sample.door : 'position-unknown',
         target: sample.door === 'opening' ? 'open' : sample.door === 'closing' ? 'closed' : null,
         reconciling, fault: null, faultAt: null });
@@ -122,7 +122,9 @@ export class MovementEngine {
     const faultAt = new Date().toISOString();
     try { await this.journal.write({ inProgress: false, fault: true, reason, at: faultAt }); }
     catch { reason = 'journal_write_failed'; }
-    this.update({ phase: 'fault', fault: reason, faultAt, openEstimated: false, closeEstimated: false });
+    try { await this.recordFault({ reason, at: faultAt }); }
+    catch { reason = 'journal_write_failed'; }
+    this.update({ phase: 'fault', fault: reason, faultAt, unavailable: null, openEstimated: false, closeEstimated: false });
   }
 
   async observe() {
@@ -160,6 +162,7 @@ export class MovementEngine {
         Object.assign(changes, { phase: 'closed', openEstimated: false, closeEstimated: false });
       }
       else if (sample.door === 'open') Object.assign(changes, { phase: 'open', openEstimated: false, closeEstimated: false });
+      else if (['opening', 'closing'].includes(sample.door)) Object.assign(changes, { phase: sample.door, openEstimated: false, closeEstimated: false });
       else if (this.partialOwner && sample.door === 'not-closed') {
         requireValue(!sample.locked, 'bolt_extended_at_partial_stop'); changes.phase = 'stopped-estimated';
       } else if (!this.state.openEstimated) Object.assign(changes, { phase: 'position-unknown', closeEstimated: false });

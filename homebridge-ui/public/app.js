@@ -102,9 +102,10 @@ function commissioning(root,profile){
   let form=checkForms.get(profile.id);
   if(!form||!sameConfiguration(form.profile,profile)){form={profile:structuredClone(profile),ack:[false,false],result:''};checkForms.set(profile.id,form);}
   const panel=document.createElement('div');panel.className='commission-row';
-  const active=row.status.actuationEnabled;
+  const active=row.status.enabled??row.status.actuationEnabled;
+  const configured=row.status.configurationValid??row.status.commissioned;
   const result=document.createElement('p');result.className='commission-result';result.setAttribute('role','status');
-  result.textContent=form.result||(row.status.health?.detail?(row.status.health.title+'. '+row.status.health.detail+(row.status.health.code?' Reason: '+row.status.health.code+'.':'')):
+  result.textContent=form.result||(row.status.health?.detail?((active?'Enabled · ':'')+row.status.health.title+'. '+row.status.health.detail+(row.status.health.code?' Reason: '+row.status.health.code+'.':'')):
     active?'Control is enabled. No additional save is needed.':row.status.held==='maintenance'?'Paused for maintenance.':'Control is disabled until you check and enable this garage door.');
   const check=document.createElement('button');check.textContent='Check connections';check.type='button';check.className='secondary';
   check.onclick=()=>action(async()=>{
@@ -114,8 +115,26 @@ function commissioning(root,profile){
     const controls=p.controls??[];const issues=[p.door.error,p.bolt.error,...p.limitations,...controls.filter(r=>r.error).map(r=>r.name+': '+r.error)].filter(Boolean);
     form.result=p.compatible?'Connections verified. Door: '+p.door.state+' ('+p.door.feedback+'). Bolt: '+p.bolt.state+' ('+p.bolt.feedback+').'+(controls.length?' Motor relays and physical controls checked: '+controls.length+'.':''):'Connection needs attention: '+issues.join(', ');
   });panel.append(check,result);
-  if(!active&&row.status.held!=='waiting-for-devices'){
-    const enable=document.createElement('button');enable.type='button';enable.className='primary';enable.textContent='Enable this garage door';enable.disabled=!form.ack.every(Boolean);
+  if(row.status.canRecover){
+    const recover=document.createElement('button');recover.type='button';recover.className='primary';recover.textContent='Check again';
+    recover.onclick=()=>action(async()=>{
+      await hb.request('/recover',{controller:row.id,revision:loaded.settings.revision,bootId:row.status.bootId});
+      checkForms.delete(row.id);connectionChecks.delete(row.id);await load();notice('Device states checked. No movement command was sent.');
+    });panel.append(recover);
+  }
+  if(active){
+    const disable=document.createElement('button');disable.type='button';disable.className='secondary';disable.textContent='Disable this garage door';disable.disabled=!!row.status.state?.busy;
+    disable.onclick=()=>garageAction(profile,{action:'Disable'});panel.append(disable);
+  }
+  if(!active&&configured){
+    const enable=document.createElement('button');enable.type='button';enable.className='primary';enable.textContent='Enable this garage door';
+    enable.onclick=()=>action(async()=>{
+      await hb.request('/enable',{controller:row.id,revision:loaded.settings.revision,bootId:row.status.bootId});
+      checkForms.delete(row.id);await load();notice('Garage door enabled. Current device states are checked automatically.');
+    });panel.append(enable);
+  }
+  if(!configured){
+    const enable=document.createElement('button');enable.type='button';enable.className='primary';enable.textContent=active?'Approve updated setup':'Enable this garage door';enable.disabled=!form.ack.every(Boolean);
     ['The previous controller and its automatic inputs are stopped.','The door is physically closed, the bolt wiring is checked and the motor relay is released.'].forEach((text,index)=>{
       const label=document.createElement('label');label.className='check';const input=document.createElement('input');input.type='checkbox';input.checked=form.ack[index];
       input.onchange=()=>{form.ack[index]=input.checked;enable.disabled=!form.ack.every(Boolean);};label.append(input,document.createTextNode(text));panel.append(label);
@@ -124,6 +143,12 @@ function commissioning(root,profile){
       await hb.request('/commission',{controller:row.id,revision:loaded.settings.revision,previousControllerStopped:true,physicalSetupReviewed:true,recover:true});
       checkForms.delete(row.id);await load();notice('Garage door enabled. No additional review or save is needed.');toast('Garage door enabled.');
     });panel.append(enable);
+  }
+  if(row.status.lastFault){
+    const history=document.createElement('details'),title=document.createElement('summary'),record=document.createElement('p');
+    title.textContent='Previous fault';record.className='help';
+    record.textContent=row.status.lastFault.reason.replaceAll('_',' ')+(row.status.lastFault.at?' · '+row.status.lastFault.at:'')+'. Historical record; current status is shown above.';
+    history.append(title,record);panel.append(history);
   }
   fields.append(panel);
 }
@@ -232,26 +257,27 @@ function showPage(page){
 }
 function garageStatus(profile){
   const row=loaded?.controllers.find(row=>row.id===profile.id),status=row?.status;
+  const enabled=status?.enabled??status?.actuationEnabled;
   const savedProfile=loaded?.settings.configuration.controllers.find(p=>p.id===profile.id);
-  const warning=(label,detail='')=>({tone:label==='Not configured'?'unconfigured':status?.actuationEnabled?'enabled':'disabled',label,detail,action:'Review setup',disabled:!save.canEdit});
+  const warning=(label,detail='')=>({tone:label==='Not configured'?'unconfigured':enabled?'enabled':'disabled',
+    label:enabled?'Enabled · '+label:label,detail,action:['Not configured','Setup review required'].includes(label)?'Review setup':'View status',disabled:!save.canEdit});
   if(!savedProfile)return warning('Not configured','New garage door — not saved or enabled.');
   if(!sameConfiguration(profile,savedProfile)){
-    const nameOnly=sameConfiguration({...savedProfile,name:profile.name},profile);
-    const attention=status?.held==='maintenance'||status?.state?.fault||status?.state?.unavailable||status?.state?.obstruction||connectionChecks.get(profile.id)===false||status?.held&&!['not-commissioned'].includes(status.held);
-    const retainStatus=nameOnly&&loaded.connected&&status&&!attention;
-    return {tone:status?.actuationEnabled?'enabled':loaded.connected&&status?'disabled':'unconfigured',
-      label:retainStatus?(status.actuationEnabled?'Enabled':'Disabled')+' · Unsaved changes':attention?'Needs attention · Unsaved changes':'Unsaved changes',
+    return {tone:enabled?'enabled':loaded.connected&&status?'disabled':'unconfigured',
+      label:(enabled?'Enabled':status?'Disabled':'Not configured')+' · Unsaved changes',
       action:'Review changes',disabled:!save.canEdit||!!connectionEditor?.dirty,
-      detail:retainStatus&&status.actuationEnabled?'Name change pending. Saving the name keeps this garage door enabled.':status?.actuationEnabled?'Your saved garage door remains enabled. Review and save to apply these edits.':'Review and save this garage door’s changes.'};
+      detail:enabled?'Your saved garage door remains enabled. Review and save to apply these edits.':'Review and save this garage door’s changes.'};
   }
-  if(!loaded.connected)return warning('Not configured','Start the coordinator child bridge to check connections.');
+  if(!loaded.connected)return warning('Status unavailable','Start the coordinator child bridge to read the saved status.');
   if(!status)return warning('Not configured');
-  if(status.held==='maintenance')return warning('Maintenance paused');
-  if(status.held==='waiting-for-devices')return warning('Waiting for devices',status.health?.detail??'Connection checks retry automatically.');
-  if(status.state?.fault||status.state?.unavailable||status.state?.obstruction||connectionChecks.get(profile.id)===false||
-    status.held&&!['not-commissioned'].includes(status.held))return warning('Needs attention',status.health?.detail??'');
+  if(status.configurationValid===false){
+    if(enabled)return warning('Setup review required',status.health?.detail??'Review the saved device mapping.');
+    return {tone:'disabled',label:'Disabled · Setup incomplete',action:'Enable',disabled:!save.canEdit,detail:'Complete setup checks to enable this garage door.'};
+  }
+  if(enabled&&(status.held||status.state?.fault||status.state?.unavailable||status.state?.obstruction||connectionChecks.get(profile.id)===false))
+    return warning(status.health?.title??'Needs attention',status.health?.detail??'Check current device states.');
   const draft=save.phase!=='saved'||!!connectionEditor?.dirty,detail=draft?'Save or discard pending changes before changing enablement.':'';
-  return status.actuationEnabled?{tone:'enabled',label:status.health?.title??'Enabled',action:'Disable',disabled:!!status.state?.busy||draft||!save.canEdit,
+  return enabled?{tone:'enabled',label:'Enabled'+(status.health?.title?' · '+status.health.title:''),action:'Disable',disabled:!!status.state?.busy||draft||!save.canEdit,
     detail:status.state?.busy?'An operation is active. Wait for it to finish before disabling.':detail||status.health?.detail||''}:
     {tone:'disabled',label:'Disabled',action:'Enable',disabled:!save.canEdit,detail};
 }

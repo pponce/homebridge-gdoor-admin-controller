@@ -31,6 +31,7 @@ export class UiServer extends HomebridgePluginUiServer {
       const data = await discoverHomebridge(baseUrl, keys[credentialRef]); return { bridgeId: data.bridgeId, services: data.services.map(({service,aid,...row}) => row) }; });
     route('/apply', body => this.api('/v1/settings/apply', body));
     route('/commission', ({ controller, ...body }) => { this.id(controller); return this.api('/v1/controllers/' + controller + '/commission', body); });
+    for (const action of ['enable', 'recover']) route('/' + action, ({ controller, ...body }) => { this.id(controller); return this.api('/v1/controllers/' + controller + '/' + action, body); });
     route('/disable', ({ controller, ...body }) => { this.id(controller); return this.api('/v1/controllers/' + controller + '/disable', body); });
     route('/probe', async ({ controller }) => {
       this.id(controller);
@@ -106,7 +107,7 @@ export class UiServer extends HomebridgePluginUiServer {
     const fromDisk = await store.read(); if (fromDisk) existing = fromDisk;
     if(mode==='create'&&Object.hasOwn(existing,reference))return {saved:false,reason:'exists'};
     if(mode==='replace'&&!Object.hasOwn(existing,reference))throw Error('credential_missing');
-    const stateStore = new PrivateStore(this.homebridgeStoragePath, 'profiles.json', s => s?.schema === 1 && s.commissioned && typeof s.commissioned === 'object');
+    const stateStore = new PrivateStore(this.homebridgeStoragePath, 'profiles.json', s => [1, 2].includes(s?.schema) && s.commissioned && typeof s.commissioned === 'object');
     const state = await stateStore.read();
     if (Object.hasOwn(existing,reference) && state && Object.keys(state.commissioned).length) await this.api('/v1/commissioning/reset', {});
     await store.write({ ...existing, [reference]: secret }); return { saved: true, reference };
@@ -115,7 +116,7 @@ export class UiServer extends HomebridgePluginUiServer {
     this.id(reference);await loadIdentity(this.homebridgeStoragePath);
     const existing=await readCredentials(this.homebridgeStoragePath);
     const {block}=await this.bootstrap();
-    const state=await new PrivateStore(this.homebridgeStoragePath,'profiles.json',s=>s?.schema===1&&s.configuration&&Array.isArray(s.configuration.controllers)).read();
+    const state=await new PrivateStore(this.homebridgeStoragePath,'profiles.json',s=>[1,2].includes(s?.schema)&&s.configuration&&Array.isArray(s.configuration.controllers)).read();
     const usesKey=value=>!!value&&typeof value==='object'&&(value.credentialRef===reference||Object.values(value).some(usesKey));
     // Check both durable sources, including disabled garages and optional inputs.
     // A key cannot disappear while either saved configuration still needs it.

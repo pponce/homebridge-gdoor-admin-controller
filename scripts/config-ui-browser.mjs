@@ -23,9 +23,9 @@ async function fixture(browser,{mobile,dark,mode='managed'}){
   let configuration=validateConfiguration(example),revision=1,reviewed,enabled=false;
   if(mode==='no-keypad')configuration.controllers[0].keypad=null;
   if(mode==='multiple'){const other=structuredClone(configuration.controllers[0]);other.id='second-garage';other.name='Second garage';other.door.doorIndex=1;other.bolt.resourceId='3';other.bolt.uniqueId='example-second-bolt';other.inputs=[];other.motorPaths=[];other.keypad=null;configuration.controllers.push(other);configuration=validateConfiguration(configuration);}
-  if(['fault','moving','enabled'].includes(mode))enabled=true;
+  if(['fault','moving','enabled','restart-wait','restart-fault'].includes(mode))enabled=true;
   let reviews=0,applies=0,nativeSaves=0,probes=0,commissions=0,disables=0,releaseNative;const probedIds=[],savedKeys=['example-tailwind-key','example-deconz-key'];
-  let keyDeletes=0;
+  let keyDeletes=0,recoveries=0;
   if(mode.startsWith('key-delete')){savedKeys.push('unused-key');configuration.connections=[{id:'unused-bridge',type:'homebridge',name:'Unused bridge',baseUrl:'http://192.0.2.99:51999',credentialRef:'unused-key'}];}
   let blocks=mode==='initial'?[]:[{platform:'GDoorAndBoltCoordinator',name:'Custom name',_bridge:{username:'synthetic-bridge',port:12345},controllers:configuration.controllers,connections:configuration.connections??[]}];
   let localImports=0,debugReads=0,debugRecording=false,debugWrites=0;
@@ -50,7 +50,7 @@ async function fixture(browser,{mobile,dark,mode='managed'}){
     if(name==='/homebridge')return {services:['button','switch','garage','lock','light'].map((kind,index)=>({kind,name:'Fixture '+kind,bridgeId:'fixture-bridge',serviceId:'2.'+(10+index),accessoryIdentity:'a'.repeat(64)}))};
     if(name==='/load')return{connected:mode!=='initial',settings:{revision,configuration},credentials:savedKeys,adminConnection:mode==='initial'?null:{baseUrl:'http://127.0.0.1:27773',identityFile:'/synthetic/homebridge/gdoorandbolt-coordinator/identity.json'},
       controllers:mode==='initial'?[]:configuration.controllers.map(profile=>{
-        const status={bootId:'synthetic-boot',actuationEnabled:enabled,held:enabled?null:'not-commissioned',state:{busy:mode==='moving',fault:mode==='fault'?'synthetic-fault':null}};
+        const status={bootId:'synthetic-boot',enabled,configurationValid:enabled,canRecover:mode.startsWith('restart-'),actuationEnabled:enabled&&!mode.startsWith('restart-'),held:enabled?null:'not-commissioned',state:{busy:mode==='moving',fault:mode==='fault'?'synthetic-fault':null}};
         if(mode==='restart-wait'){status.held='waiting-for-devices';status.state.unavailable='bolt_unreachable';status.health=controllerHealth(status);}
         if(mode==='restart-fault'){status.held='controller_requires_review';status.state.fault='bolt_write_ambiguous';status.health=controllerHealth(status);}
         return{id:profile.id,name:profile.name,status};})};
@@ -61,6 +61,7 @@ async function fixture(browser,{mobile,dark,mode='managed'}){
     if(name==='/probe'){probes++;probedIds.push(body.controller);if(mode==='probe-unavailable')throw Error('synthetic unavailable');return{probe:{compatible:probes>1,door:{state:'closed',feedback:'closed-sensor'},bolt:{state:'locked',feedback:'relay'},limitations:[],
       controls:[{id:'physical-keypad',name:'Physical keypad',kind:'input',error:probes===1?'input_alarm_mapping_changed':null}]}};}
     if(name==='/commission'){assert.equal(body.previousControllerStopped,true);assert.equal(body.physicalSetupReviewed,true);enabled=true;commissions++;return{};}
+    if(name==='/recover'){assert.equal(body.bootId,'synthetic-boot');assert.equal(enabled,true);recoveries++;mode='enabled';return{};}
     if(name==='/disable'){assert.equal(body.revision,revision);assert.equal(body.bootId,'synthetic-boot');enabled=false;disables++;return{};}
     if(name==='/credentials'){assert.equal(body.secret,'private-browser-test-key');const exists=savedKeys.includes(body.reference);if(body.mode==='create'&&exists)return{saved:false,reason:'exists'};if(!exists)savedKeys.push(body.reference);else enabled=false;return{saved:true};}
     if(name==='/credentials/delete'){keyDeletes++;const used=v=>v&&typeof v==='object'&&(v.credentialRef===body.reference||Object.values(v).some(used));if(used(configuration)||used(blocks))return{deleted:false,reason:'in-use'};savedKeys.splice(savedKeys.indexOf(body.reference),1);return{deleted:true};}
@@ -106,7 +107,7 @@ async function fixture(browser,{mobile,dark,mode='managed'}){
   assert.equal(await page.locator('#saved-keys .saved-key').count(),savedKeys.length);
   assert.equal(await page.locator('#credential-secret').inputValue(),'');
   await page.locator('#garages-tab').click();await page.locator('.garage-card').first().waitFor();
-  return{page,errors,probedIds,keyDeletes:()=>keyDeletes,savedKeys:()=>[...savedKeys],localImports:()=>localImports,debugReads:()=>debugReads,debugWrites:()=>debugWrites,reviews:()=>reviews,disables:()=>disables,configuration:()=>configuration,blocks:()=>blocks,applies:()=>applies,nativeSaves:()=>nativeSaves,probes:()=>probes,commissions:()=>commissions,release:()=>releaseNative?.()};
+  return{page,errors,probedIds,recoveries:()=>recoveries,keyDeletes:()=>keyDeletes,savedKeys:()=>[...savedKeys],localImports:()=>localImports,debugReads:()=>debugReads,debugWrites:()=>debugWrites,reviews:()=>reviews,disables:()=>disables,configuration:()=>configuration,blocks:()=>blocks,applies:()=>applies,nativeSaves:()=>nativeSaves,probes:()=>probes,commissions:()=>commissions,release:()=>releaseNative?.()};
 }
 async function review(page){
   await page.getByRole('button',{name:'Review changes',exact:true}).click();
@@ -121,9 +122,11 @@ try{
   try{
    for(const mode of ['restart-wait','restart-fault']){
      const x=await fixture(browser,{mobile,dark,mode}),p=x.page;
-     await p.getByRole('button',{name:/^Review setup /}).click();
-     await p.locator('.commission-result').filter({hasText:mode==='restart-wait'?'retrying automatically':'bolt_write_ambiguous'}).waitFor();
-     assert.equal(await p.getByRole('button',{name:'Enable this garage door',exact:true}).count(),mode==='restart-wait'?0:1);
+     await p.getByRole('button',{name:/^View status /}).click();
+     await p.locator('.commission-result').filter({hasText:mode==='restart-wait'?'retry automatically':'bolt_write_ambiguous'}).waitFor();
+     assert.equal(await p.getByRole('button',{name:'Enable this garage door',exact:true}).count(),0);
+     await p.getByRole('button',{name:'Check again',exact:true}).click();await saved(p);
+     assert.equal(x.recoveries(),1);assert.match(await p.locator('.garage-card .garage-status').textContent(),/^Enabled/);
      assert.equal(x.commissions(),0);assert.equal(x.applies(),0);assert.deepEqual(x.errors,[]);await p.close();
    }
    for(const mode of ['enabled','moving','debug-unavailable']){

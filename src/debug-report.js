@@ -22,12 +22,13 @@ export function debugReport({identity,controllers,reporting,activity},now=new Da
     recording:reporting.recording,traceMode:one(reporting.traceMode,['full','events','subscribers','off']),
     publicationMode:one(reporting.publicationMode,['inline','deferred']),
     connectionInspection:one(reporting.connectionInspection,['available','unavailable']),truncated:bool(reporting.truncated),
-    controllers:rows.map(r=>{const s=r.status??{},v=s.state??{};return {garage:garage(r.id),enabled:bool(s.actuationEnabled),commissioned:bool(s.commissioned),
+    controllers:rows.map(r=>{const s=r.status??{},v=s.state??{};return {garage:garage(r.id),enabled:bool(s.enabled??s.actuationEnabled),actuationAvailable:bool(s.actuationEnabled),configurationValid:bool(s.configurationValid??s.commissioned),commissioned:bool(s.commissioned),
       held:!!s.held,phase:one(v.phase,['starting','position-unknown','stopped-estimated','unavailable','not-commissioned','closed','open','opening','closing','unknown','fault','stopped','unlocking','locking']),
       door:one(v.door,['closed','open','opening','closing','not-closed','unknown']),bolt:one(v.bolt,['locked','unlocked','locking','unlocking','unknown']),
       target:one(v.target,['closed','open']),busy:bool(v.busy),fault:!!v.fault,unavailable:!!v.unavailable,obstruction:bool(v.obstruction),
-      heldReason:faultCode(s.held)??one(s.held,['waiting-for-devices','maintenance','not-commissioned']),
+      heldReason:faultCode(s.held)??one(s.held,['waiting-for-devices','checking-devices','maintenance','not-commissioned']),
       faultReason:faultCode(v.fault),faultAt:stamp(v.faultAt),unavailableReason:faultCode(v.unavailable),reconciling:!!v.reconciling,
+      previousFaultReason:faultCode(s.lastFault?.reason),previousFaultAt:stamp(s.lastFault?.at),
       openEstimated:bool(v.openEstimated),closeEstimated:bool(v.closeEstimated),externalUnlockOverride:bool(v.externalUnlockOverride)};}),
     tiles:list(reporting.tiles,64).filter(t=>garage(t.controllerId)).map(t=>({garage:garage(t.controllerId),kind:one(t.kind,['garage','bolt']),available:bool(t.available),
       fields:list(t.fields,5).filter(v=>field(v.field)).map(v=>({field:field(v.field),reported:scalar(v.reported),cached:scalar(v.cached),status:num(v.status),supportsEvents:bool(v.supportsEvents),subscribers:list(v.subscribers,32).map(client).filter(Boolean)}))})),
@@ -38,6 +39,6 @@ export function debugReport({identity,controllers,reporting,activity},now=new Da
       kind:one(e.kind,['publish','get','get-error']),field:field(e.field),value:scalar(e.value),explicit:bool(e.explicit),client:subscriber(e.client),
       subscribers:Array.isArray(e.subscribers)?list(e.subscribers,32).map(subscriber):null})),
     activity:list(activity).filter(e=>e.controllerId===null||garage(e.controllerId)).map(e=>({garage:garage(e.controllerId),at:stamp(e.at),
-      type:one(e.type,['restart-review-required','restart-observation','settings-applied','timings-applied','credentials-change-review','controller-disabled','recovery-confirmed','commissioned','held','unknown','complete','command-held','maintenance-completed']),
+      type:one(e.type,['restart-review-required','restart-observation','settings-applied','timings-applied','credentials-change-review','controller-disabled','controller-enabled','recovery-check','fault-recorded','recovery-confirmed','commissioned','held','unknown','complete','command-held','maintenance-completed']),
       command:one(e.detail,['open','close','toggle','lock','unlock'])}))};
 }

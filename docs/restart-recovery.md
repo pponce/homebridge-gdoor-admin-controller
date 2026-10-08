@@ -1,31 +1,49 @@
-# Restart recovery (0.4.26)
+# Enablement and restart recovery (0.4.27)
 
-Previously enabled garages retain their saved enablement across coordinator child-bridge and full Homebridge restarts. Explicitly disabled garages stay disabled; maintenance stays paused.
+Enabled is the saved user choice made after completing setup. Device health and command permission are separate. Reboots, faults, outages, maintenance and timing edits do not disable a garage or erase its setup. Only an explicit Disable changes that choice; deleting a garage removes its records. New garages remain disabled until setup is approved.
 
-Startup and idle reads canceled by shutdown do not create durable faults. If Tailwind, deCONZ or an upstream Homebridge child bridge is temporarily unavailable, startup read checks retry every five seconds, without an overall expiry. The page shows Waiting for devices. Each retry checks the saved journal, device identity, current feedback and motor relay release. Success resumes ordinary monitoring and fresh input subscriptions; old input events are not replayed. No startup or recovery check operates the door or bolt.
+Both the Homebridge settings and web Controller page show the saved setting alongside current status, for example Enabled · Device unavailable or Enabled · Fault. Previous fault history is labeled separately. A fault uses **Check again**, not Enable or repeated commissioning. This performs fresh read-only checks for just that controller. It never issues a door/bolt command or changes enablement. A lost check response requires reloading status, not automatic resubmission.
 
-## Door state at restart
+## Startup and current feedback
 
-| Current feedback | Behavior |
+Startup begins with Checking devices. It reads current device identity, door and bolt feedback, obstruction/blocking flags and motor relay release. Unavailable startup dependencies retry every five seconds without an overall expiry; idle communication loss uses the configured idle poll interval. Commands wait for healthy readings. A previously recorded fault is archived before its journal is cleared. A resolved old fault, including a legacy boolean-only fault record, does not become a current fault just because Homebridge restarted.
+
+| Fresh feedback | Status and behavior |
 | --- | --- |
-| Closed | Enabled; no automatic startup bolting |
-| Confirmed open | Enabled; no startup movement |
-| Opening or closing | Enabled and monitoring; new conflicting commands wait until a confirmed endpoint |
-| Tailwind not-closed | Enabled with Position unconfirmed; no invented fully-open position or restored travel estimate |
-| Interrupted travel and Tailwind not-closed | Enabled and monitoring. A new explicit Close through HomeKit can use Tailwind's directional API; it runs the ordinary fresh checks and closing sequence. Relay toggles wait for a confirmed endpoint |
+| Closed | Enabled · Ready · Closed; no startup bolting |
+| Confirmed open | Enabled · Ready · Open; no startup movement |
+| Opening / closing | Enabled · Opening / Closing; observation continues, conflicting commands wait |
+| Tailwind not-closed | Enabled · Position unknown; no restored travel estimate |
+| Unavailable device | Enabled · Device unavailable; read checks retry |
+| Locked bolt while door is not closed, active motor relay, obstruction, invalid feedback or wrong device identity | Enabled · Fault with a specific reason; commands blocked |
 
-A reboot cannot recover physical position that a device does not measure. Tailwind supplies a closed contact, so after interrupted opening it cannot distinguish fully open, partly open or still moving. Time alone is not treated as proof. No old command, motor pulse or interrupted operation is replayed. Observing an endpoint after interrupted travel clears the interruption record without automatically bolting; a new explicit Close uses the normal bolt sequence.
+The physical problem is checked again on every reboot or explicit Check again. If it is still present, the current fault remains. A fault during an operation stops that operation and requires fresh recovery checks; actuator writes are never automatically retried. A damaged operation record or failed journal write retains a separate hold until repaired and explicitly checked. None of these conditions changes Enabled.
 
-## Faults that still need review
+A reboot cannot recover physical position a device does not measure. Tailwind has a closed contact, so not-closed cannot distinguish fully open, partly open or moving. After interrupted travel or a prior ambiguous write, the engine reconciles against fresh feedback; it does not restore timers. A fresh directional Tailwind Close request through HomeKit is allowed when reported available and runs the normal closing safeguards. Relay toggles wait for a confirmed endpoint. No accepted old command, input event or motor pulse is replayed. Reaching an endpoint during this reconciliation does not automatically operate the bolt.
 
-Ambiguous actuator writes, changed hardware identity, obstruction, an active motor relay, invalid feedback, or a locked bolt with a non-closed door retain review holds. They are distinct from an unavailable connection. New durable faults store a fixed, allowlisted reason and timestamp, which survive subsequent restarts and appear in the settings UI and diagnostic export. Arbitrary errors and private device data are excluded.
+## Configuration and storage
 
-The pre-0.4.26 record contains only fault/inProgress booleans. An existing fault cannot be safely classified retroactively. With the door physically closed, use Check connections and Enable this garage door once to recover that old hold. Future normal restarts do not require repeating setup. Older plugin versions cannot read the extended fault record and will conservatively hold rather than clear it.
+Name and validated timing edits preserve setup approval through both editors. Device mappings, feedback modes, input actions and other control-policy changes require **Setup review**. Replacing credentials retains the user's Enabled choice but requires setup review under the existing credential replacement workflow. These configuration checks are distinct from fault recovery. Disable retains the completed setup, so a later Enable checks fresh state without demanding a physically closed door again. Maintenance remains paused across reboot.
+
+The private profile store migrates schema 1 to schema 2 once. Previously approved garages migrate to Enabled, even if their runtime is currently faulted; garages without saved approval remain disabled. Schema 2 stores the explicit enablement map, configuration approval and last fault independently. Older releases reject schema 2 rather than interpreting retained setup approval as permission to operate an explicitly disabled garage. Do not downgrade by manually removing the schema or enablement fields. This migration does not change HomeKit pairings or other plugins' storage.
+
+Fault history contains only fixed allowlisted reasons and timestamps. Legacy records without reasons are marked as an unidentified previous fault in history. Arbitrary errors, device responses, URLs and credentials are excluded.
+
+## API compatibility
+
+The default v1 response shapes and synchronized `api-v1.md` examples remain unchanged for older administration clients. Send `X-Coordinator-Status: detailed` to request the extended status used by the built-in Homebridge UI. The web Controller page reads the same runtime directly.
+
+Extended fields:
+
+- `enabled`: durable user choice, independent of faults/readiness.
+- `configurationValid`: saved setup approval matches the current device mapping and policy. Disable does not remove this approval.
+- `actuationEnabled`: current engine availability; it is not the Enabled setting and does not promise every command is valid. Individual commands still enforce movement, feedback, bolt and motor safeguards.
+- `health`: current title, explanation and fixed code; `lastFault`: historical reason and timestamp, or null.
+- `canRecover`: whether the UI can offer a fresh check now.
+- State extensions from 0.4.26 remain: `faultAt`, `reconciling`, `restartCloseAvailable`.
+
+Legacy `commissioned` remains true only when the garage is enabled and its approval is current. New authenticated POST endpoints `/v1/controllers/{id}/recover` and `/v1/controllers/{id}/enable` require exactly `instanceId`, `revision`, `bootId`. They reject stale, busy, stopped or maintenance requests. Recovery cannot enable a disabled or unapproved garage. The web recovery endpoint is `POST /api/controller/recover`, admin-only in manage mode, with `controllerId`, `revision`, `bootId` and the existing session/CSRF requirements.
 
 ## Verification
 
-Regression checks exercise actual durable storage, five-minute simulated dependency outages, repeated restarts, shutdown during startup/idle reads and commanded travel, all reported door states, interrupted requests, read-only recovery, stale-command rejection, explicit disable/maintenance, fixed fault retention and privacy. Homebridge integration checks restart the actual child process and entire Homebridge with loopback emulators. Desktop/mobile browser checks verify the waiting and fault explanations. These are software tests, not physical acceptance on an installed garage.
-
-## Optional status details
-
-Starting in 0.4.26, clients may send `X-Coordinator-Status: detailed` to request extended status. Without that header, the exact legacy v1 response shapes remain unchanged. The Homebridge UI opts in automatically. In extended responses, optional status.health contains title, detail and a fixed code (or null). State may add faultAt, reconciling and restartCloseAvailable. A transient startup read failure retains commissioning, reports held=waiting-for-devices and state.unavailable, and retries read checks every five seconds without moving hardware. Restart retains commissioning for interrupted requests; their outcome becomes unknown and the controller resumes observation without replay. Fresh, safe state restores enablement even when open, opening or closing. While reconciling, new requests return controller_observing_movement until an endpoint is confirmed, except a new explicit primary Tailwind Close when restartCloseAvailable is true. Relay pulses and old commands are never replayed. Legacy fault records require one explicit recovery; new faults retain their original reason and time. Older servers ignore this header and retain their existing response shape.
+Tests cover durable migration and damaged-state rejection, explicit disable/re-enable, current faults with persistent enablement, history across successive reboots, all reported door states, delayed dependencies, interrupted and ambiguous operations, no replay, storage holds, stale requests, live timing edits and existing physical input/HomeKit behavior. Actual Homebridge child/full restart tests use loopback device emulators. Browser tests exercise the separate status/recovery workflow on desktop and mobile. Automated checks do not establish physical acceptance on the owner's garage; validation receipts are in `status.md`.

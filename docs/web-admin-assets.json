@@ -89,7 +89,7 @@
   "additions": [
     {
       "path": "web-admin/public/controller.js",
-      "sha256": "46bc53c443107bd44761fd955856242cbf97e6590ae92f489ee029fc121cd4fd",
+      "sha256": "1c71204df1be06f97fd8c0168bcf789d0d2b67b41d2c09ed05f742f1a4c84eda",
       "purpose": "Plugin-native editor for controller defaults and device timing overrides."
     }
   ]

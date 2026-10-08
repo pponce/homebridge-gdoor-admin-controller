@@ -30,12 +30,11 @@ function fixture(options = {}) {
   return { engine, model };
 }
 
-test('startup and observations never operate hardware; incomplete journal holds', async () => {
+test('startup reassesses clean, interrupted and faulted journals without hardware writes', async () => {
   for (const journal of [{ inProgress: false, fault: false }, { inProgress: true, fault: false }, { inProgress: false, fault: true }]) {
     const { engine, model } = fixture({ model: { journal, locked: false } });
     await engine.initialize();
-    if (!engine.state.fault) await engine.observe();
-    else assert.equal(engine.state.fault, 'previous_run_requires_review');
+    assert.equal(engine.state.fault, null); await engine.observe();
     assert.deepEqual(model.writes, []);
   }
 });

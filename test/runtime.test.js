@@ -87,13 +87,14 @@ test('production runtime begins non-actuating, commissions through read-only che
   assert.equal(f.runtime.status(f.id).state.phase, 'closed');
   assert.deepEqual(f.hardware.state.writes, [['bolt', false], ['door', 'open'], ['door', 'close'], ['bolt', true]]);
 });
-test('review/apply enforces revisions, invalidates changed commissioning and does not move hardware', async t => {
+test('review/apply enforces revisions and preserves setup for timing changes without hardware writes', async t => {
   const f = await fixture(t); await f.commission(); const before = f.runtime.settings();
   const changed = structuredClone(before.configuration); changed.controllers[0].timing.openRetractSettleSeconds = 1;
   const review = await f.runtime.review(changed, before.revision);
   await assert.rejects(f.runtime.review(changed, before.revision + 1), /revision_conflict/);
   await f.runtime.apply(review.token);
-  assert.equal(f.runtime.settings().revision, before.revision + 1); assert.equal(f.runtime.status(f.id).actuationEnabled, false);
+  assert.equal(f.runtime.settings().revision, before.revision + 1); assert.equal(f.runtime.status(f.id).actuationEnabled, true);
+  assert.equal(f.runtime.status(f.id).enabled, true); assert.equal(f.runtime.status(f.id).configurationValid, true);
   await assert.rejects(f.runtime.apply(review.token), /review_expired/);
   assert.deepEqual(f.hardware.state.writes, []);
 });
@@ -113,7 +114,8 @@ test('ambiguous commands hold the garage and restart does not replay them', asyn
   const body = f.command('open'); await f.runtime.submit(f.id, body); await f.runtime.entry(f.id).job;
   assert.equal(f.runtime.status(f.id).state.phase, 'fault'); await f.runtime.stop(); const writes = [...f.hardware.state.writes];
   const second = new CoordinatorRuntime({ storagePath: f.storagePath, configuration: f.config, credentials: async () => f.hardware.credentials });
-  t.after(() => second.stop()); await second.start(); assert.equal(second.status(f.id).actuationEnabled, false);
+  t.after(() => second.stop()); await second.start(); assert.equal(second.status(f.id).actuationEnabled, true);
+  assert.equal(second.status(f.id).enabled, true); assert.equal(second.status(f.id).lastFault.reason, 'door_write_ambiguous');
   await assert.rejects(second.submit(f.id, body), /request_invalid/); assert.deepEqual(f.hardware.state.writes, writes);
 });
 
@@ -155,7 +157,7 @@ test('renaming never enables a disabled garage or preserves changed hardware/beh
   assert.equal(f.runtime.status(f.id).actuationEnabled, false);
   await f.commission();
   draft = f.runtime.settings(); draft.configuration.controllers[0].name = 'Changed behavior';
-  draft.configuration.controllers[0].timing.closeRetractSettleSeconds = 1;
+  draft.configuration.controllers[0].autoBolt = !draft.configuration.controllers[0].autoBolt;
   review = await f.runtime.review(draft.configuration, draft.revision);
   assert.deepEqual(review.requiresCommissioning, [f.id]); await f.runtime.apply(review.token);
   assert.equal(f.runtime.status(f.id).actuationEnabled, false);
@@ -215,6 +217,6 @@ test('shared address changes require rechecking only garages using the changed d
   const settings=f.runtime.settings(),shared=settings.configuration.connections.find(row=>row.baseUrl===f.hardware.config.bolt.baseUrl);
   updateConnection(settings.configuration,shared.id,{...shared,baseUrl:'http://192.0.2.222:8080'});
   const review=await f.runtime.review(settings.configuration,settings.revision);assert.deepEqual(review.requiresCommissioning,[f.id]);await f.runtime.apply(review.token);
-  assert.equal(f.runtime.status(f.id).actuationEnabled,false);assert.equal(f.runtime.status('second-garage').actuationEnabled,true);
+  assert.equal(f.runtime.status(f.id).actuationEnabled,false);assert.equal(f.runtime.status(f.id).enabled,true);assert.equal(f.runtime.status(f.id).configurationValid,false);assert.equal(f.runtime.status('second-garage').actuationEnabled,true);
   assert.deepEqual(f.hardware.state.writes,[]);assert.deepEqual(f.other.state.writes,[]);
 });
