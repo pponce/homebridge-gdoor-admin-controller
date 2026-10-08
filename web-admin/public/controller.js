@@ -48,6 +48,7 @@ window.ConfiguratorController = ({ root, api, readOnly }) => {
     };
     root.querySelector('[data-controller-reload]').onclick = async () => { if (leave()) { try { await load(); } catch { message('Could not reload. Check your connection and try again.'); } } };
     form.oninput = () => {
+      if (!uncertain) message('');
       dirty = true;
       for (const checkbox of root.querySelectorAll('[data-inherit]')) {
         const number = root.querySelector(`[data-input-index="${checkbox.dataset.inherit}"][data-key="${checkbox.dataset.key}"]`);
@@ -73,6 +74,7 @@ window.ConfiguratorController = ({ root, api, readOnly }) => {
       review.querySelector('[data-controller-apply]').onclick = async () => {
         if (saving || uncertain) return;
         saving = true; const turn = generation;
+        message('Saving timings…');
         root.querySelectorAll('button,select').forEach(element => { element.disabled = true; });
         try {
           const result = await api('controller/timings', { controllerId: selected, revision: data.revision, values: next });

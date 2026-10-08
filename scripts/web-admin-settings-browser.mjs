@@ -90,6 +90,7 @@ try {
       await editor.getByRole('button', { name: 'Apply timings', exact: true }).click();
       await editor.getByText('Timings saved and active. Homebridge was not restarted.', { exact: true }).waitFor();
       assert.deepEqual(runtime.configuration.controllers[0].inputs[0].timing, {});
+      assert.equal(saves, 2);
       loseReply = true;
       await editor.locator('[data-default-group="feedback"][data-key="closingSeconds"]').fill('14');
       await editor.getByRole('button', { name: 'Review timing changes', exact: true }).click();
