@@ -11,7 +11,7 @@ The integrated web interface must be optional and disabled by default. Enabling 
 
 ## Validation
 The original nine foundation tests passed on Node 22/24 in CI run 37716390646. The expanded sixteen tests passed locally on Node 24.19.0. Added checks cover durable restart login, private file modes, duplicate setup, queued revision conflicts, immutable pending writes, corrupted/shared/symlink storage rejection, exact frontend provenance and initial page resource closure.
-The branch workflow runs the expanded suite on Node 22/24 and checks the packaged artifact. Browser parity and a deployed HTTPS setup are still pending.
+All sixteen tests and exact package verification passed on Node 22 and 24 in [CI run 37718040599](https://github.com/pponce/homebridge-gdoor-admin-controller/actions/runs/37718040599), implementation 32c57a86687d8b3d3e797cba6ad542f745a93902. Browser parity and a deployed HTTPS setup are still pending.
 
 ## Still required before an owner test install
 Homebridge enable/disable settings and lifecycle wiring; first-admin setup; certificate configuration; the Homebridge-specific replacement for standalone installation help; actual original-frontend browser flows; deCONZ setup/inventory/users/PINs/alarm/lockout operations; coordinator keypad routing; persistent activity/history; backup and interruption recovery.
