@@ -11,3 +11,6 @@ Publish from the reviewed clean source using `bash scripts/publish-npm.sh REVIEW
 Configure the new plugin and its child bridge from scratch, then pair that child bridge in Apple Home. New garages stay disabled until explicitly checked and enabled. Rebuild any affected scenes/automations. Old npm releases remain available; deprecation is deferred until this installation is accepted.
 
 Validation: 172 local Node tests passed. Actual Homebridge registration and browser/UI checks run in GitHub CI. Source readiness, npm publication, host installation and physical acceptance are separate milestones.
+
+
+0.4.20 source validation complete: [CI run 37707958298](https://github.com/pponce/homebridge-gdoor-admin-controller/actions/runs/37707958298) passed all five jobs on `c1503c3fe285a8df30efbaf0a3c02e45f43e84be`: 172 tests on Node 22/24, actual Homebridge 2.0/2.4, custom UI IPC and desktop Chromium/mobile WebKit. Package dry-run passed. This subsequent documentation-only revision preserves that implementation. npm publication, owner installation and physical acceptance remain outstanding.
