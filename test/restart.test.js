@@ -178,6 +178,16 @@ test('graceful shutdown during commanded travel preserves enablement and never r
   assert.equal(next.status(f.id).state.reconciling, false); assert.deepEqual(f.model.writes, writes);
 });
 
+test('an upstream read disconnect during active-command shutdown preserves interrupted intent without a new fault', async t => {
+  const f=await fixture(t);let began;const reading=new Promise(resolve=>{began=resolve;});
+  f.model.pause=()=>new Promise(resolve=>{f.model.release=resolve;began();});
+  await f.first.submit(f.id,f.command(f.first));await reading;
+  f.model.error='door_read_failed';const stopping=f.first.stop();f.model.release();await stopping;
+  assert.deepEqual(await f.journal.read(),{inProgress:true,fault:false});assert.deepEqual(f.model.writes,[]);
+  f.model.pause=null;f.model.error=null;const next=await f.create();
+  assert.equal(next.status(f.id).actuationEnabled,true);assert.equal(next.status(f.id).state.fault,null);
+});
+
 test('maintenance cancels a pending startup retry and remains paused through restart', async t => {
   const f = await fixture(t); await f.first.stop(); f.model.error = 'bolt_unreachable';
   t.mock.timers.enable({ apis: ['setTimeout'] });

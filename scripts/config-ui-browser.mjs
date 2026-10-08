@@ -121,7 +121,7 @@ try{
   try{
    for(const mode of ['restart-wait','restart-fault']){
      const x=await fixture(browser,{mobile,dark,mode}),p=x.page;
-     await p.getByRole('button',{name:'Review setup',exact:true}).click();
+     await p.getByRole('button',{name:/^Review setup /}).click();
      await p.locator('.commission-result').filter({hasText:mode==='restart-wait'?'retrying automatically':'bolt_write_ambiguous'}).waitFor();
      assert.equal(await p.getByRole('button',{name:'Enable this garage door',exact:true}).count(),mode==='restart-wait'?0:1);
      assert.equal(x.commissions(),0);assert.equal(x.applies(),0);assert.deepEqual(x.errors,[]);await p.close();

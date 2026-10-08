@@ -262,7 +262,7 @@ export class MovementEngine {
       }
       await this.journal.write({ inProgress: Boolean(this.partialOwner), fault: false });
     } catch (error) {
-      if (this.stopped && code(error) === 'operation_interrupted') {
+      if (this.stopped && (code(error) === 'operation_interrupted' || retryableRead(code(error)))) {
         // The durable intent already exists. A routine shutdown keeps enablement
         // and resumes observation next boot; ambiguous writes still latch below.
         this.initialized = false;
