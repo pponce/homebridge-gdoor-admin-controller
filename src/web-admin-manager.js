@@ -14,10 +14,10 @@ const safeErrors = new Set(['web_account_setup_required', 'web_connection_unavai
   'web_gateway_identity_changed', 'web_gateway_duplicate', 'web_admin_node_update_required', 'web_port_in_use', 'web_listener_failed',
   'web_certificate_generation_failed', 'web_private_storage_invalid', 'web_private_storage_write_failed']);
 export class WebAdminManager {
-  constructor({ storagePath, runtime, settings = new WebAdminSettings(storagePath), accounts = new WebAdminAccountStore(storagePath),
+  constructor({ storagePath, configPath, coordinatorBridge, runtime, settings = new WebAdminSettings(storagePath), accounts = new WebAdminAccountStore(storagePath),
     tls = new WebAdminTls(storagePath), credentials = () => readCredentials(storagePath), exchange = webGatewayExchange,
     build = async options => (await import('./web-admin-service.js')).createWebAdminService(options) }) {
-    Object.assign(this, { storagePath, runtime, settings, accounts, tls, credentials, exchange, build });
+    Object.assign(this, { storagePath, configPath, coordinatorBridge, runtime, settings, accounts, tls, credentials, exchange, build });
     this.pending = Promise.resolve(); this.active = null; this.error = null; this.stopped = false;
   }
   serial(action) { const next = this.pending.then(action); this.pending = next.catch(() => {}); return next; }
@@ -64,7 +64,8 @@ export class WebAdminManager {
     requireWeb(await this.accounts.configured(), 'web_account_setup_required');
     const resolved = prepared ?? await this.resolve(row); await resolved.assertCurrent();
     const tls = await this.tls.load(row.settings);
-    const service = await this.build({ storagePath: this.storagePath, runtime: this.runtime, row, accounts: this.accounts, tls, ...resolved });
+    const service = await this.build({ storagePath: this.storagePath, configPath: this.configPath, coordinatorBridge: this.coordinatorBridge,
+      runtime: this.runtime, row, accounts: this.accounts, tls, ...resolved });
     try {
       await new Promise((resolve, reject) => {
         const failed = error => { service.server.removeListener('listening', ready); reject(new WebAdminError(error.code === 'EADDRINUSE' ? 'web_port_in_use' : 'web_listener_failed')); };

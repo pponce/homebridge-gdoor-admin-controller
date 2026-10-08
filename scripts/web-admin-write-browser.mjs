@@ -69,12 +69,32 @@ try {
       await page.getByText('Web account created.', { exact: true }).waitFor(); assert.equal(await page.locator('[data-web-account]').count(), 2);
       await page.locator('#settings-close').click(); await navigate('history'); assert.ok(await page.locator('#activity .gp-history-row').count() >= 3);
       if (process.env.PREVIEW_OUTPUT) { await mkdir(process.env.PREVIEW_OUTPUT, { recursive: true }); await page.screenshot({ path: join(process.env.PREVIEW_OUTPUT, kind + '-durable-write-history.png'), fullPage: true }); }
+      // Exercise the production PIN transaction and browser confirmation while
+      // substituting only the host service port. No service or hardware exists.
+      f.state.homebridgeAvailable = true; await navigate('users');
+      await page.locator('#user-list [data-id="' + 'a'.repeat(32) + '"]').click();
+      await page.locator('#hb-use').check(); await page.locator('[data-hb-alarm="1"]').check();
+      await page.locator('#pin').fill('6789'); await page.locator('#pin-repeat').fill('6789'); await page.locator('#editor button.primary').click();
+      await page.getByRole('button', { name: 'Continue to preparation', exact: true }).click();
+      const restart = page.getByRole('button', { name: 'Save PIN and restart Homebridge deCONZ', exact: true });
+      assert.equal(await restart.isEnabled(), false); assert.equal(f.maintenance.includes('stop'), false);
+      assert.match(await page.locator('#hb-flow-content').textContent(), /same page/);
+      await page.locator('[name="homebridge-username"]').fill('BridgeAdmin');
+      await page.locator('[name="homebridge-password"]').fill('synthetic-bridge-password');
+      await page.locator('[name="homebridge-restart-confirmed"]').check();
+      const pinWritesBefore = f.writes.filter(([, route]) => route === '/alarmsystems/users/' + 'a'.repeat(32)).length;
+      await restart.click(); await page.getByRole('button', { name: 'Done', exact: true }).click();
+      await page.getByText('Homebridge access updated.', { exact: true }).waitFor();
+      assert.equal(f.writes.filter(([, route]) => route === '/alarmsystems/users/' + 'a'.repeat(32)).length, pinWritesBefore + 1);
+      assert.equal(f.maintenance.filter(value => value === 'stop').length, 1); assert.equal(f.maintenance.filter(value => value === 'start').length, 1);
+      assert.equal(await page.locator('#login').isVisible(), false); assert.equal(await page.locator('#users').isVisible(), true);
+      assert.equal(await page.locator('[name="homebridge-password"]').count(), 0);
       await page.locator('#logout').click(); await page.locator('#username').fill('Guest'); await page.locator('#password').fill('synthetic-guest-password'); await page.locator('#login button').click();
       await page.locator('#user-list [data-id]').first().waitFor(); await ready(); await page.locator('#user-list [data-id]').first().click();
-      assert.equal(await page.locator('#editor button.primary').isEnabled(), false);
+      assert.equal(await page.locator('#user-list [data-id="' + 'a'.repeat(32) + '"]').count(), 0);
       assert.deepEqual(errors, []); assert.deepEqual(f.errors, []);
       await context.close(); await browser.close(); browser = null;
-      console.log(kind + ': Homebridge setup, production TLS, rename, PIN, alarm save, lost-reply recovery without replay, preferences, accounts, activity and Regular protections passed');
+      console.log(kind + ': Homebridge setup, production TLS, rename, PIN, alarm save, lost-reply recovery without replay, preferences, accounts, activity, confirmed child-bridge PIN restart and Regular protections passed');
     } finally { if (browser) { await browser.close(); browser = null; } await new Promise(resolve => setupServer.close(resolve)); await f.close(); }
   }
   if (process.env.GITHUB_OUTPUT) await appendFile(process.env.GITHUB_OUTPUT, 'result=Desktop and mobile production setup, durable saves and no-replay recovery passed\n');

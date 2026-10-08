@@ -13,7 +13,7 @@ export const PLATFORM_NAME = 'GDoorAndBoltCoordinator';
 export default function register(api) { api.registerPlatform(PLUGIN_NAME, PLATFORM_NAME, CoordinatorPlatform); }
 export class CoordinatorPlatform {
   constructor(log, config, api) {
-    this.log = log; this.api = api; this.stopped = false; this.cached = [];
+    this.log = log; this.api = api; this.stopped = false; this.cached = []; this.coordinatorBridge = config?._bridge?.username;
     api.on('shutdown', () => { void this.shutdown(); });
     if (!config || !config.controllers?.length && config.platform !== PLATFORM_NAME) return;
     try { this.configuration = validateConfiguration({ ...config, controllers: config.controllers ?? [] }, { allowEmpty: true }); }
@@ -36,7 +36,7 @@ export class CoordinatorPlatform {
     }
     const diagnostics = new Diagnostics(this.runtime.configuration, () => readCredentials(storagePath));
     const probe = diagnostics.probe.bind(diagnostics); diagnostics.probe = id => { diagnostics.configuration = this.runtime.configuration; return probe(id); };
-    this.webAdmin = new WebAdminManager({ storagePath, runtime: this.runtime });
+    this.webAdmin = new WebAdminManager({ storagePath, configPath: this.api.user.configPath?.(), coordinatorBridge: this.coordinatorBridge, runtime: this.runtime });
     this.server = createManagementServer({ identity, configuration: this.configuration, diagnostics, runtime: this.runtime,
       webAdmin: this.webAdmin,
       ...(this.accessories ? { setReporting: enabled => this.accessories.reporting.setRecording(enabled),

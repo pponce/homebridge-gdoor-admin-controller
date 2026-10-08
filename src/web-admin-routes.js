@@ -12,6 +12,7 @@ const routes = new Map([
   ['POST /api/alarm/save', 'save_alarm'], ['POST /api/lockout/save', 'save_lockout'], ['POST /api/lockout/reset', 'reset_lockout'],
   ['GET /api/keypad', 'keypad_status'], ['POST /api/keypad/send', 'keypad_send'], ['GET /api/transaction', 'transaction_status'],
   ['POST /api/recovery/review', 'review_recovery'], ['POST /api/recovery/confirm', 'recover_transaction'], ['GET /api/settings', 'installation_settings'],
+  ['POST /api/homebridge/authorize-recovery', 'homebridge_authorize_recovery'],
 ]);
 const global = new Set(['gateways', 'setup', 'setup_gateway', 'setup_application', 'setup_local_gateways', 'setup_probe', 'setup_connect', 'activity_options', 'history_query', 'history_clear', 'history_retention', 'installation_settings']);
 export function webAdminRoute(request, body) {

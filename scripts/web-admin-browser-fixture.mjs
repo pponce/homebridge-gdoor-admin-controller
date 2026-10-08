@@ -7,12 +7,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { WebAdminManager } from '../src/web-admin-manager.js';
 import { defaultWebSettings } from '../src/web-admin-settings.js';
+import { createWebAdminService } from '../src/web-admin-service.js';
 
 export async function webBrowserFixture() {
   const storagePath = await mkdtemp(join(tmpdir(), 'web-admin-acceptance-'));
   await mkdir(join(storagePath, 'gdoorandbolt-coordinator'), { mode: 0o700 });
   const data = JSON.parse(await readFile(new URL('../test/fixtures/web-admin-read-parity.json', import.meta.url)));
-  const writes = [], errors = [], state = { loseNextAlarmReply: false };
+  const writes = [], errors = [], maintenance = [], state = { loseNextAlarmReply: false, homebridgeAvailable: false, bridgeStopped: false };
   const gateway = http.createServer(async (request, response) => {
     try {
       assert.ok(request.url.startsWith('/api/synthetic_key/'));
@@ -69,12 +70,26 @@ export async function webBrowserFixture() {
   const runtime = { configuration: { managementPort: 27773, controllers: [], connections: [
     { id: 'deconz', name: 'Synthetic gateway', type: 'deconz', baseUrl: 'http://127.0.0.1:' + gateway.address().port, credentialRef: 'synthetic' },
   ] }, guard() {}, state: { maintenance: null } };
-  const manager = new WebAdminManager({ storagePath, runtime, credentials: async () => ({ synthetic: 'synthetic_key' }) });
+  const homebridgeHost = {
+    async available() { return state.homebridgeAvailable; },
+    async authenticate(credentials) { assert.equal(credentials.username, 'BridgeAdmin'); assert.equal(credentials.password, 'synthetic-bridge-password'); maintenance.push('authenticated'); },
+    async clearAuthentication() { maintenance.push('cleared'); },
+    async prepare(binding) { assert.deepEqual(binding.alarms, [1]); return { bridge: 'AA:BB:CC:DD:EE:FF', pid: 1234 }; },
+    async stop() { state.bridgeStopped = true; maintenance.push('stop'); },
+    async assertStopped() { assert.equal(state.bridgeStopped, true); },
+    async snapshotStopped(lease, pin) { assert.match(pin, /^[0-9]{4,16}$/); maintenance.push('backup'); },
+    async verifyGateway() {}, async verifySnapshot() {},
+    async commitStopped(lease, { applied }) { assert.equal(state.bridgeStopped, true); assert.equal(applied, true); maintenance.push('pin saved'); },
+    async start() { state.bridgeStopped = false; maintenance.push('start'); },
+    async verifyRunning() { assert.equal(state.bridgeStopped, false); maintenance.push('verified'); },
+  };
+  const manager = new WebAdminManager({ storagePath, runtime, credentials: async () => ({ synthetic: 'synthetic_key' }),
+    build: options => createWebAdminService({ ...options, homebridgeHost }) });
   const reserve = http.createServer(); await new Promise(resolve => reserve.listen(0, '127.0.0.1', resolve));
   const port = reserve.address().port; await new Promise(resolve => reserve.close(resolve));
   const origin = 'https://127.0.0.1:' + port, password = 'synthetic-browser-password';
   const settings = { ...defaultWebSettings(), enabled: true, port, origin, publicUrl: origin, connectionIds: ['deconz'] };
-  return { manager, settings, origin, password, data, writes, errors, state,
+  return { manager, settings, origin, password, data, writes, errors, state, maintenance,
     async enable() { const value = await manager.configure({ expectedRevision: 0, settings, admin: { username: 'Owner', password } }); assert.equal(value.error, null); },
     async close() { await manager.close(); await new Promise(resolve => { gateway.close(resolve); gateway.closeAllConnections(); }); await rm(storagePath, { recursive: true, force: true }); },
   };

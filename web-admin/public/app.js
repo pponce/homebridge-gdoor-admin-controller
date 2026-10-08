@@ -135,6 +135,7 @@
     return result;
   }
   const homebridgeFlow=window.ConfiguratorHomebridgeFlow({api,extensions:()=>applicationSettings?.extensions||[],
+    nativeHomebridge:()=>applicationSettings?.homebridge?.profile==='homebridge-child-bridge',
     save:(request,context)=>api('users/rotate-pin',request,context,{reviewed:true}),
     extension:async(id,route,body)=>{
       if(!/^[a-z][a-z0-9-]{0,26}$/.test(id)||!/^[a-z][a-z0-9-]{0,31}$/.test(route))throw Error('Integration route unavailable.');

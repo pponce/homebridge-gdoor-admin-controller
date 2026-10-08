@@ -78,6 +78,14 @@ export class WebAdminBackend {
     requireWeb(alarm === null || integer(alarm, 1, 255), 'invalid_alarm');
     requireWeb(typeof action === 'string' && (!regular || regularReads.has(action) || regularWrites.has(action)), 'forbidden');
     try {
+      if (action === 'homebridge_authorize_recovery') {
+        requireWeb(!regular && this.accessMode === 'manage', 'forbidden');
+        requireWeb(exact(payload, ['transaction_id', 'credentials']) && integer(alarm, 1, 255), 'invalid_request');
+        requireWeb(typeof this.integration?.authorizeRecovery === 'function', 'homebridge_not_configured');
+        const tx = await this.transactions.load(gateway);
+        requireWeb(tx && tx.id === payload.transaction_id && tx.alarm === alarm && tx.participants.homebridge === 1 && tx.stage !== 'complete', 'no_matching_transaction');
+        return this.integration.authorizeRecovery(tx, payload.credentials);
+      }
       if (action === 'debug_status' || action === 'debug_control') {
         requireWeb(!regular, 'forbidden'); requireWeb(integer(alarm, 1, 255), 'explicit_alarm_required');
         const key = gateway + ':' + alarm;
@@ -115,6 +123,7 @@ export class WebAdminBackend {
       await client.verify(alarm);
       const view = new WebAdminView({ gatewayId: gateway, name: registration.name, alarm, client,
         onInventory: result => { this.catalog.set(gateway, result); },
+        homebridgeStatus: this.integration?.viewStatus ? () => this.integration.viewStatus() : undefined,
         transactionStatus: this.transactions?.status ? id => this.transactions.status(id) : undefined });
       if (edit || recovery) {
         const authorize = regular ? async (operation, body, snapshot) => {
@@ -127,7 +136,17 @@ export class WebAdminBackend {
         } : undefined;
         const editor = new WebAdminEditor({ view, identity: registration.identity, transactions: this.transactions, backup: this.backup, history: this.history,
           authorize, integration: this.integration, requestDiscovery: this.requestDiscovery, actor: session.username ? 'Web account · ' + session.username : 'Administrator' });
-        const result = await editor.dispatch(action, payload); return regular ? { saved: result.saved === true } : result;
+        let result;
+        const homebridgePin = action === 'rotate_pin' && this.integration?.applies && await this.integration.applies({ operation: action, gateway, identity_id: payload.id, homebridge_selection: payload.homebridge_selection });
+        if (homebridgePin) {
+          requireWeb(!regular && typeof this.integration.withRequest === 'function', 'forbidden');
+          const { homebridge_confirmed, homebridge_login, ...request } = payload;
+          result = await this.integration.withRequest({ pin: payload.new_pin, confirmed: homebridge_confirmed, credentials: homebridge_login }, () => editor.dispatch(action, request));
+        } else {
+          try { result = await editor.dispatch(action, payload); }
+          finally { if (action === 'recover_transaction') await this.integration?.host?.clearAuthentication?.(); }
+        }
+        return regular ? { saved: result.saved === true } : result;
       }
       if (action === 'inventory' || action === 'discover') return view.inventory();
       if (action === 'editor') return view.snapshot();

@@ -8,7 +8,7 @@ window.ConfiguratorHomebridgeFlow=deps=>{
   document.getElementById('configurator-preview').append(dialog);
   const $=id=>dialog.querySelector('#'+id);
   let active=null,working=false,resolve=null;
-  const wipe=()=>{if(active?.request){active.request.new_pin='';active.request.repeat_pin='';active.request=null;}};
+  const wipe=()=>{if(active?.request){active.request.new_pin='';active.request.repeat_pin='';if(active.request.homebridge_login){active.request.homebridge_login.password='';active.request.homebridge_login.otp='';}active.request=null;}};
   const text=(tag,value,parent=$('hb-flow-content'))=>{const e=document.createElement(tag);e.textContent=value;parent.append(e);return e;};
   const button=(label,action,primary=true)=>{const e=text('button',label,$('hb-flow-actions'));e.type='button';e.className='gp-button'+(primary?' primary':'');e.onclick=()=>run(action);return e;};
   function view(step,title){$('hb-flow-step').textContent=step;$('hb-flow-title').textContent=title;$('hb-flow-content').replaceChildren();$('hb-flow-actions').replaceChildren();$('hb-flow-message').textContent='';$('hb-flow-close').textContent=active?.submitted?'Close':'Cancel';if(dialog.open)$('hb-flow-title').focus({preventScroll:true});}
@@ -48,20 +48,33 @@ window.ConfiguratorHomebridgeFlow=deps=>{
     for(const row of items)for(const {input} of row.inputs)input.onchange=active.validate;
     active.validate();
   }
+  function homebridgeLogin(){
+    text('h3','Authorize Homebridge maintenance');
+    text('p','Use an administrator account from your Homebridge UI. This is separate from your web admin account. The password is used for this update and is not saved.');
+    const fields={};
+    for(const [name,label,type] of [['username','Homebridge username','text'],['password','Homebridge password','password'],['otp','Authentication code (if enabled)','text']]){
+      const wrapper=text('label',label);wrapper.className='gp-field';const input=document.createElement('input');input.name='homebridge-'+name;input.type=type;input.autocomplete=name==='otp'?'one-time-code':name==='password'?'current-password':'username';input.maxLength=name==='otp'?6:name==='username'?256:1024;wrapper.append(input);fields[name]=input;
+    }
+    return ()=>{if(!fields.username.value.trim()||!fields.password.value)throw Error('Enter your Homebridge administrator username and password.');const value={username:fields.username.value.trim(),password:fields.password.value};if(fields.otp.value)value.otp=fields.otp.value;fields.password.value='';fields.otp.value='';return value;};
+  }
   async function prepare(){
     const rows=await statuses();view('2 of 4 · Prepare','Prepare for the update');
-    text('p','Homebridge accessories will be temporarily unavailable. Complete the checks below, then start the update here.');
+    const native=deps.nativeHomebridge?.()===true;
+    text('p',native?'The Homebridge deCONZ child bridge will stop while the PIN is updated, then restart. Its accessories will be temporarily unavailable. This web interface stays open on the same page.':'Homebridge accessories will be temporarily unavailable. Complete the checks below, then start the update here.');
     const items=checks(rows.map(row=>({...row,spec:row.status.flow.preparation})));
-    const go=button('Start update',async()=>{
+    let login,confirmation;
+    if(native){login=homebridgeLogin();const label=text('label','');label.className='gp-check';confirmation=document.createElement('input');confirmation.type='checkbox';confirmation.name='homebridge-restart-confirmed';label.append(confirmation,document.createTextNode('The garage door and bolt are stationary. I confirm the PIN change and Homebridge deCONZ restart.'));items.push({inputs:[{input:confirmation,name:'homebridge_confirmed'}]});}
+    const go=button(native?'Save PIN and restart Homebridge deCONZ':'Start update',async()=>{
       // Capture explicit checked values before replacing the form with progress.
-      const prepared=items.map(row=>({...row,body:Object.fromEntries(row.inputs.map(x=>[x.name,x.input.checked]))}));
+      const prepared=items.filter(row=>row.extension).map(row=>({...row,body:Object.fromEntries(row.inputs.map(x=>[x.name,x.input.checked]))}));
       if(prepared.some(row=>Object.values(row.body).some(v=>v!==true)))throw Error('Complete every preparation check first.');
+      if(native){if(!confirmation.checked)throw Error('Confirm the restart before continuing.');active.request.homebridge_confirmed=true;active.request.homebridge_login=login();}
       active.validate=null;view('3 of 4 · Update','Updating Homebridge access');
       const progress=text('p','Checking preparation…');
       try{
         for(const row of prepared)await deps.extension(row.extension.id,row.spec.action,{gateway:active.context.gateway,...row.body});
       }catch(e){await prepare();throw e;}
-      progress.textContent='Pausing connected integrations, synchronizing the PIN and restarting Homebridge…';
+      progress.textContent=native?'Updating the PIN and restarting the Homebridge deCONZ child bridge. Keep this page open…':'Pausing connected integrations, synchronizing the PIN and restarting Homebridge…';
       active.submitted=true;$('hb-flow-close').textContent='Close';
       let error;
       try{await deps.save(active.request,active.context);}catch(e){error=e;}finally{wipe();}
@@ -69,7 +82,8 @@ window.ConfiguratorHomebridgeFlow=deps=>{
     });
     requireChecks(items,go);
   }
-  async function advance(){
+  async function advance(login){
+    if(login){let credentials=login();try{await deps.api('homebridge/authorize-recovery',{transaction_id:active.id,credentials},active.context);}finally{credentials.password='';credentials.otp='';}}
     const evidence=await deps.api('recovery/review',{},active.context);
     if(!evidence.ready||evidence.transaction_id!==active.id)throw Error('The saved update needs further verification. No change was repeated.');
     let error;
@@ -117,7 +131,8 @@ window.ConfiguratorHomebridgeFlow=deps=>{
       const label=text('label','PIN submitted for this update');label.className='gp-field';const input=document.createElement('input');input.type='password';input.inputMode='numeric';input.autocomplete='off';input.maxLength=16;label.append(input);
       button('Verify submitted PIN',async()=>{let pin=input.value;input.value='';try{await deps.api('recovery/credential',{transaction_id:tx.id,pin},active.context);}finally{pin='';}await refresh();},false);
     }
-    button('Check saved update and continue',advance);
+    const login=deps.nativeHomebridge?.()===true?homebridgeLogin():null;
+    button('Check saved update and continue',()=>advance(login));
     if(previousError&&previousError.code!=='transaction_recovery_required')$('hb-flow-message').textContent=previousError.message;
   }
   function open(options){

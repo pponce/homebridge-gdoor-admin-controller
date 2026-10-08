@@ -1,5 +1,11 @@
 # Node.js web admin development status
 
+## Current checkpoint: confirmed alarm PIN restart
+
+The owner accepts an explicit restart confirmation for an alarm PIN change. The new implementation stops and starts only the deCONZ child bridge through authenticated Homebridge UI REST controls, preserving the current web page/session. It carries forward the original scoped offline PIN-cache update, with reviewed source fingerprints, private backup, compare-and-replace, stop verification and restart readback. Homebridge UI passwords and short-lived access tokens stay in memory. Source files, system services and the standalone reference are not modified. See web-admin-alarm-pin.md for requirements and limits.
+
+The first-admin username/password setup remains in the plugin General page; subsequent web accounts are managed in web Settings. Seventeen focused restart/PIN/client checks pass locally. Full regression/package and desktop/mobile browser acceptance for this addition are pending. This is development code, not a published owner-test release. Historical milestones below are retained; their earlier live-PIN-API blocker and unfinished-startup statements are superseded by the current checkpoint.
+
 ## Optional product boundary
 The integrated web interface is optional and disabled by default. The latest development checkpoint connects its explicit enable/setup action and server lifecycle to Homebridge. With no saved enablement, startup does not generate a certificate, contact a gateway, open a web listener, or load SQLite. The validated main-branch 0.4.23 UI release does not include this development work.
 
