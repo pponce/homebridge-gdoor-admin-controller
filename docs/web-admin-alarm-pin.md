@@ -53,3 +53,25 @@ retained. Their temporary removal was reverted before the history/keypad commit.
 The backend has optional integration ports, but an actual alarm-PIN integration
 adapter is still outstanding. Restoring frontend source is not implementation or
 physical acceptance of this feature.
+
+## Supported API limitation confirmed during lifecycle integration
+
+The supported PUT handler in homebridge-lib Platform logs the JSON request body
+at debug level before calling the plugin handler. DeconzAccessory.Gateway logs
+the body again at debug level. CharacteristicDelegate's ordinary setter logs
+both the new and old values before storing the PIN in context. A supported
+accessory logLevel change can suppress the last of these, but does not by itself
+establish that the platform request log is suppressed. Delegate's default
+platform log level is 2; no platform logging/redaction setting is exposed by
+DeconzPlatform.onUiRequest. Merely muting the alarm accessory is insufficient.
+
+The library's default saveInterval is 3600 seconds. Its periodic flush and
+shutdown flush are distinct from the successful dynamic-setting response. No
+supported immediate flush/verified restart route was found in this UI API.
+Do not restart deCONZ hardware, remove/re-expose an accessory, edit another
+plugin's cache, or infer durable success from a timer to work around this.
+
+These findings block automatic PIN synchronization in the current supported
+adapter design. The next product choice is a clearly limited observe-only
+preview, or holding the owner release until this integration can meet the
+requirements. This does not authorize dropping the feature from the full build.
