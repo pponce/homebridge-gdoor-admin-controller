@@ -29,7 +29,6 @@ The full garage, keypad, and web-administration setup uses:
 | homebridge-deconz | Install and configure [homebridge-deconz](https://github.com/ebaauw/homebridge-deconz) on the same Homebridge host, in a **different child bridge**. It provides the Homebridge side of the deCONZ alarm integration. |
 | Physical keypad | The tested model is the **Xfinity/Comcast URC4450BC0-X-R**, paired with deCONZ and assigned to the intended alarm. Other compatible IAS ACE keypads **may work, but have not been hardware-tested with this setup**. Do not assume other Xfinity models behave identically. |
 | Garage hardware | A supported garage opener **and a separate bolt/lock** for each controller, with suitable feedback or explicitly configured timing estimates. See Supported connections below. |
-| Network access | Homebridge must be able to reach the configured devices and deCONZ gateway. Your browser must be able to reach Homebridge for setup and the plugin's HTTPS port for web administration. |
 
 **Both plugins require separate child bridges.** Do not run this plugin or `homebridge-deconz` on the main bridge, or put them together in one child bridge. This keeps the controller and web interface running when a confirmed alarm-PIN update restarts the deCONZ child bridge.
 
