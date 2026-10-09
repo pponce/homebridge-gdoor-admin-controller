@@ -21,6 +21,7 @@ window.ConfiguratorHomebridgeReadiness = (code, check) => {
   homebridge_sources_unavailable: 'The installed homebridge-deconz plugin or its library could not be located from this plugin.',
   homebridge_file_unavailable: 'A required Homebridge configuration or plugin file could not be read with the expected file permissions.',
   homebridge_configuration_unavailable: 'The local Homebridge configuration could not be inspected.',
+  homebridge_cli_unavailable: 'The installed homebridge-deconz UI command could not be located or read. Check the plugin installation and its permissions.',
 })[code] || 'Check the local deCONZ child bridge and Homebridge UI setup. PIN synchronization is unavailable until setup is ready.';
 };
 // One user task, with declarative steps supplied by registered integrations.
@@ -84,21 +85,21 @@ window.ConfiguratorHomebridgeFlow=deps=>{
   async function prepare(){
     const rows=await statuses();view('2 of 4 · Prepare','Prepare for the update');
     const native=deps.nativeHomebridge?.()===true;
-    text('p',native?'The Homebridge deCONZ child bridge will stop while the PIN is updated, then restart. Its accessories will be temporarily unavailable. This web interface stays open on the same page.':'Homebridge accessories will be temporarily unavailable. Complete the checks below, then start the update here.');
+    text('p',native?'The PIN will be updated through Homebridge deCONZ without restarting it. This web interface stays open on the same page. Homebridge saves the setting on its normal schedule; a crash or power loss before then could restore its previous PIN.':'Homebridge accessories will be temporarily unavailable. Complete the checks below, then start the update here.');
     const items=checks(rows.map(row=>({...row,spec:row.status.flow.preparation})));
     let login,confirmation;
-    if(native){login=homebridgeLogin();const label=text('label','');label.className='gp-check';confirmation=document.createElement('input');confirmation.type='checkbox';confirmation.name='homebridge-restart-confirmed';label.append(confirmation,document.createTextNode('I confirm the garage door is closed and the bolt is locked. Update the PIN and restart the deCONZ child bridge.'));items.push({inputs:[{input:confirmation,name:'homebridge_confirmed'}]});}
-    const go=button(native?'Save PIN and restart Homebridge deCONZ':'Start update',async()=>{
+    if(native){login=homebridgeLogin();const label=text('label','');label.className='gp-check';confirmation=document.createElement('input');confirmation.type='checkbox';confirmation.name='homebridge-restart-confirmed';label.append(confirmation,document.createTextNode('I confirm the PIN update in deCONZ and Homebridge.'));items.push({inputs:[{input:confirmation,name:'homebridge_confirmed'}]});}
+    const go=button(native?'Update PIN':'Start update',async()=>{
       // Capture explicit checked values before replacing the form with progress.
       const prepared=items.filter(row=>row.extension).map(row=>({...row,body:Object.fromEntries(row.inputs.map(x=>[x.name,x.input.checked]))}));
       if(prepared.some(row=>Object.values(row.body).some(v=>v!==true)))throw Error('Complete every preparation check first.');
-      if(native){if(!confirmation.checked)throw Error('Confirm the restart before continuing.');active.request.homebridge_confirmed=true;active.request.homebridge_login=login();}
+      if(native){if(!confirmation.checked)throw Error('Confirm the PIN update before continuing.');active.request.homebridge_confirmed=true;active.request.homebridge_clear_logs=active.clearLogs===true;active.request.homebridge_login=login();}
       active.validate=null;view('3 of 4 · Update','Updating Homebridge access');
       const progress=text('p','Checking preparation…');
       try{
         for(const row of prepared)await deps.extension(row.extension.id,row.spec.action,{gateway:active.context.gateway,...row.body});
       }catch(e){await prepare();throw e;}
-      progress.textContent=native?'Updating the PIN and restarting the Homebridge deCONZ child bridge. Keep this page open…':'Pausing connected integrations, synchronizing the PIN and restarting Homebridge…';
+      progress.textContent=native?'Updating and checking the PIN in deCONZ and Homebridge. Keep this page open…':'Pausing connected integrations, synchronizing the PIN and restarting Homebridge…';
       active.submitted=true;$('hb-flow-close').textContent='Close';
       let error;
       try{await deps.save(active.request,active.context);}catch(e){error=e;}finally{wipe();}
@@ -113,7 +114,7 @@ window.ConfiguratorHomebridgeFlow=deps=>{
     if(!evidence.ready){
       view('Update paused','A recovery check needs attention');
       text('p',login?'Homebridge sign-in succeeded. A recovery check is blocking completion; entering your password again will not resolve it.':'A recovery check is blocking completion.');
-      const labels={saved_operation:'Saved Homebridge operation',gateway_state:'deCONZ user and alarm state',child_bridge_state:'deCONZ child bridge and saved PIN',private_backup:'Private PIN backup',child_bridge_stopped:'Stopped deCONZ child bridge',maintenance:'Garage controller maintenance',restore_service:'Restore deCONZ child bridge without changing the PIN'};
+      const labels={saved_operation:'Saved Homebridge operation',gateway_state:'deCONZ user and alarm state',child_bridge_state:'deCONZ child bridge and saved PIN',homebridge_api:'Homebridge PIN API and saved value',private_backup:'Private PIN backup',child_bridge_stopped:'Stopped deCONZ child bridge',maintenance:'Garage controller maintenance',restore_service:'Restore deCONZ child bridge without changing the PIN'};
       const reasons={homebridge_snapshot_unverified:'The update stopped before its private PIN backup was confirmed.',homebridge_backup_changed:'The private backup does not match this update.',homebridge_cache_changed:'The saved Homebridge data differs from the expected backup.',homebridge_gateway_revision_changed:'The deCONZ settings differ from the saved update.',homebridge_login_required:'Homebridge authorization is no longer available.'};
       for(const item of evidence.diagnostics||[])text('p',(labels[item.check]||'Recovery verification')+': '+(reasons[item.reason]||'This check could not be verified.')+' ['+item.reason+']');
       if(!evidence.diagnostics?.length)text('p','The saved PIN outcome could not be independently verified.');
@@ -143,6 +144,9 @@ window.ConfiguratorHomebridgeFlow=deps=>{
       const applied=tx.outcome==='applied';
       view('4 of 4 · Finished',applied?'Homebridge access updated':'Update finished without applying the change');
       text('p',applied?(active.success||'Homebridge is synchronized and the required integration checks are complete.'):'The saved operation was resolved without applying the requested credential change.');
+      if(applied&&tx.homebridge_method==='api')text('p','The running Homebridge PIN was verified. Homebridge will save it on its normal schedule.');
+      if(applied&&tx.homebridge_logs==='cleared')text('p','The current Homebridge log was cleared.');
+      else if(applied&&['pending','requested','failed'].includes(tx.homebridge_logs))text('p','PIN updated successfully, but Homebridge logs could not be confirmed cleared. You can clear them from Homebridge UI.');
       active.result={completed:applied,resolved:true};button('Done',()=>{lock(false);close();});return;
     }
     if(tx.stage==='none'){
@@ -197,6 +201,12 @@ window.ConfiguratorHomebridgeFlow=deps=>{
       view('1 of 4 · Review','Update Homebridge access');text('p',options.summary);
       const list=document.createElement('ul');for(const alarm of options.alarms)text('li',alarm,list);$('hb-flow-content').append(list);
       text('p','Use this PIN for the selected alarms in deCONZ and Homebridge.');
+      if(deps.nativeHomebridge?.()===true){
+        text('p','Homebridge may record the PIN in its logs.');
+        const label=text('label','');label.className='gp-check';const input=document.createElement('input');input.type='checkbox';input.name='homebridge-clear-logs';
+        input.onchange=()=>{active.clearLogs=input.checked;};label.append(input,document.createTextNode('Clear Homebridge logs after this update'));
+        text('p','Clears the entire current Homebridge log after the PIN update succeeds. Archived or downloaded copies are unaffected.');
+      }
       button('Continue',async()=>{const tx=await deps.api('transaction',undefined,active.context);if(!['none','complete'].includes(tx.stage)){if(!tx.homebridge)throw Error('Another settings change needs recovery first.');wipe();active.submitted=true;active.id=tx.id;active.context.alarm=tx.alarm;await refresh();return;}active.baselineId=tx.id||null;active.baselineCaptured=true;await prepare();});
     }
     return result;

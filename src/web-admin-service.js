@@ -11,7 +11,7 @@ import { webCoordinatorParticipant, webCoordinatorKeypad } from './web-admin-coo
 import { createWebAdminServer } from './web-admin-server.js';
 import { loadWebAdminAssets } from './web-admin-assets.js';
 import { WebHomebridgeMaintenance, WebHomebridgeMaintenanceStore } from './web-admin-homebridge-maintenance.js';
-import { WebHomebridgeHost } from './web-admin-homebridge-host.js';
+import { WebHomebridgeApiHost as WebHomebridgeHost } from './web-admin-homebridge-api.js';
 import { WebAdminController } from './web-admin-controller.js';
 
 export async function createWebAdminService({ storagePath, configPath, coordinatorBridge, runtime, row, registrations, accounts, tls, assertCurrent, homebridgeHost }) {

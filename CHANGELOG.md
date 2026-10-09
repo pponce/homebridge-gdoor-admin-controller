@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.37
+
+- Update Homebridge alarm PINs through the official Configuration API without restarting Homebridge or editing its accessory files. Let the plugin save on its normal schedule.
+- Offer optional current-log clearing after a successful update; report cleanup failures without reopening PIN recovery.
+- Preserve recovery for previously pending offline updates.
+
 User-facing changes for `homebridge-gdoor-admin-controller`. GitHub releases use matching `vVERSION` tags. Development history and validation receipts are in [developer documentation](docs/developer/README.md).
 
 ## 0.4.36 — 2026-10-09

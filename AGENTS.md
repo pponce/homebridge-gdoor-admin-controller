@@ -19,3 +19,5 @@
 - Retain HomeKit reporting diagnostics as an on-demand troubleshooting capability. The owner explicitly requested 0.4.14 start with diagnostics OFF while retaining live re-enablement, combined with the UI fix in one install. This is an investigation build, not a validated root-cause fix. Comparison scripts restore their starting modes; --restore-baseline selects OFF/inline and --restore-recording enables full recording. Keep notification behavior unchanged.
 
 - Connection simplification must use documented configuration and supported interfaces only. No Homebridge/other-plugin patches, private-cache scraping or undocumented storage dependencies. Keep manual entry where supported discovery cannot supply a value.
+
+- New Homebridge PIN updates use the official homebridge-deconz Configuration API without a routine restart or private accessory-file edits. The owner accepts upstream PIN logging and deferred persistence. Keep our logs credential-free; optional supported log deletion is explicit and follows complete success. Retain the reviewed offline adapter only for previously pending updates.

@@ -30,11 +30,11 @@ The full garage, keypad, and web-administration setup uses:
 | Physical keypad | The tested model is the **Xfinity/Comcast URC4450BC0-X-R**, paired with deCONZ and assigned to the intended alarm. Other compatible IAS ACE keypads **may work, but have not been hardware-tested with this setup**. Do not assume other Xfinity models behave identically. |
 | Garage hardware | A supported garage opener **and a separate bolt/lock** for each controller, with suitable feedback or explicitly configured timing estimates. See Supported connections below. |
 
-**Both plugins require separate child bridges.** Do not run this plugin or `homebridge-deconz` on the main bridge, or put them together in one child bridge. This keeps the controller and web interface running when a confirmed alarm-PIN update restarts the deCONZ child bridge.
+**Both plugins require separate child bridges.** Do not run this plugin or `homebridge-deconz` on the main bridge, or put them together in one child bridge. This isolates their operation and keeps the controller and web interface available during deCONZ child-bridge maintenance.
 
 The physical keypad is needed for physical PIN entry; it is not needed to operate a configured garage from Apple Home. A garage controller using other supported connections can run without the optional deCONZ administration features.
 
-**Homebridge alarm-PIN synchronization has additional requirements:** Linux, a local HTTP Homebridge UI, writable Homebridge storage, and matching reviewed source fingerprints for `homebridge-deconz` and `homebridge-lib`. Different version numbers are accepted when those files still match; changed source files require compatibility review. See [alarm-PIN setup and compatibility](docs/web-admin-alarm-pin.md).
+**Homebridge alarm-PIN synchronization** requires Linux, a local HTTP Homebridge UI and the installed homebridge-deconz UI command. It uses the official API without restarting Homebridge or editing accessory files. PINs may appear in Homebridge logs; the confirmation window offers optional log clearing after success. See [setup, persistence and recovery](docs/web-admin-alarm-pin.md).
 
 ## Supported connections
 
@@ -96,7 +96,7 @@ The web interface is off by default. Its local HTTPS certificate is self-signed,
 
 Web accounts are separate from Homebridge accounts and deCONZ PIN users. Manage additional web accounts and change your own web password in **Settings**. Use **Users** and **Access grants** for deCONZ identities and permissions, **Protection** for keypad lockout policy, and **Activity** for recorded access outcomes.
 
-To use a deCONZ user's PIN for the Homebridge alarm, follow [Homebridge alarm-PIN setup](docs/web-admin-alarm-pin.md). This is a separate, explicitly confirmed operation that restarts only the deCONZ child bridge.
+To use a deCONZ user's PIN for the Homebridge alarm, follow [Homebridge alarm-PIN setup](docs/web-admin-alarm-pin.md). This is a separate, explicitly confirmed operation using the official API without a restart.
 
 Under **Controller**, select the **Garage Door**, edit controller defaults or device timing overrides, then review and apply. Save while the controller is idle; changes take effect on the next operation **without a Homebridge or child-bridge restart**. Hardware mappings and other controller configuration remain in the Homebridge plugin settings.
 
