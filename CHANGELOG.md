@@ -2,6 +2,16 @@
 
 User-facing changes for `homebridge-gdoor-admin-controller`. GitHub releases use matching `vVERSION` tags. Development history and validation receipts are in [developer documentation](docs/developer/README.md).
 
+## 0.4.29 — 2026-10-08
+
+### Improved
+
+- Clarified Homebridge user setup: reuse the existing PIN by entering it in the PIN and Repeat PIN fields above, select the alarms, and click Save changes.
+- Explained that separate access saves are needed only when name or access settings have also changed. Removed advance narration about the guided update.
+- Added a direct interactive demo link near the top of the README.
+
+This release changes instructions only; PIN synchronization, restart confirmation, permissions, and controller behavior are unchanged.
+
 ## 0.4.28 — 2026-10-08
 
 ### Improved

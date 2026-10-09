@@ -329,18 +329,18 @@
     const protectedUser=u.owner||(homebridgeUser&&boundAlarms.includes(selectedAlarm));
     const schedule=u.schedule||null;
     $('#editor').innerHTML=`<div class="gp-body"><div class="gp-identity-row"><label class="gp-field">Name<input id="name" maxlength="64" required value="${esc(u.name)}"></label><label class="gp-check"><input id="enabled" type="checkbox" ${u.enabled?'checked':''}>Enabled on this gateway</label></div>
-      <label class="gp-field">${attaching?'Current PIN (verify alarm uniqueness)':adding?'PIN':'PIN · leave blank to keep it'}<input id="pin" type="password" inputmode="numeric" autocomplete="new-password" pattern="[0-9]{4,16}" maxlength="16" ${adding?'required':''} ></label>
-      ${!adding&&(overview.pin_rotation_available||overview.homebridge_sync===false)?'<label class="gp-field">Repeat PIN<input id="pin-repeat" type="password" inputmode="numeric" autocomplete="new-password" pattern="[0-9]{4,16}" maxlength="16"></label><p class="gp-sub">PIN changes apply to this gateway only. Changes are verified through the coordinated maintenance transaction.</p>':''}
+      <label class="gp-field">${attaching?'Current PIN (verify alarm uniqueness)':adding?'PIN':'PIN'}<input id="pin" type="password" inputmode="numeric" autocomplete="new-password" pattern="[0-9]{4,16}" maxlength="16" ${adding?'required':''} ></label>
+      ${!adding&&(overview.pin_rotation_available||overview.homebridge_sync===false)?'<label class="gp-field">Repeat PIN<input id="pin-repeat" type="password" inputmode="numeric" autocomplete="new-password" pattern="[0-9]{4,16}" maxlength="16"></label><p class="gp-sub">To keep the current PIN when setting up Homebridge, enter it in both fields. For other user edits, leave both fields blank to keep the PIN.</p>':''}
       ${!adding&&(overview.homebridge_available||overview.homebridge_status)?`<div class="gp-homebridge-selection">
         <p class="gp-sub gp-form-note">${homebridgeIdentity()?`Current Homebridge user: <strong>“${esc(selectedName)}”</strong>.`:'No Homebridge user is selected on this gateway.'}</p>
         <label class="gp-check"><input id="hb-use" type="checkbox" aria-describedby="hb-choice-note" aria-controls="hb-configuration" ${homebridgeUser?'checked':''} ${!hbEligible?'disabled':''}>Use this user for Homebridge on this gateway</label>
-        <p id="hb-choice-note" class="gp-sub gp-form-note">${!hbReady?esc(window.ConfiguratorHomebridgeReadiness(overview.homebridge_status?.error,overview.homebridge_status?.file_check)):homebridgeUser?'This user is currently selected for Homebridge.':!hbEligible?`Save any access changes first, with the PIN fields left blank. Eligibility uses saved permissions. This user needs enabled API arm/disarm access, unlimited uses and no schedule or expiry on ${boundAlarms.length?'every alarm already linked to Homebridge':'at least one alarm'}.`:'Select this option to use this user’s PIN for Homebridge.'}</p>
+        <p id="hb-choice-note" class="gp-sub gp-form-note">${!hbReady?esc(window.ConfiguratorHomebridgeReadiness(overview.homebridge_status?.error,overview.homebridge_status?.file_check)):homebridgeUser?'This user is currently selected for Homebridge.':!hbEligible?`If you changed this user’s access below, leave both PIN fields blank and click Save changes before selecting this option. This user needs enabled API arm/disarm access, unlimited uses and no schedule or expiry on ${boundAlarms.length?'every alarm already linked to Homebridge':'at least one alarm'}.`:'Select this option to use this user’s PIN for Homebridge.'}</p>
         <div id="hb-configuration" ${homebridgeUser?'':'hidden'}>
           <h3>Alarms to use with Homebridge</h3>
-          <p class="gp-sub">Existing linked alarms stay selected when changing the Homebridge user.</p>
+          ${boundAlarms.length?'<p class="gp-sub">Already linked alarms must stay selected.</p>':''}
           <div id="hb-alarms">${overview.alarms.map(a=>`<label class="gp-check"><input type="checkbox" data-hb-alarm="${a.id}" ${boundAlarms.includes(a.id)?'checked disabled':eligibleAlarms.some(x=>x.id===a.id)?'':'disabled'}>${esc(a.name)}${boundAlarms.includes(a.id)?' · already linked to Homebridge':''}</label>`).join('')}</div>
-          <p class="gp-sub gp-form-note">Select the alarms and enter this user’s PIN twice to synchronize Homebridge. Save access changes first. Homebridge is stopped and restarted through coordinated maintenance.</p>
-          <p class="gp-sub gp-form-note">Saving opens a guided Homebridge update. Any required preparation and physical confirmations happen here, without switching pages.</p>
+          <p class="gp-sub gp-form-note">Select the alarms, then enter this user’s current PIN in the <strong>PIN</strong> and <strong>Repeat PIN</strong> fields above and click <strong>Save changes</strong>. You can keep the same PIN used by your previous installation.</p>
+          <p class="gp-sub gp-form-note">If you also changed the name or access settings below, save those changes first with both PIN fields blank.</p>
         </div>
       </div>`:''}
       <fieldset class="gp-alarm-access"><legend>Access for one alarm</legend>
@@ -437,7 +437,7 @@
       const selectedHbAlarms=[...document.querySelectorAll('[data-hb-alarm]:checked')].map(x=>Number(x.dataset.hbAlarm));
       const bindingChanged=useHomebridge&&(!homebridgeUser||JSON.stringify(selectedHbAlarms)!==JSON.stringify(boundAlarms));
       if(homebridgeUser&&!useHomebridge&&overview.homebridge_available)throw Error('Select another user for Homebridge to replace this binding.');
-      if(bindingChanged&&!body.pin)throw Error('Enter and repeat this user’s PIN to synchronize Homebridge.');
+      if(bindingChanged&&!body.pin)throw Error('Enter this user’s current PIN in the PIN and Repeat PIN fields above, then click Save changes.');
       const credentialOnly=!adding&&Boolean(body.pin);
       if(!adding&&body.pin&&body.pin!==$('#pin-repeat').value)throw Error('The PIN entries do not match.');
       if(credentialOnly){
