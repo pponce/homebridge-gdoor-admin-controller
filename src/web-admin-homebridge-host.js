@@ -204,6 +204,11 @@ export class WebHomebridgeHost {
     requireWeb(this.client?.bridge === config.bridge && this.registrations.get(binding.gateway)?.identity === binding.identity, 'homebridge_binding_changed');
     const state = await this.client.status(); requireWeb(state.status === 'ok' && !state.manuallyStopped && state.pid !== process.pid, 'homebridge_child_not_running');
     const stamp = await this.stamp(state.pid); requireWeb(stamp !== null, 'homebridge_process_unverified');
+    // Test our own durable storage before stopping another child bridge.
+    const probe = { schema: 1, checked: true };
+    const validProbe = value => object(value) && value.schema === 1 && value.checked === true;
+    await this.files.write('web-homebridge-storage-check.json', probe, validProbe);
+    requireWeb(await this.files.read('web-homebridge-storage-check.json', validProbe), 'web_private_storage_invalid');
     const rows = json(await readHomebridgeFile(config.cache)), port = this.gatewayPort(rows, binding.identity), inventory = await this.inventory(port, binding.identity);
     const mapping = this.mapping(binding, rows, inventory);
     requireWeb((await this.client.status()).pid === state.pid && await this.stamp(state.pid) === stamp, 'homebridge_process_changed');
@@ -247,6 +252,33 @@ export class WebHomebridgeHost {
       await client.verify(alarm); const grants = await client.request('/alarmsystems/' + alarm + '/users');
       requireWeb(homebridgeEligibleUser(grants[binding.user]), 'homebridge_user_must_remain_unrestricted');
     }
+  }
+  // Only used for an interrupted stop before any gateway write. It does not
+  // create a backup, edit a cache, or claim to recover a previously changed PIN.
+  async noWriteState(lease, tx) {
+    requireWeb(tx.write_attempted === false, 'homebridge_gateway_write_unverified');
+    const config = await this.current(lease);
+    await this.verifyGateway(lease, tx);
+    const rows = json(await readHomebridgeFile(config.cache));
+    for (const accessory of Object.values(lease.host.mapping)) homebridgeAlarmContext(rows, lease.binding.identity, accessory);
+    const state = await this.client.waitFor(async row => {
+      if (row.status === 'ok' && !row.manuallyStopped) return row.pid !== process.pid && await this.stamp(row.pid) !== null;
+      return row.status === 'down' && row.manuallyStopped &&
+        (row.pid === null || await this.stamp(row.pid) === null) && await this.stamp(lease.host.pid) !== lease.host.stamp;
+    });
+    return state.status === 'ok' ? 'running' : 'stopped';
+  }
+  async verifyNoWriteRunning(lease, tx) {
+    requireWeb(tx.write_attempted === false, 'homebridge_gateway_write_unverified');
+    const config = await this.current(lease);
+    const state = await this.client.waitFor(async row => row.status === 'ok' && !row.manuallyStopped &&
+      row.pid !== process.pid && await this.stamp(row.pid) !== null);
+    const stamp = await this.stamp(state.pid);
+    const rows = json(await readHomebridgeFile(config.cache)), port = this.gatewayPort(rows, lease.binding.identity);
+    requireWeb(same(this.mapping(lease.binding, rows, await this.inventory(port, lease.binding.identity)), lease.host.mapping), 'homebridge_alarm_mapping_changed');
+    await this.verifyGateway(lease, tx);
+    const after = await this.client.status();
+    requireWeb(after.status === 'ok' && !after.manuallyStopped && after.pid === state.pid && await this.stamp(after.pid) === stamp, 'homebridge_process_changed');
   }
   async start(lease) { await this.current(lease); await this.client.command('start', lease.id, true); }
   async verifyRunning(lease, tx) {

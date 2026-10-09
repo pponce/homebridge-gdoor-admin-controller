@@ -1,5 +1,14 @@
 # Developer status and validation history
 
+## 2026-10-08 — 0.4.32 early-interruption recovery
+
+Handle an existing stop_requested lease with write_attempted=false without constructing a PIN backup or writing either PIN store. After explicit Homebridge authorization, inspect the gateway revision, child identity, mapped cache and settled process state; start only a stopped child, then verify the running service and mapped alarms. Journal the restore intent before starting. A lost start reply is resolved by readback, never an automatic resend. A subsequent explicit recovery can retry only after fresh stopped-state evidence. Preserve the prior binding. Missing/unconfirmed/attempted gateway writes cannot enter this branch. Participant completion now precedes the transaction's complete marker, preventing a hidden hold after a late completion failure. Readiness checks only involve participants actually reached by pause.
+
+Fix a concrete transport defect: JSON Content-Type was sent with an empty PUT body. Homebridge UI's Fastify JSON parser rejects an empty JSON body; send {}. The historic failure was not retained, so this remains a plausible live cause rather than a confirmed host diagnosis. Reference: homebridge/homebridge-config-ui-x src/modules/child-bridges/child-bridges.service.ts and fastify/fastify lib/content-type-parser.js. Preserve future failures as allowlisted codes only. Probe plugin-owned private storage before stopping the child bridge. No automatic hardware commands, PIN retries, state-file deletion or other-plugin source changes.
+
+Validation: focused host/client/transaction/recovery checks and desktop/mobile cancellation-then-new-setup coverage prepared. Complete-tree CI remains the release gate.
+
+
 ## 2026-10-08 — 0.4.31 recovery diagnostics
 
 Expose fixed, allowlisted recovery check reasons without changing recovery eligibility, replay behavior or durable transaction schema. A blocked review replaces the login form with the failed check. Pending Save opens recovery directly; Continue/Refresh status labels are distinct. Existing journals remain intact. All 21 focused recovery checks and 16 cross-repository checks passed locally. Full local tests were blocked by missing runtime dependencies and binary image assets in this text-only checkout; complete-tree CI is the release gate.

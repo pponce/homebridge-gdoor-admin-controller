@@ -153,3 +153,25 @@ test('configuration or gateway identity changes prevent offline PIN preparation'
   await assert.rejects(f.host.stop(lease), /homebridge_configuration_changed/); assert.deepEqual(f.calls, []);
   await assert.rejects(f.host.prepare({ ...binding, identity: 'FFEEDDCCBBAA9988' }), /homebridge_binding_changed/);
 });
+
+test('no-write restoration checks preserve the existing PIN and need no private backup', async t => {
+  const f = await fixture(t); await f.host.authenticate({ username: 'Owner', password: 'synthetic' });
+  const lease = { id: 'a'.repeat(32), binding, host: await f.host.prepare(binding) };
+  const tx = { write_attempted: false, intent: { expected: { ...f.expected, revision: 3, user_revision: 3 } } };
+  const before = await readFile(f.target);
+  assert.equal(await f.host.noWriteState(lease, tx), 'running');
+  await f.host.verifyNoWriteRunning(lease, tx); assert.deepEqual(f.calls, []);
+  await f.host.stop(lease);
+  assert.equal(await f.host.noWriteState(lease, tx), 'stopped');
+  await f.host.start(lease); await f.host.verifyNoWriteRunning(lease, tx);
+  assert.deepEqual(await readFile(f.target), before);
+  await assert.rejects(readFile(path.join(f.root, 'gdoorandbolt-coordinator', 'web-homebridge-private-backup.json')), { code: 'ENOENT' });
+  await assert.rejects(f.host.noWriteState(lease, { ...tx, write_attempted: true }), /homebridge_gateway_write_unverified/);
+  await assert.rejects(f.host.verifyNoWriteRunning(lease, { ...tx, write_attempted: true }), /homebridge_gateway_write_unverified/);
+});
+
+test('private storage failure is discovered before a service stop', async t => {
+  const f = await fixture(t); await f.host.authenticate({ username: 'Owner', password: 'synthetic' });
+  await chmod(path.join(f.root, 'gdoorandbolt-coordinator'), 0o755);
+  await assert.rejects(f.host.prepare(binding), /web_private_storage_invalid/); assert.deepEqual(f.calls, []);
+});

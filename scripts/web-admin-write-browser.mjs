@@ -110,11 +110,36 @@ try {
       await page.locator('[name="homebridge-username"]').fill('BridgeAdmin');
       await page.locator('[name="homebridge-password"]').fill('synthetic-bridge-password');
       await page.locator('[name="homebridge-restart-confirmed"]').check();
+      // A stopped bridge with no confirmed backup must have a usable cancel path.
+      f.state.failBackupOnce = true;
+      const writesBeforeCancel = f.writes.length;
+      await restart.click();
+      await page.getByText('Cancel the unfinished PIN change', { exact: true }).waitFor();
+      await page.locator('#hb-flow-close').click();
+      await page.getByRole('button', { name: 'Continue Homebridge update', exact: true }).click();
+      await page.locator('[name="homebridge-username"]').fill('BridgeAdmin');
+      await page.locator('[name="homebridge-password"]').fill('synthetic-bridge-password');
+      await page.getByRole('button', { name: 'Cancel PIN change and restore service', exact: true }).click();
+      await page.getByText('Update finished without applying the change', { exact: true }).waitFor();
+      await page.getByRole('button', { name: 'Done', exact: true }).click();
+      assert.equal(f.writes.length, writesBeforeCancel);
+      assert.equal(f.state.bridgeStopped, false);
+      await page.locator('#interrupted-change').waitFor({ state: 'hidden' });
+      // A fresh update is allowed after cancellation; no manual state reset.
+      await page.locator('#hb-use').check(); await page.locator('[data-hb-alarm="1"]').check();
+      await page.locator('#pin').fill('6789'); await page.locator('#pin-repeat').fill('6789');
+      await page.locator('#editor button.primary').click();
+      await page.getByRole('button', { name: 'Continue', exact: true }).click();
+      await page.locator('[name="homebridge-username"]').fill('BridgeAdmin');
+      await page.locator('[name="homebridge-password"]').fill('synthetic-bridge-password');
+      await page.locator('[name="homebridge-restart-confirmed"]').check();
+      const stopsBefore = f.maintenance.filter(value => value === 'stop').length;
+      const startsBefore = f.maintenance.filter(value => value === 'start').length;
       const pinWritesBefore = f.writes.filter(([, route]) => route === '/alarmsystems/users/' + 'a'.repeat(32)).length;
       await restart.click(); await page.getByRole('button', { name: 'Done', exact: true }).click();
       await page.getByText('Homebridge access updated.', { exact: true }).waitFor();
       assert.equal(f.writes.filter(([, route]) => route === '/alarmsystems/users/' + 'a'.repeat(32)).length, pinWritesBefore + 1);
-      assert.equal(f.maintenance.filter(value => value === 'stop').length, 1); assert.equal(f.maintenance.filter(value => value === 'start').length, 1);
+      assert.equal(f.maintenance.filter(value => value === 'stop').length, stopsBefore + 1); assert.equal(f.maintenance.filter(value => value === 'start').length, startsBefore + 1);
       assert.equal(await page.locator('#login').isVisible(), false); assert.equal(await page.locator('#users').isVisible(), true);
       assert.equal(await page.locator('[name="homebridge-password"]').count(), 0);
       // Isolated recovery dialog: successful auth plus blocked review must show
@@ -138,7 +163,7 @@ try {
       });
       await recoveryPage.locator('[name="homebridge-username"]').fill('BridgeAdmin');
       await recoveryPage.locator('[name="homebridge-password"]').fill('synthetic-password');
-      await recoveryPage.getByRole('button', { name: 'Continue', exact: true }).click();
+      await recoveryPage.getByRole('button', { name: 'Cancel PIN change and restore service', exact: true }).click();
       await recoveryPage.getByText('A recovery check needs attention', { exact: true }).waitFor();
       assert.match(await recoveryPage.locator('#hb-flow-content').textContent(), /homebridge_snapshot_unverified/);
       assert.equal(await recoveryPage.locator('input[type="password"]').count(), 0);

@@ -113,7 +113,7 @@ window.ConfiguratorHomebridgeFlow=deps=>{
     if(!evidence.ready){
       view('Update paused','A recovery check needs attention');
       text('p',login?'Homebridge sign-in succeeded. A recovery check is blocking completion; entering your password again will not resolve it.':'A recovery check is blocking completion.');
-      const labels={saved_operation:'Saved Homebridge operation',gateway_state:'deCONZ user and alarm state',child_bridge_state:'deCONZ child bridge and saved PIN',private_backup:'Private PIN backup',child_bridge_stopped:'Stopped deCONZ child bridge',maintenance:'Garage controller maintenance'};
+      const labels={saved_operation:'Saved Homebridge operation',gateway_state:'deCONZ user and alarm state',child_bridge_state:'deCONZ child bridge and saved PIN',private_backup:'Private PIN backup',child_bridge_stopped:'Stopped deCONZ child bridge',maintenance:'Garage controller maintenance',restore_service:'Restore deCONZ child bridge without changing the PIN'};
       const reasons={homebridge_snapshot_unverified:'The update stopped before its private PIN backup was confirmed.',homebridge_backup_changed:'The private backup does not match this update.',homebridge_cache_changed:'The saved Homebridge data differs from the expected backup.',homebridge_gateway_revision_changed:'The deCONZ settings differ from the saved update.',homebridge_login_required:'Homebridge authorization is no longer available.'};
       for(const item of evidence.diagnostics||[])text('p',(labels[item.check]||'Recovery verification')+': '+(reasons[item.reason]||'This check could not be verified.')+' ['+item.reason+']');
       if(!evidence.diagnostics?.length)text('p','The saved PIN outcome could not be independently verified.');
@@ -166,15 +166,18 @@ window.ConfiguratorHomebridgeFlow=deps=>{
         active.validate=null;view('4 of 4 · Finish','Checking the saved update');text('p','Verifying the completed step and resuming when ready…');await advance();
       });requireChecks(items,next);return;
     }
-    view('Update needs attention','Continue the saved Homebridge update');
-    text('p',tx.verified?'The saved outcome is verified. Continue the remaining checks without repeating the PIN change.':'The outcome still needs verification. The controller may remain paused. The original PIN change will not be repeated.');
+    const notSent=tx.write_attempted===false;
+    view('Update needs attention',notSent?'Cancel the unfinished PIN change':'Continue the saved Homebridge update');
+    if(tx.failure_reason)text('p','The update stopped at: '+tx.failure_reason+'.');
+    if(notSent)text('p','The saved record confirms that no PIN write was attempted. Cancel this change to restore the deCONZ child bridge if it is stopped and finish the required checks.');
+    else text('p',tx.verified?'The saved outcome is verified. Continue the remaining checks without repeating the PIN change.':'The outcome still needs verification. The controller may remain paused. The original PIN change will not be repeated.');
     if(matching.some(row=>row.status.flow.blocked))text('p','An integration requires local review. Its existing hold remains in place.');
     if(tx.write_attempted&&!tx.verified){
       const label=text('label','PIN submitted for this update');label.className='gp-field';const input=document.createElement('input');input.type='password';input.inputMode='numeric';input.autocomplete='off';input.maxLength=16;label.append(input);
       button('Verify submitted PIN',async()=>{let pin=input.value;input.value='';try{await deps.api('recovery/credential',{transaction_id:tx.id,pin},active.context);}finally{pin='';}await refresh();},false);
     }
     const login=deps.nativeHomebridge?.()===true?homebridgeLogin():null;
-    button('Continue',()=>advance(login));
+    button(notSent?'Cancel PIN change and restore service':'Continue',()=>advance(login));
     if(previousError&&previousError.code!=='transaction_recovery_required')$('hb-flow-message').textContent=previousError.message;
   }
   function open(options){

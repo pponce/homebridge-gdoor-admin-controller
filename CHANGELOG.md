@@ -2,6 +2,20 @@
 
 User-facing changes for `homebridge-gdoor-admin-controller`. GitHub releases use matching `vVERSION` tags. Development history and validation receipts are in [developer documentation](docs/developer/README.md).
 
+## 0.4.32 — 2026-10-08
+
+### Fixed
+
+- Homebridge start/stop requests now send a valid empty JSON object. An empty body with a JSON content type can be rejected by Homebridge UI before the service command runs.
+- An interrupted PIN update that stopped before writing can now be cancelled with **Cancel PIN change and restore service**. The existing PIN stores and user association stay untouched; a stopped deCONZ child bridge is started and checked before the controller is released.
+- Recovery no longer requires a nonexistent PIN backup when the durable record proves no PIN write was attempted. Uncertain or attempted writes still require outcome verification and are never replayed.
+- Keep the pending-update banner until integration completion succeeds. A failed completion remains recoverable.
+- Check private storage before stopping the child bridge and retain a fixed, non-secret failure reason for future interruptions.
+
+### Upgrading
+
+Keep any pending update intact. After installing, refresh Users, open **Continue Homebridge update**, authorize with your Homebridge administrator account, then choose **Cancel PIN change and restore service** when offered. When it finishes without applying the change, you can begin setup again. If a check still fails, keep the saved operation and use the displayed diagnostic; do not delete its files.
+
 ## 0.4.31 — 2026-10-08
 
 ### Fixed

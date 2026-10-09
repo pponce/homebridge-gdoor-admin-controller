@@ -7,6 +7,13 @@ import { WebGatewayRejected } from './web-admin-gateway.js';
 import { requireWeb, object, exact, integer } from './web-admin-common.js';
 import { WebAdminFiles, webDigest } from './web-admin-files.js';
 
+const failureReasons = new Set(['homebridge_ui_result_unknown', 'homebridge_ui_response_invalid', 'homebridge_restart_unverified',
+  'homebridge_process_unverified', 'homebridge_process_changed', 'homebridge_file_unavailable', 'homebridge_cache_schema_unsupported',
+  'homebridge_accessory_identity_changed', 'homebridge_backup_invalid', 'homebridge_configuration_changed', 'homebridge_login_required',
+  'web_private_storage_write_failed', 'web_private_storage_invalid', 'web_private_storage_too_large', 'homebridge_storage_review_required',
+  'homebridge_cache_changed', 'homebridge_saved_pin_unverified', 'homebridge_gateway_revision_changed', 'maintenance_devices_require_review',
+  'maintenance_step_failed']);
+const failureReason = error => failureReasons.has(error?.message) ? error.message : 'maintenance_step_failed';
 const gatewayId = value => typeof value === 'string' && /^[a-z][a-z0-9-]{0,31}$/.test(value);
 const stages = ['preparing', 'writing', 'verified', 'resuming', 'recovery_required', 'complete'];
 const operations = ['save_user', 'delete_user', 'rotate_pin', 'save_alarm', 'save_lockout', 'reset_lockout', 'keypad_send'];
@@ -63,7 +70,7 @@ export class WebAdminTransactions {
     const tx = await this.load(gateway); if (!tx) return { stage: 'none' };
     return { ...Object.fromEntries(['id', 'stage', 'operation', 'alarm', 'write_attempted', 'verified'].map(key => [key, tx[key]])),
       participants_available: Object.entries(tx.participants).every(([name, version]) => this.participants.get(name)?.api_version === version), automatic_retry: false,
-      homebridge: Object.hasOwn(tx.participants, 'homebridge'), outcome: !tx.write_attempted ? 'not_sent' : tx.definite_rejection ? 'rejected' : tx.verified ? tx.intent.outcome ?? 'applied' : 'unknown' };
+      homebridge: Object.hasOwn(tx.participants, 'homebridge'), failure_reason: failureReasons.has(tx.failure_reason) ? tx.failure_reason : null, outcome: !tx.write_attempted ? 'not_sent' : tx.definite_rejection ? 'rejected' : tx.verified ? tx.intent.outcome ?? 'applied' : 'unknown' };
   }
   async execute({ context, backup, snapshot, intent, validateAgain, write, verify, credential }) {
     webJournalWithoutSecrets(context); webJournalWithoutSecrets(intent); webJournalWithoutSecrets(snapshot);
@@ -99,7 +106,8 @@ export class WebAdminTransactions {
         tx.intent = await verify(result); webJournalWithoutSecrets(tx.intent);
         tx.verified = true; tx.stage = 'verified'; await this.save(tx); await this.finish(tx);
         return { saved: true, transaction_id: tx.id, verification: 'gateway_response_and_readback' };
-      } catch {
+      } catch (error) {
+        tx.failure_reason = failureReason(error);
         // Persistence failure is an additional in-memory hold. Never overwrite
         // that uncertainty by attempting another save or releasing participants.
         if (this.storageUncertain) throw new WebAdminError('transaction_storage_review_required');
@@ -112,11 +120,15 @@ export class WebAdminTransactions {
     for (const name of tx.paused) await this.participants.get(name).verify(structuredClone(tx));
     tx.stage = 'resuming'; await this.save(tx);
     for (const name of [...tx.paused].reverse()) await this.participants.get(name).resume(structuredClone(tx));
+    // Commit participant completion before clearing the transaction banner.
+    // A failed completion remains recoverable and each participant is idempotent.
+    for (const name of [...tx.paused].reverse()) await this.participants.get(name).complete?.(structuredClone(tx));
     tx.stage = 'complete'; await this.save(tx);
-    for (const name of tx.paused) await this.participants.get(name).complete?.(structuredClone(tx));
   }
   async canResolve(tx, inspect, diagnostics = []) {
-    for (const participant of this.required(tx)) {
+    this.required(tx);
+    for (const name of tx.paused) {
+      const participant = this.participants.get(name);
       if (participant.recovery_ready && await participant.recovery_ready(structuredClone(tx), diagnostics) !== true) {
         if (!diagnostics.length) diagnostics.push({ participant: 'integration', check: 'maintenance', reason: 'verification_failed' });
         return false;
@@ -148,7 +160,7 @@ export class WebAdminTransactions {
       requireWeb(tx && review && review.gateway === gateway && review.id === body.transaction_id && tx.id === body.transaction_id && tx.identity === identity && review.digest === webDigest(tx) && this.clock() < review.expires, 'recovery_review_expired');
       requireWeb(await this.canResolve(tx, inspect), 'recovery_evidence_changed'); tx.verified = true;
       try { await this.finish(tx); }
-      catch { if (!this.storageUncertain) { tx.stage = 'recovery_required'; await this.save(tx); } throw new WebAdminError(this.storageUncertain ? 'transaction_storage_review_required' : 'transaction_recovery_required'); }
+      catch (error) { if (!this.storageUncertain) { tx.failure_reason = failureReason(error); tx.stage = 'recovery_required'; await this.save(tx); } throw new WebAdminError(this.storageUncertain ? 'transaction_storage_review_required' : 'transaction_recovery_required'); }
       return { recovered: true, transaction_id: tx.id, gateway_write_replayed: false };
     });
   }
