@@ -2,6 +2,13 @@
 
 User-facing changes for `homebridge-gdoor-admin-controller`. GitHub releases use matching `vVERSION` tags. Development history and validation receipts are in [developer documentation](docs/developer/README.md).
 
+## 0.4.36 — 2026-10-09
+
+### Improved
+
+- Homebridge PIN synchronization accepts different package versions when the reviewed source fingerprints still match. Package identity, saved-data validation, private backup and restart verification remain required.
+- Clarify that the private Homebridge backup does not automatically roll back a deCONZ PIN change.
+
 ## 0.4.35 — 2026-10-09
 
 ### Fixed

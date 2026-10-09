@@ -1,5 +1,13 @@
 # Developer status and validation history
 
+## 2026-10-09 — Source-based Homebridge PIN compatibility
+
+Remove exact installed package-version equality as requested. Package names and every previously reviewed source fingerprint still must match. The manifest labels the originating releases as reviewed_version, informational provenance only. All cache schema/identity/mapping/PIN checks, stopped-process checks, backup, compare-and-replace and restart/recovery checks remain. New regression coverage accepts version-only changes while rejecting wrong package identity, modified source under either version, and missing source.
+
+The private backup retains before/after Homebridge accessory-file data in one overwritten file. It is not a deCONZ credential backup or an automatic cross-system rollback. Recovery verifies or completes the saved operation without replaying the gateway PIN write.
+
+Focused host tests pass locally; full CI is required before installation. No live host changes are part of this source update.
+
 ## 2026-10-09 — 0.4.35 post-restart device API readiness
 
 The owner reported a verified saved outcome with an unexpected error in Homebridge resume. Inspection found that child running status was followed by a single inventory GET; transport failures were collapsed into a generic diagnostic. This is a plausible startup race, not confirmed as the host incident root cause. Add a bounded read-only retry for inventory transport unavailability and HTTP 502/503/504. Re-read the cache port and child process on each attempt; reject changed processes, malformed replies or mapping mismatches immediately. Preserve all PIN, gateway, source and completion verification. Add fixed inventory errors and allowlist existing gateway transport diagnostics.

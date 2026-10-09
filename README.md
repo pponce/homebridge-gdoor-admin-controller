@@ -34,7 +34,7 @@ The full garage, keypad, and web-administration setup uses:
 
 The physical keypad is needed for physical PIN entry; it is not needed to operate a configured garage from Apple Home. A garage controller using other supported connections can run without the optional deCONZ administration features.
 
-**Homebridge alarm-PIN synchronization has additional requirements:** Linux, a local HTTP Homebridge UI, writable Homebridge storage, and the reviewed `homebridge-deconz` **1.3.5** / `homebridge-lib` **8.1.5** sources. Other versions are not automatically accepted for this operation. See [alarm-PIN setup and compatibility](docs/web-admin-alarm-pin.md).
+**Homebridge alarm-PIN synchronization has additional requirements:** Linux, a local HTTP Homebridge UI, writable Homebridge storage, and matching reviewed source fingerprints for `homebridge-deconz` and `homebridge-lib`. Different version numbers are accepted when those files still match; changed source files require compatibility review. See [alarm-PIN setup and compatibility](docs/web-admin-alarm-pin.md).
 
 ## Supported connections
 

@@ -42,7 +42,11 @@ This is a narrowly reviewed storage-format dependency inherited from the old
 alarm-PIN workflow, not a supported Homebridge PIN-setting API. It is not used
 for General connection or device discovery. Compatibility is limited to source
 fingerprints recorded in src/web-admin-homebridge-sources.json:
-homebridge-deconz 1.3.5 and homebridge-lib 8.1.5. Changed sources require review.
+The fingerprints were reviewed from homebridge-deconz 1.3.5 and homebridge-lib
+8.1.5. Those version numbers record provenance; exact installed-version equality
+is not required. Package names and all listed source fingerprints must match,
+and the relevant saved accessory-data structure and identities must validate.
+Changed source files still require review.
 No installed source code, pairing identity or Homebridge config is rewritten.
 
 ## Transaction sequence
@@ -113,4 +117,8 @@ The Homebridge-user checkbox requires both saved unrestricted grants and a ready
 
 From 0.4.28, a failed file check names the fixed configuration/package-relative file and reason in Settings and beneath the user checkbox. It does not reveal absolute host paths or file contents. Missing/unreadable files, unsupported links, unexpected owners, oversized files, and world-write access remain rejected.
 
-Reviewed plugin/library files accept both ordinary 644 permissions and 664 when the writable group is the Homebridge process's own primary group. The owner must still be root or the Homebridge service user, and versions/source fingerprints must match. This avoids requiring manual permission changes for a normal homebridge:homebridge installation. Homebridge configuration and private PIN-cache reads retain their stricter no-group-write policy; cache replacement still writes mode 600.
+Reviewed plugin/library files accept both ordinary 644 permissions and 664 when the writable group is the Homebridge process's own primary group. The owner must still be root or the Homebridge service user, and package names/source fingerprints must match. This avoids requiring manual permission changes for a normal homebridge:homebridge installation. Homebridge configuration and private PIN-cache reads retain their stricter no-group-write policy; cache replacement still writes mode 600.
+
+## Private backup and recovery
+
+The stopped child bridge's complete accessory-data file is saved privately, with before/after contents, in one `web-homebridge-private-backup.json` file. It remains after completion and the next prepared PIN update replaces it. This is not a backup of the deCONZ gateway database or its old PIN, and it does not provide an automatic rollback across both systems. Do not treat the backup as permission to bypass compatibility or verification checks. Interrupted operations use the saved recovery flow; it never automatically repeats the original gateway PIN write.
