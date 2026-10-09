@@ -4,6 +4,8 @@ Coordinate a **garage door opener and a separate motorized bolt** from Apple Hom
 
 An optional **web administration interface** brings deCONZ users, PINs, access schedules, keypad lockout protection, alarms, and activity history into one place. It runs inside the Homebridge plugin; there is no separate web service to install.
 
+[**Try the interactive demo →**](https://pponce.github.io/homebridge-gdoor-admin-controller/)
+
 > **Custom deCONZ is currently required for the keypad and user-management setup described here.** It needs the alarm-user features in [pponce's custom deCONZ REST plugin](https://github.com/pponce/deconz-rest-plugin/tree/alarm-users-v1). The upstream proposal, [deCONZ PR #8661](https://github.com/dresden-elektronik/deconz-rest-plugin/pull/8661), is still an open draft as of October 8, 2026. Acceptance is **TBD**. A standard deCONZ installation does not currently provide these features, and installing this Homebridge plugin does not install or upgrade deCONZ for you.
 
 ## What it does
