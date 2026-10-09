@@ -6,7 +6,7 @@ Remove exact installed package-version equality as requested. Package names and 
 
 The private backup retains before/after Homebridge accessory-file data in one overwritten file. It is not a deCONZ credential backup or an automatic cross-system rollback. Recovery verifies or completes the saved operation without replaying the gateway PIN write.
 
-Focused host tests pass locally; full CI is required before installation. No live host changes are part of this source update.
+All 52 focused host, client, maintenance and transaction tests pass locally. All five jobs pass in [CI run 37884218527](https://github.com/pponce/homebridge-gdoor-admin-controller/actions/runs/37884218527) for `4ca803a096dd26eb79b661b94b8d03cacfa304b9`: Node 22/24 regression and package checks, Homebridge 2.0/2.4 integration, and desktop/mobile configuration and production web-admin workflows. The 0.4.36 owner updater pins this verified source and verifies npm availability before stopping Homebridge. No npm publication, installation or live host changes are claimed.
 
 ## 2026-10-09 — 0.4.35 post-restart device API readiness
 
