@@ -2,6 +2,13 @@
 
 User-facing changes for `homebridge-gdoor-admin-controller`. GitHub releases use matching `vVERSION` tags. Development history and validation receipts are in [developer documentation](docs/developer/README.md).
 
+## 0.4.38 — 2026-10-09
+
+- Authorize PIN changes with the existing web-admin administrator session; request Homebridge login only when clearing logs, with an explicit explanation.
+- Verify availability through official discovery and live PIN API reads without requiring Homebridge UI process status.
+- Show safe preflight failure details and make clear when no PIN change started.
+- Hide the Homebridge selection checkbox for the assigned user while preserving PIN synchronization and blank-field behavior.
+
 ## 0.4.37 — 2026-10-09
 
 - Update Homebridge alarm PINs through the official Configuration API without restarting Homebridge or editing its accessory files. Let the plugin save on its normal schedule.
