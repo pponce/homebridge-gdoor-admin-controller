@@ -136,7 +136,16 @@ try {
       const stopsBefore = f.maintenance.filter(value => value === 'stop').length;
       const startsBefore = f.maintenance.filter(value => value === 'start').length;
       const pinWritesBefore = f.writes.filter(([, route]) => route === '/alarmsystems/users/' + 'a'.repeat(32)).length;
-      await restart.click(); await page.getByRole('button', { name: 'Done', exact: true }).click();
+      f.state.failRunningOnce = true;
+      await restart.click();
+      await page.getByText('Continue the saved Homebridge update', { exact: true }).waitFor();
+      assert.match(await page.locator('#hb-flow-content').textContent(), /Failed step: Homebridge deCONZ — Restore service and device readiness/);
+      assert.match(await page.locator('#hb-flow-content').textContent(), /maintenance_step_failed \(Internal type error\)/);
+      assert.equal((await page.locator('#hb-flow-content').textContent()).includes('synthetic private error'), false);
+      await page.locator('[name="homebridge-username"]').fill('BridgeAdmin');
+      await page.locator('[name="homebridge-password"]').fill('synthetic-bridge-password');
+      await page.getByRole('button', { name: 'Continue', exact: true }).click();
+      await page.getByRole('button', { name: 'Done', exact: true }).click();
       await page.getByText('Homebridge access updated.', { exact: true }).waitFor();
       assert.equal(f.writes.filter(([, route]) => route === '/alarmsystems/users/' + 'a'.repeat(32)).length, pinWritesBefore + 1);
       assert.equal(f.maintenance.filter(value => value === 'stop').length, stopsBefore + 1); assert.equal(f.maintenance.filter(value => value === 'start').length, startsBefore + 1);

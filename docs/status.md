@@ -1,5 +1,12 @@
 # Developer status and validation history
 
+## 2026-10-08 — 0.4.33 maintenance failure attribution
+
+The owner successfully recovered and completed the PIN change after a verified-outcome maintenance_step_failed. The original precise failure cannot be reconstructed from that generic record. Add allowlisted participant/phase/reason/category diagnostics at awaited transaction boundaries, retained in the durable transaction and rendered by the Homebridge flow. Source location is limited to fixed first-party filenames and numeric line/column; never return raw stack traces or host paths. Unexpected exception messages and filesystem paths remain excluded. Leave authentication lifetime, restart semantics, verification gates and PIN writes unchanged so the next owner test isolates the failure.
+
+Focused persistence/privacy tests pass. Browser coverage injects a post-restart TypeError, verifies visible phase/category without private error text, then completes recovery without repeating the PIN write. Complete-tree CI is required before install.
+
+
 ## 2026-10-08 — 0.4.32 early-interruption recovery
 
 Handle an existing stop_requested lease with write_attempted=false without constructing a PIN backup or writing either PIN store. After explicit Homebridge authorization, inspect the gateway revision, child identity, mapped cache and settled process state; start only a stopped child, then verify the running service and mapped alarms. Journal the restore intent before starting. A lost start reply is resolved by readback, never an automatic resend. A subsequent explicit recovery can retry only after fresh stopped-state evidence. Preserve the prior binding. Missing/unconfirmed/attempted gateway writes cannot enter this branch. Participant completion now precedes the transaction's complete marker, preventing a hidden hold after a late completion failure. Readiness checks only involve participants actually reached by pause.

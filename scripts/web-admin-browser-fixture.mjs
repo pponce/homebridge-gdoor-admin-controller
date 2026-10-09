@@ -84,7 +84,7 @@ export async function webBrowserFixture() {
     async verifyNoWriteRunning(lease, tx) { assert.equal(tx.write_attempted, false); assert.equal(state.bridgeStopped, false); },
     async commitStopped(lease, { applied }) { assert.equal(state.bridgeStopped, true); assert.equal(applied, true); maintenance.push('pin saved'); },
     async start() { state.bridgeStopped = false; maintenance.push('start'); },
-    async verifyRunning() { assert.equal(state.bridgeStopped, false); maintenance.push('verified'); },
+    async verifyRunning() { if (state.failRunningOnce) { state.failRunningOnce = false; throw new TypeError('synthetic private error'); } assert.equal(state.bridgeStopped, false); maintenance.push('verified'); },
   };
   const manager = new WebAdminManager({ storagePath, runtime, credentials: async () => ({ synthetic: 'synthetic_key' }),
     build: options => createWebAdminService({ ...options, homebridgeHost }) });

@@ -168,7 +168,14 @@ window.ConfiguratorHomebridgeFlow=deps=>{
     }
     const notSent=tx.write_attempted===false;
     view('Update needs attention',notSent?'Cancel the unfinished PIN change':'Continue the saved Homebridge update');
-    if(tx.failure_reason)text('p','The update stopped at: '+tx.failure_reason+'.');
+    if(tx.failure){
+      const participants={homebridge:'Homebridge deCONZ',coordinator:'Garage controller',controller:'Garage controller',gateway:'deCONZ gateway',backup:'Policy backup',integration:'Connected integration'};
+      const steps={pause:'Pause',backup:'Save backup',revalidate:'Recheck settings',credential_evidence:'Prepare PIN verification',gateway_write:'Send gateway change',gateway_readback:'Verify gateway result',verify:'Verify saved state',resume:'Restore service and device readiness',complete:'Finish maintenance'};
+      const kinds={coded_error:'Reported check failure',permission_denied:'File access denied',missing_file:'Required file missing',io_error:'Storage I/O failure',type_error:'Internal type error',unexpected_error:'Unexpected internal error'};
+      text('p','Failed step: '+(participants[tx.failure.participant]||'Maintenance')+' — '+(steps[tx.failure.step]||'Check')+'.');
+      text('p','Reason: '+tx.failure.reason+' ('+(kinds[tx.failure.kind]||'Unknown error')+').');
+      if(tx.failure.location)text('p','Diagnostic location: '+tx.failure.location.file+':'+tx.failure.location.line+':'+tx.failure.location.column+'.');
+    }else if(tx.failure_reason)text('p','The update stopped at: '+tx.failure_reason+'.');
     if(notSent)text('p','The saved record confirms that no PIN write was attempted. Cancel this change to restore the deCONZ child bridge if it is stopped and finish the required checks.');
     else text('p',tx.verified?'The saved outcome is verified. Continue the remaining checks without repeating the PIN change.':'The outcome still needs verification. The controller may remain paused. The original PIN change will not be repeated.');
     if(matching.some(row=>row.status.flow.blocked))text('p','An integration requires local review. Its existing hold remains in place.');

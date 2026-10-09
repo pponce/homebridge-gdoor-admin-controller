@@ -2,6 +2,16 @@
 
 User-facing changes for `homebridge-gdoor-admin-controller`. GitHub releases use matching `vVERSION` tags. Development history and validation receipts are in [developer documentation](docs/developer/README.md).
 
+## 0.4.33 — 2026-10-08
+
+### Improved
+
+- Interrupted updates now identify the component and phase that failed: pause, backup, gateway write/readback, verification, service restoration or completion.
+- Report additional fixed device/maintenance error codes and distinguish internal type errors from file-access and storage failures.
+- Include a restricted source filename and line when available. Raw exceptions, stack traces, host paths, PINs and credentials are not exposed.
+
+This is a diagnostic update. PIN synchronization, recovery, restart and authentication behavior are unchanged. It does not reconstruct details missing from older failure records.
+
 ## 0.4.32 — 2026-10-08
 
 ### Fixed
