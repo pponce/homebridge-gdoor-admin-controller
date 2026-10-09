@@ -2,6 +2,10 @@
 
 User-facing changes for `homebridge-gdoor-admin-controller`. GitHub releases use matching `vVERSION` tags. Development history and validation receipts are in [developer documentation](docs/developer/README.md).
 
+## 0.4.39 — 2026-10-09
+
+- Remove the extra PIN confirmation checkbox. Clicking Update PIN confirms the requested change.
+
 ## 0.4.38 — 2026-10-09
 
 - Authorize PIN changes with the existing web-admin administrator session; request Homebridge login only when clearing logs, with an explicit explanation.

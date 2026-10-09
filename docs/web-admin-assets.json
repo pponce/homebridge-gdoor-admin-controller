@@ -46,7 +46,7 @@
       "path": "web-admin/public/homebridge-flow.js",
       "gitBlob": "9fcae68c8689ddd96a1a9edf1465c9d6cab567ff",
       "sha256": "b20ad60e19e7a7828991393d987ad1b1b5f77acdb53f844cb188f19c63e2d6fb",
-      "adaptedSha256": "84f4e6ea0598eaadb5a9505f33eb388e18ed8b72d4a4618e2de1559e98abd494",
+      "adaptedSha256": "27a46229c27bb0eea82227ce550d08602fc799c3a8fd76346c135648935f9ca6",
       "adaptation": "Explicit child-bridge restart confirmation, temporary Homebridge UI authentication and recovery authorization. The current page and web session remain open. Explain Homebridge readiness failures and retain the blocked user-level PIN selector. Display an allowlisted file label and failure reason for Homebridge readiness without revealing host paths or file contents. Official API confirmation without restart, optional post-success log clearing and separate cleanup outcome."
     },
     {
