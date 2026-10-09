@@ -2,6 +2,13 @@
 
 User-facing changes for `homebridge-gdoor-admin-controller`. GitHub releases use matching `vVERSION` tags. Development history and validation receipts are in [developer documentation](docs/developer/README.md).
 
+## 0.4.34 — 2026-10-09
+
+### Improved
+
+- Move “Use for homebridge” below the gateway enabled checkbox.
+- Show PIN guidance between the user name and PIN fields, updating immediately with the Homebridge checkbox. Show the current Homebridge user only in the selected guidance.
+
 ## 0.4.33 — 2026-10-08
 
 ### Improved

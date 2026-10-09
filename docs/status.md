@@ -1,5 +1,9 @@
 # Developer status and validation history
 
+## 2026-10-09 — 0.4.34 user editor layout
+
+Move the Homebridge checkbox beneath gateway enabled and make PIN guidance conditional above the PIN fields. Preserve eligibility, binding and maintenance behavior. Existing Chromium/WebKit write-flow coverage now checks placement and both guidance states. JavaScript syntax and generated demo consistency checked locally; complete-tree CI validates browser flows before installation. Includes 0.4.33 maintenance diagnostics for the next owner test.
+
 ## 2026-10-08 — 0.4.33 maintenance failure attribution
 
 The owner successfully recovered and completed the PIN change after a verified-outcome maintenance_step_failed. The original precise failure cannot be reconstructed from that generic record. Add allowlisted participant/phase/reason/category diagnostics at awaited transaction boundaries, retained in the durable transaction and rendered by the Homebridge flow. Source location is limited to fixed first-party filenames and numeric line/column; never return raw stack traces or host paths. Unexpected exception messages and filesystem paths remain excluded. Leave authentication lifetime, restart semantics, verification gates and PIN writes unchanged so the next owner test isolates the failure.

@@ -78,6 +78,13 @@ try {
       // substituting only the host service port. No service or hardware exists.
       f.state.homebridgeAvailable = true; await navigate('users');
       await page.locator('#user-list [data-id="' + 'a'.repeat(32) + '"]').click();
+      assert.equal(await page.locator('#pin-guidance').textContent(), 'For user edits, leave both fields blank to keep the current PIN.');
+      assert.equal(await page.locator('#hb-use').evaluate(el => el.closest('.gp-identity-options').querySelector('label:first-child input').id), 'enabled');
+      assert.equal(await page.locator('#pin-guidance').evaluate(el => Boolean(el.compareDocumentPosition(document.querySelector('#pin')) & Node.DOCUMENT_POSITION_FOLLOWING)), true);
+      await page.getByLabel('Use for homebridge', { exact: true }).check();
+      assert.match(await page.locator('#pin-guidance').textContent(), /^Enter in pin to use for homebridge and this user\./);
+      await page.locator('#hb-use').uncheck();
+      assert.equal(await page.locator('#pin-guidance').textContent(), 'For user edits, leave both fields blank to keep the current PIN.');
       await page.locator('#hb-use').check(); await page.locator('[data-hb-alarm="1"]').check();
       await page.locator('#pin').fill('6789'); await page.locator('#pin-repeat').fill('6789'); await page.locator('#editor button.primary').click();
       await page.getByRole('button', { name: 'Continue', exact: true }).click();

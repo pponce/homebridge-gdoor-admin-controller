@@ -26,7 +26,7 @@
       "path": "web-admin/public/app.js",
       "gitBlob": "3de32986d0b5d0b68adf7baacb000441c21b794b",
       "sha256": "80be3155ddf2900c2e8eebc54936040bbca513223e4588f21903ba487d0a580a",
-      "adaptedSha256": "f1b7c81ce79e9f0528656ae88fc64d59a741b6f4e351e0753d1e0eeef17880f2",
+      "adaptedSha256": "defe91e6fb15b36ae277533db295a0d4b0d66d229a725c6acd1f3b4619e6a774",
       "adaptation": "Add the authorized Controller timing editor with admin-only navigation, demo isolation, and live save support; retain original gateway and account workflows. Explain Homebridge readiness failures and retain the blocked user-level PIN selector. Explain that Homebridge user eligibility uses saved grants and access edits must be saved with blank PIN fields first. Display an allowlisted file label and failure reason for Homebridge readiness without revealing host paths or file contents."
     },
     {
@@ -82,7 +82,7 @@
       "path": "web-admin/public/style.css",
       "gitBlob": "a989313e78d1454a31c6a9b7327647066e510942",
       "sha256": "38bee5eb6eaa4bc8a7344fee7fbb6c790498ca46db3553cc3dc8ea76b10d93e8",
-      "adaptedSha256": "00797669103c365f5fe73babed02292de19294bed01a49379ebe7659404eca4f",
+      "adaptedSha256": "2e86000e9701d30c4965c6c05ce2065f66f7290a8f9ec5a4471b01fb8762a109",
       "adaptation": "Separate the signed-in account password section from web account management and identify the current user. Keep the Controller garage selector compact and responsive."
     }
   ],
