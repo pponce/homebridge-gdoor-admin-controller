@@ -2,6 +2,14 @@
 
 User-facing changes for `homebridge-gdoor-admin-controller`. GitHub releases use matching `vVERSION` tags. Development history and validation receipts are in [developer documentation](docs/developer/README.md).
 
+## 0.4.35 — 2026-10-09
+
+### Fixed
+
+- After a Homebridge restart, allow up to 30 seconds for the deCONZ device API to become reachable using read-only inventory checks. Never repeat the PIN write or restart command.
+- Report device API unavailability, invalid responses and readiness timeouts explicitly instead of a generic internal error. Identity, mapping and PIN verification remain required.
+- Includes the 0.4.34 user editor layout and conditional PIN guidance.
+
 ## 0.4.34 — 2026-10-09
 
 ### Improved

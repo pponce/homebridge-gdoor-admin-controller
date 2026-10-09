@@ -174,6 +174,7 @@ window.ConfiguratorHomebridgeFlow=deps=>{
       const kinds={coded_error:'Reported check failure',permission_denied:'File access denied',missing_file:'Required file missing',io_error:'Storage I/O failure',type_error:'Internal type error',unexpected_error:'Unexpected internal error'};
       text('p','Failed step: '+(participants[tx.failure.participant]||'Maintenance')+' — '+(steps[tx.failure.step]||'Check')+'.');
       text('p','Reason: '+tx.failure.reason+' ('+(kinds[tx.failure.kind]||'Unknown error')+').');
+      if(tx.failure.reason==='homebridge_alarm_api_not_ready')text('p','Homebridge restarted, but its deCONZ device API did not become available within 30 seconds. Continue the saved update to check it again.');
       if(tx.failure.location)text('p','Diagnostic location: '+tx.failure.location.file+':'+tx.failure.location.line+':'+tx.failure.location.column+'.');
     }else if(tx.failure_reason)text('p','The update stopped at: '+tx.failure_reason+'.');
     if(notSent)text('p','The saved record confirms that no PIN write was attempted. Cancel this change to restore the deCONZ child bridge if it is stopped and finish the required checks.');

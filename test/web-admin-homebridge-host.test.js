@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { WebAdminError } from '../src/web-admin-auth.js';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, readFile, rm, stat, symlink, chmod } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -174,4 +175,58 @@ test('private storage failure is discovered before a service stop', async t => {
   const f = await fixture(t); await f.host.authenticate({ username: 'Owner', password: 'synthetic' });
   await chmod(path.join(f.root, 'gdoorandbolt-coordinator'), 0o755);
   await assert.rejects(f.host.prepare(binding), /web_private_storage_invalid/); assert.deepEqual(f.calls, []);
+});
+
+async function restartedFixture(t) {
+  const f = await fixture(t); await f.host.authenticate({ username: 'Owner', password: 'synthetic' });
+  f.lease = { id: 'b'.repeat(32), binding, host: await f.host.prepare(binding) };
+  await f.host.stop(f.lease); await f.host.snapshotStopped(f.lease, '3333');
+  await f.host.commitStopped(f.lease, { applied: true }); await f.host.start(f.lease);
+  f.tx = { write_attempted: true, definite_rejection: false, intent: { expected: f.expected } };
+  let time = 0; f.host.clock = () => time; f.host.sleep = async ms => { time += ms; };
+  return f;
+}
+
+test('restart waits for device API transport without repeating stop, start or cache writes', async t => {
+  const f = await restartedFixture(t), exchange = f.host.exchange, before = await readFile(f.target);
+  let reads = 0;
+  f.host.exchange = async request => {
+    assert.equal(request.method, 'GET'); assert.ok(request.timeoutMs > 0 && request.timeoutMs <= 8000);
+    if (++reads <= 2) throw new WebAdminError('gateway_result_unknown_no_retry');
+    return exchange(request);
+  };
+  await f.host.verifyRunning(f.lease, f.tx);
+  assert.equal(reads, 3); assert.deepEqual(f.calls, ['stop', 'start']);
+  assert.deepEqual(await readFile(f.target), before);
+});
+
+test('device API deadline is bounded and a later read-only recovery succeeds', async t => {
+  const f = await restartedFixture(t), exchange = f.host.exchange;
+  let reads = 0;
+  f.host.exchange = async () => { reads++; return [503, {}]; };
+  await assert.rejects(f.host.verifyRunning(f.lease, f.tx), /homebridge_alarm_api_not_ready/);
+  assert.equal(f.host.clock(), 30000); assert.equal(reads, 60);
+  f.host.exchange = exchange; await f.host.verifyRunning(f.lease, f.tx);
+  assert.deepEqual(f.calls, ['stop', 'start']);
+});
+
+test('readiness polling does not retry malformed replies, changed mapping or unknown exceptions', async t => {
+  const f = await restartedFixture(t);
+  for (const [reply, reason] of [
+    [() => { throw new WebAdminError('gateway_response_invalid'); }, 'homebridge_alarm_api_response_invalid'],
+    [() => [200, {}], 'homebridge_alarm_mapping_changed'],
+    [() => { throw Error('synthetic unknown error'); }, 'synthetic unknown error'],
+  ]) {
+    let reads = 0; f.host.exchange = async () => { reads++; return reply(); };
+    await assert.rejects(f.host.verifyRunning(f.lease, f.tx), new RegExp(reason)); assert.equal(reads, 1);
+  }
+  assert.deepEqual(f.calls, ['stop', 'start']);
+});
+
+test('readiness polling stops when the child process changes', async t => {
+  const f = await restartedFixture(t); let reads = 0;
+  f.host.exchange = async () => { reads++; throw new WebAdminError('gateway_result_unknown_no_retry'); };
+  f.host.sleep = async () => { f.host.client.status = async () => ({ pid: 9999, status: 'ok', manuallyStopped: false }); };
+  await assert.rejects(f.host.verifyRunning(f.lease, f.tx), /homebridge_process_changed/);
+  assert.equal(reads, 1); assert.deepEqual(f.calls, ['stop', 'start']);
 });

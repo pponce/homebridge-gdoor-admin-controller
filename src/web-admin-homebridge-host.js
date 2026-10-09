@@ -4,6 +4,7 @@
 import { constants } from 'node:fs';
 import { lstat, open, readFile, realpath, rename, unlink } from 'node:fs/promises';
 import path from 'node:path';
+import { performance } from 'node:perf_hooks';
 import { createRequire } from 'node:module';
 import { createHash, randomBytes } from 'node:crypto';
 import { isDeepStrictEqual as same } from 'node:util';
@@ -123,8 +124,9 @@ export class WebHomebridgeHost {
   constructor({ storagePath, configPath = path.join(storagePath, 'config.json'), registrations, coordinatorBridge,
     clientFactory = options => new WebHomebridgeClient(options), exchange = webGatewayExchange,
     gatewayFactory = row => new WebAdminGateway(row), stamp = processStamp,
+    clock = () => performance.now(), sleep = ms => new Promise(resolve => setTimeout(resolve, ms)),
     pluginRoot = () => path.dirname(require.resolve('homebridge-deconz/package.json')) }) {
-    Object.assign(this, { storagePath, configPath, coordinatorBridge, clientFactory, exchange, gatewayFactory, stamp, pluginRoot });
+    Object.assign(this, { storagePath, configPath, coordinatorBridge, clientFactory, exchange, gatewayFactory, stamp, pluginRoot, clock, sleep });
     this.registrations = new Map(registrations.map(row => [row.id, row])); this.files = new WebAdminFiles(storagePath); this.client = null;
   }
   async configuration() {
@@ -186,9 +188,38 @@ export class WebHomebridgeHost {
     requireWeb(found.length === 1 && integer(found[0].context.uiPort, 1024, 65535), 'homebridge_gateway_identity_changed');
     return found[0].context.uiPort;
   }
-  async inventory(port, identity) {
-    const [status, value] = await this.exchange({ url: 'http://127.0.0.1:' + port + '/gateways/' + identity + '/accessories', method: 'GET' });
+  async inventory(port, identity, timeoutMs = 8000) {
+    let result;
+    try { result = await this.exchange({ timeoutMs, url: 'http://127.0.0.1:' + port + '/gateways/' + identity + '/accessories', method: 'GET' }); }
+    catch (error) {
+      if (error instanceof WebAdminError && error.message === 'gateway_result_unknown_no_retry') throw new WebAdminError('homebridge_alarm_api_unavailable');
+      if (error instanceof WebAdminError && error.message === 'gateway_response_invalid') throw new WebAdminError('homebridge_alarm_api_response_invalid');
+      throw error;
+    }
+    const [status, value] = result;
+    requireWeb(![502, 503, 504].includes(status), 'homebridge_alarm_api_unavailable');
     requireWeb(status === 200 && object(value), 'homebridge_alarm_inventory_unavailable'); return value;
+  }
+  // Poll only the restarted child's read-only inventory transport. Identity,
+  // mapping, malformed replies and PIN mismatches still fail immediately.
+  async runningInventory(config, lease, state) {
+    const deadline = this.clock() + 30000;
+    while (true) {
+      requireWeb(this.clock() < deadline, 'homebridge_alarm_api_not_ready');
+      const current = await this.client.status();
+      requireWeb(current.status === 'ok' && !current.manuallyStopped && current.pid === state.pid,
+        'homebridge_process_changed');
+      const rows = json(await readHomebridgeFile(config.cache)), port = this.gatewayPort(rows, lease.binding.identity);
+      try {
+        const inventory = await this.inventory(port, lease.binding.identity, Math.max(1, Math.min(8000, Math.ceil(deadline - this.clock()))));
+        requireWeb(same(this.mapping(lease.binding, rows, inventory), lease.host.mapping), 'homebridge_alarm_mapping_changed');
+        return rows;
+      } catch (error) {
+        if (!(error instanceof WebAdminError) || error.message !== 'homebridge_alarm_api_unavailable') throw error;
+        requireWeb(this.clock() < deadline, 'homebridge_alarm_api_not_ready');
+        await this.sleep(Math.min(500, deadline - this.clock()));
+      }
+    }
   }
   mapping(binding, rows, inventory) {
     const mapping = {};
@@ -274,8 +305,7 @@ export class WebHomebridgeHost {
     const state = await this.client.waitFor(async row => row.status === 'ok' && !row.manuallyStopped &&
       row.pid !== process.pid && await this.stamp(row.pid) !== null);
     const stamp = await this.stamp(state.pid);
-    const rows = json(await readHomebridgeFile(config.cache)), port = this.gatewayPort(rows, lease.binding.identity);
-    requireWeb(same(this.mapping(lease.binding, rows, await this.inventory(port, lease.binding.identity)), lease.host.mapping), 'homebridge_alarm_mapping_changed');
+    const rows = await this.runningInventory(config, lease, state);
     await this.verifyGateway(lease, tx);
     const after = await this.client.status();
     requireWeb(after.status === 'ok' && !after.manuallyStopped && after.pid === state.pid && await this.stamp(after.pid) === stamp, 'homebridge_process_changed');
@@ -285,8 +315,7 @@ export class WebHomebridgeHost {
     const config = await this.current(lease);
     const state = await this.client.waitFor(async row => row.status === 'ok' && !row.manuallyStopped &&
       row.pid !== lease.host.pid && await this.stamp(row.pid) !== null);
-    const rows = json(await readHomebridgeFile(config.cache)), port = this.gatewayPort(rows, lease.binding.identity);
-    requireWeb(same(this.mapping(lease.binding, rows, await this.inventory(port, lease.binding.identity)), lease.host.mapping), 'homebridge_alarm_mapping_changed');
+    const rows = await this.runningInventory(config, lease, state);
     const value = await this.backup(lease), expected = json(Buffer.from(tx.write_attempted && !tx.definite_rejection ? value.after : value.before, 'base64'));
     for (const accessory of Object.values(lease.host.mapping)) {
       requireWeb(homebridgeAlarmContext(rows, lease.binding.identity, accessory).pin === homebridgeAlarmContext(expected, lease.binding.identity, accessory).pin, 'homebridge_saved_pin_unverified');

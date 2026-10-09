@@ -19,6 +19,8 @@ const failureReasons = new Set(['homebridge_ui_result_unknown', 'homebridge_ui_r
   'motor_not_idle', 'relay_not_idle', 'homebridge_cache_owner_unavailable', 'homebridge_file_permissions_invalid',
   'homebridge_cache_write_unverified', 'homebridge_alarm_inventory_unavailable', 'homebridge_alarm_mapping_changed',
   'homebridge_gateway_identity_changed', 'homebridge_user_must_remain_unrestricted', 'private_storage_write_failed',
+  'homebridge_alarm_api_unavailable', 'homebridge_alarm_api_not_ready', 'homebridge_alarm_api_response_invalid',
+  'gateway_result_unknown_no_retry', 'gateway_response_invalid', 'gateway_identity_changed',
   'maintenance_step_failed']);
 const failureReason = error => failureReasons.has(error?.message) ? error.message : 'maintenance_step_failed';
 const failureSteps = new Set(['pause', 'backup', 'revalidate', 'credential_evidence', 'gateway_write', 'gateway_readback', 'verify', 'resume', 'complete']);

@@ -1,5 +1,11 @@
 # Developer status and validation history
 
+## 2026-10-09 — 0.4.35 post-restart device API readiness
+
+The owner reported a verified saved outcome with an unexpected error in Homebridge resume. Inspection found that child running status was followed by a single inventory GET; transport failures were collapsed into a generic diagnostic. This is a plausible startup race, not confirmed as the host incident root cause. Add a bounded read-only retry for inventory transport unavailability and HTTP 502/503/504. Re-read the cache port and child process on each attempt; reject changed processes, malformed replies or mapping mismatches immediately. Preserve all PIN, gateway, source and completion verification. Add fixed inventory errors and allowlist existing gateway transport diagnostics.
+
+All 44 focused host, maintenance and transaction tests pass locally, including delayed availability, deadline, subsequent recovery, unchanged cache and single stop/start, malformed responses and changed process. Full release CI remains the install gate.
+
 ## 2026-10-09 — 0.4.34 user editor layout
 
 Move the Homebridge checkbox beneath gateway enabled and make PIN guidance conditional above the PIN fields. Preserve eligibility, binding and maintenance behavior. Existing Chromium/WebKit write-flow coverage now checks placement and both guidance states. JavaScript syntax and generated demo consistency checked locally; complete-tree CI validates browser flows before installation. Includes 0.4.33 maintenance diagnostics for the next owner test.
