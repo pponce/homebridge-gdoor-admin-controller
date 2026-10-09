@@ -6,7 +6,7 @@ New updates use the maintainer's Configuration API and installed ui discovery co
 
 The review window offers an unchecked option to clear the entire current Homebridge log after all transaction participants complete. Use the administrator log/truncate API with a JSON body; record deletion intent once and keep failures separate from PIN completion. Never automatically repeat deletion or uncertain PIN writes. Archived/downloaded/externally collected logs are unaffected.
 
-Focused synthetic checks cover multiple alarm updates, no service requests/cache files/library fingerprints, lost replies, pre-write cancellation, mapping mismatch, recovery and optional cleanup failure. Full CI and browser results will be recorded before owner installation. No npm publication, host installation or hardware acceptance is claimed.
+All 66 focused checks pass locally. All five jobs pass in [CI run 37886323001](https://github.com/pponce/homebridge-gdoor-admin-controller/actions/runs/37886323001) on `8817ba15b6fa7eceeed03e74d682224ef0022e67`: full Node 22/24 regression and exact package checks, actual Homebridge 2.0/2.4 integration, custom UI IPC and Chromium desktop/WebKit mobile configuration and production admin workflows. Browser coverage verifies unchecked log opt-in, cancellation before a PIN write, saved-update recovery without service stop/start or repeated gateway write, and cleanup failure displayed after completed PIN success. The first run caught a missing release-note date; the date and changelog CI trigger were corrected before this passing run. The 0.4.37 updater pins this tested source. No npm publication, host installation or hardware acceptance is claimed.
 
 
 ## 2026-10-09 — Source-based Homebridge PIN compatibility
