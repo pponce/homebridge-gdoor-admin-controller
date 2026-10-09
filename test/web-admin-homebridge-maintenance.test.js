@@ -95,3 +95,24 @@ test('changing a Homebridge binding requires unrestricted grants and cannot sile
   await assert.rejects(f.integration.protect('test', 1, { operation: 'delete_user', uid, deleting: true }, {}, snapshot), /homebridge_user_must_remain_unrestricted/);
   await assert.rejects(f.integration.protect('test', 1, { operation: 'save_user', uid }, { ...user, enabled: false }, snapshot), /homebridge_user_must_remain_unrestricted/);
 });
+
+test('blocked recovery identifies an unconfirmed backup without retrying writes or service actions', async () => {
+  const f = fixture(); f.host.snapshotStopped = async () => { throw Error('private payload must not escape'); };
+  await assert.rejects(f.run(), /transaction_recovery_required/);
+  const before = [...f.events];
+  const review = await f.tx.review('test', gid, async () => true);
+  assert.equal(review.ready, false);
+  assert.deepEqual(review.diagnostics, [{ participant: 'homebridge', check: 'private_backup', reason: 'homebridge_snapshot_unverified' }]);
+  assert.equal(f.writes(), 0);
+  assert.deepEqual(f.events, [...before, 'check gateway']);
+  assert.equal(f.record().stage, 'recovery_required');
+});
+
+test('unknown diagnostic errors cannot expose credentials or paths', async () => {
+  const f = fixture(); f.host.snapshotStopped = async () => { throw Error('backup interrupted'); };
+  await assert.rejects(f.run(), /transaction_recovery_required/);
+  f.host.verifyGateway = async () => { throw Error('/private/path secret=2468'); };
+  const review = await f.tx.review('test', gid, async () => true);
+  assert.deepEqual(review.diagnostics, [{ participant: 'homebridge', check: 'gateway_state', reason: 'verification_failed' }]);
+  assert.equal(JSON.stringify(review).includes('2468'), false);
+});

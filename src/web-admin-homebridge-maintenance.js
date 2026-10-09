@@ -175,17 +175,27 @@ export class WebHomebridgeMaintenance {
     if (expected) row.bindings.push(structuredClone(expected));
     lease.stage = 'complete'; await this.save(row);
   }
-  async recovery_ready(tx) {
+  async recovery_ready(tx, diagnostics = []) {
+    let check = 'saved_operation';
     try {
       const row = await this.current(tx), lease = row.lease;
+      check = 'gateway_state';
       await this.host.verifyGateway(structuredClone(lease), structuredClone(tx));
+      check = 'child_bridge_state';
       if (['start_requested', 'running', 'complete'].includes(lease.stage)) await this.host.verifyRunning(structuredClone(lease), structuredClone(tx));
       else {
+        check = 'private_backup';
         requireWeb(lease.stage !== 'stop_requested', 'homebridge_snapshot_unverified');
+        check = 'child_bridge_stopped';
         await this.host.assertStopped(structuredClone(lease));
+        check = 'private_backup';
         await this.host.verifySnapshot(structuredClone(lease));
       }
       return true;
-    } catch { return false; }
+    } catch (error) {
+      const allowed = new Set(['homebridge_snapshot_unverified', 'homebridge_backup_changed', 'homebridge_cache_changed', 'homebridge_gateway_revision_changed', 'homebridge_gateway_identity_changed', 'homebridge_user_must_remain_unrestricted', 'homebridge_configuration_changed', 'homebridge_login_required', 'homebridge_transaction_changed', 'homebridge_storage_review_required', 'homebridge_file_unavailable', 'homebridge_saved_pin_unverified', 'homebridge_process_changed', 'homebridge_process_unverified', 'homebridge_alarm_mapping_changed']);
+      diagnostics.push({ participant: 'homebridge', check, reason: allowed.has(error.message) ? error.message : 'verification_failed' });
+      return false;
+    }
   }
 }

@@ -1,5 +1,9 @@
 # Developer status and validation history
 
+## 2026-10-08 — 0.4.31 recovery diagnostics
+
+Expose fixed, allowlisted recovery check reasons without changing recovery eligibility, replay behavior or durable transaction schema. A blocked review replaces the login form with the failed check. Pending Save opens recovery directly; Continue/Refresh status labels are distinct. Existing journals remain intact. All 21 focused recovery checks and 16 cross-repository checks passed locally. Full local tests were blocked by missing runtime dependencies and binary image assets in this text-only checkout; complete-tree CI is the release gate.
+
 ## 2026-10-08 — 0.4.30 Homebridge result correlation
 
 The owner remains on 0.4.28 and sees no saved Homebridge user after the setup dialog reports an unrelated completed operation. Retain the original request error and remember the operation present before submission, refusing to interpret that older record as the new result. Status checks remain read-only; no PIN or restart is replayed. Underlying live failure remains unconfirmed.

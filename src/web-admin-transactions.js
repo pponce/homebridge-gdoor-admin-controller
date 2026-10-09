@@ -115,8 +115,13 @@ export class WebAdminTransactions {
     tx.stage = 'complete'; await this.save(tx);
     for (const name of tx.paused) await this.participants.get(name).complete?.(structuredClone(tx));
   }
-  async canResolve(tx, inspect) {
-    for (const participant of this.required(tx)) if (participant.recovery_ready && await participant.recovery_ready(structuredClone(tx)) !== true) return false;
+  async canResolve(tx, inspect, diagnostics = []) {
+    for (const participant of this.required(tx)) {
+      if (participant.recovery_ready && await participant.recovery_ready(structuredClone(tx), diagnostics) !== true) {
+        if (!diagnostics.length) diagnostics.push({ participant: 'integration', check: 'maintenance', reason: 'verification_failed' });
+        return false;
+      }
+    }
     if (!tx.write_attempted || tx.definite_rejection === true) return true;
     if (tx.verified && tx.intent.kind === 'command') return true;
     if (await inspect(structuredClone(tx.intent)) && (tx.verified || tx.intent.sensitive !== true)) return true;
@@ -129,10 +134,11 @@ export class WebAdminTransactions {
   review(gateway, identity, inspect) {
     return this.locked(gateway, async () => {
       const tx = await this.load(gateway); requireWeb(tx && tx.stage !== 'complete' && tx.identity === identity, 'no_matching_transaction');
-      const ready = await this.canResolve(tx, inspect), token = ready ? randomBytes(24).toString('hex') : null, now = this.clock();
+      const diagnostics = [];
+      const ready = await this.canResolve(tx, inspect, diagnostics), token = ready ? randomBytes(24).toString('hex') : null, now = this.clock();
       for (const [key, value] of this.reviews) if (value.gateway === gateway || now >= value.expires) this.reviews.delete(key);
       if (ready) this.reviews.set(token, { gateway, id: tx.id, digest: webDigest(tx), expires: now + 120 });
-      return { transaction_id: tx.id, ready, token, reason: ready ? 'review_required' : 'external_verification_required', automatic_retry: false };
+      return { transaction_id: tx.id, ready, token, reason: ready ? 'review_required' : 'external_verification_required', diagnostics, automatic_retry: false };
     });
   }
   async recover(gateway, identity, body, inspect) {

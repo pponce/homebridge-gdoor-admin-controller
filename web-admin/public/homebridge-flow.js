@@ -37,7 +37,7 @@ window.ConfiguratorHomebridgeFlow=deps=>{
   const button=(label,action,primary=true)=>{const e=text('button',label,$('hb-flow-actions'));e.type='button';e.className='gp-button'+(primary?' primary':'');e.onclick=()=>run(action);return e;};
   function view(step,title){$('hb-flow-step').textContent=step;$('hb-flow-title').textContent=title;$('hb-flow-content').replaceChildren();$('hb-flow-actions').replaceChildren();$('hb-flow-message').textContent='';$('hb-flow-close').textContent=active?.submitted?'Close':'Cancel';if(dialog.open)$('hb-flow-title').focus({preventScroll:true});}
   function lock(value){working=value;dialog.querySelectorAll('button,input').forEach(e=>e.disabled=value);}
-  async function run(action){if(working||!active)return;lock(true);try{await action();}catch(e){$('hb-flow-message').textContent=e.message||'The connection is unavailable. Check the saved update before continuing.';if(active?.submitted&&!$('hb-flow-actions').querySelector('[data-refresh]'))button('Check saved update',()=>refresh(),false).dataset.refresh='true';}finally{lock(false);active?.validate?.();}}
+  async function run(action){if(working||!active)return;lock(true);try{await action();}catch(e){$('hb-flow-message').textContent=e.message||'The connection is unavailable. Check the saved update before continuing.';if(active?.submitted&&!$('hb-flow-actions').querySelector('[data-refresh]'))button('Refresh status',()=>refresh(),false).dataset.refresh='true';}finally{lock(false);active?.validate?.();}}
   function close(){if(working)return;dialog.close();}
   $('hb-flow-close').onclick=close;
   dialog.addEventListener('cancel',e=>{if(working)e.preventDefault();});
@@ -87,7 +87,7 @@ window.ConfiguratorHomebridgeFlow=deps=>{
     text('p',native?'The Homebridge deCONZ child bridge will stop while the PIN is updated, then restart. Its accessories will be temporarily unavailable. This web interface stays open on the same page.':'Homebridge accessories will be temporarily unavailable. Complete the checks below, then start the update here.');
     const items=checks(rows.map(row=>({...row,spec:row.status.flow.preparation})));
     let login,confirmation;
-    if(native){login=homebridgeLogin();const label=text('label','');label.className='gp-check';confirmation=document.createElement('input');confirmation.type='checkbox';confirmation.name='homebridge-restart-confirmed';label.append(confirmation,document.createTextNode('The garage door and bolt are stationary. I confirm the PIN change and Homebridge deCONZ restart.'));items.push({inputs:[{input:confirmation,name:'homebridge_confirmed'}]});}
+    if(native){login=homebridgeLogin();const label=text('label','');label.className='gp-check';confirmation=document.createElement('input');confirmation.type='checkbox';confirmation.name='homebridge-restart-confirmed';label.append(confirmation,document.createTextNode('I confirm the garage door is closed and the bolt is locked. Update the PIN and restart the deCONZ child bridge.'));items.push({inputs:[{input:confirmation,name:'homebridge_confirmed'}]});}
     const go=button(native?'Save PIN and restart Homebridge deCONZ':'Start update',async()=>{
       // Capture explicit checked values before replacing the form with progress.
       const prepared=items.filter(row=>row.extension).map(row=>({...row,body:Object.fromEntries(row.inputs.map(x=>[x.name,x.input.checked]))}));
@@ -109,7 +109,17 @@ window.ConfiguratorHomebridgeFlow=deps=>{
   async function advance(login){
     if(login){let credentials=login();try{await deps.api('homebridge/authorize-recovery',{transaction_id:active.id,credentials},active.context);}finally{credentials.password='';credentials.otp='';}}
     const evidence=await deps.api('recovery/review',{},active.context);
-    if(!evidence.ready||evidence.transaction_id!==active.id)throw Error('The saved update needs further verification. No change was repeated.');
+    if(evidence.transaction_id!==active.id)throw Error('The saved operation changed. Close this window and reopen the pending update.');
+    if(!evidence.ready){
+      view('Update paused','A recovery check needs attention');
+      text('p',login?'Homebridge sign-in succeeded. A recovery check is blocking completion; entering your password again will not resolve it.':'A recovery check is blocking completion.');
+      const labels={saved_operation:'Saved Homebridge operation',gateway_state:'deCONZ user and alarm state',child_bridge_state:'deCONZ child bridge and saved PIN',private_backup:'Private PIN backup',child_bridge_stopped:'Stopped deCONZ child bridge',maintenance:'Garage controller maintenance'};
+      const reasons={homebridge_snapshot_unverified:'The update stopped before its private PIN backup was confirmed.',homebridge_backup_changed:'The private backup does not match this update.',homebridge_cache_changed:'The saved Homebridge data differs from the expected backup.',homebridge_gateway_revision_changed:'The deCONZ settings differ from the saved update.',homebridge_login_required:'Homebridge authorization is no longer available.'};
+      for(const item of evidence.diagnostics||[])text('p',(labels[item.check]||'Recovery verification')+': '+(reasons[item.reason]||'This check could not be verified.')+' ['+item.reason+']');
+      if(!evidence.diagnostics?.length)text('p','The saved PIN outcome could not be independently verified.');
+      text('p','The update remains pending. No PIN change was repeated. Share the check and reason above before retrying.');
+      return;
+    }
     let error;
     try{await deps.api('recovery/confirm',{transaction_id:evidence.transaction_id,token:evidence.token,reviewed:true},active.context);}catch(e){error=e;}
     await refresh(error);
@@ -123,7 +133,7 @@ window.ConfiguratorHomebridgeFlow=deps=>{
       view('Update status','The Homebridge update could not be confirmed');
       text('p',previousError?.message||'No new saved operation was found for this request. Its outcome has not been confirmed.');
       text('p','The saved status has not advanced beyond the operation recorded before you clicked Save. Checking again will not repeat the PIN change or restart.');
-      button('Check saved update',()=>refresh(),false).dataset.refresh='true';return;
+      button('Refresh status',()=>refresh(),false).dataset.refresh='true';return;
     }
     if(tx.id&&active.id&&tx.id!==active.id)throw Error('The saved operation changed. Close this flow and review the current update.');
     if(tx.id)active.id=tx.id;
@@ -164,7 +174,7 @@ window.ConfiguratorHomebridgeFlow=deps=>{
       button('Verify submitted PIN',async()=>{let pin=input.value;input.value='';try{await deps.api('recovery/credential',{transaction_id:tx.id,pin},active.context);}finally{pin='';}await refresh();},false);
     }
     const login=deps.nativeHomebridge?.()===true?homebridgeLogin():null;
-    button('Check saved update and continue',()=>advance(login));
+    button('Continue',()=>advance(login));
     if(previousError&&previousError.code!=='transaction_recovery_required')$('hb-flow-message').textContent=previousError.message;
   }
   function open(options){
@@ -175,8 +185,8 @@ window.ConfiguratorHomebridgeFlow=deps=>{
     else{
       view('1 of 4 · Review','Update Homebridge access');text('p',options.summary);
       const list=document.createElement('ul');for(const alarm of options.alarms)text('li',alarm,list);$('hb-flow-content').append(list);
-      text('p','The PIN will be synchronized with deCONZ and Homebridge. A private policy snapshot is retained; remote gateway credentials need a backup by their administrator.');
-      button('Continue to preparation',async()=>{const tx=await deps.api('transaction',undefined,active.context);if(!['none','complete'].includes(tx.stage))throw Error('Another update is pending. Close this flow and continue the saved update first.');active.baselineId=tx.id||null;active.baselineCaptured=true;await prepare();});
+      text('p','Use this PIN for the selected alarms in deCONZ and Homebridge.');
+      button('Continue',async()=>{const tx=await deps.api('transaction',undefined,active.context);if(!['none','complete'].includes(tx.stage)){if(!tx.homebridge)throw Error('Another settings change needs recovery first.');wipe();active.submitted=true;active.id=tx.id;active.context.alarm=tx.alarm;await refresh();return;}active.baselineId=tx.id||null;active.baselineCaptured=true;await prepare();});
     }
     return result;
   }

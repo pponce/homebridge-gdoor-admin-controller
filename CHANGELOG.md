@@ -2,6 +2,16 @@
 
 User-facing changes for `homebridge-gdoor-admin-controller`. GitHub releases use matching `vVERSION` tags. Development history and validation receipts are in [developer documentation](docs/developer/README.md).
 
+## 0.4.31 — 2026-10-08
+
+### Fixed
+
+- Show the failed recovery check after successful Homebridge sign-in instead of leaving users in a repeated login loop. Diagnostic reasons omit credentials and host paths.
+- Open the pending Homebridge update directly when another Save encounters it.
+- Simplify Continue and Refresh status buttons, remove internal backup narration, and clarify the closed-door/locked-bolt confirmation.
+
+Existing pending updates are preserved. This release diagnoses blocked recovery; it does not cancel transactions or bypass verification.
+
 ## 0.4.30 — 2026-10-08
 
 ### Fixed
