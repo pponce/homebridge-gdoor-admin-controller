@@ -115,12 +115,20 @@ window.ConfiguratorHomebridgeFlow=deps=>{
     await refresh(error);
   }
   async function refresh(previousError){
+    if(previousError)active.saveError=previousError;
+    previousError=active.saveError;
     active.validate=null;
     const [tx,rows]=await Promise.all([deps.api('transaction',undefined,active.context),statuses()]);
+    if(active.submitted&&active.baselineCaptured&&(!tx.id||tx.id===active.baselineId)){
+      view('Update status','The Homebridge update could not be confirmed');
+      text('p',previousError?.message||'No new saved operation was found for this request. Its outcome has not been confirmed.');
+      text('p','The saved status has not advanced beyond the operation recorded before you clicked Save. Checking again will not repeat the PIN change or restart.');
+      button('Check saved update',()=>refresh(),false).dataset.refresh='true';return;
+    }
     if(tx.id&&active.id&&tx.id!==active.id)throw Error('The saved operation changed. Close this flow and review the current update.');
     if(tx.id)active.id=tx.id;
     if(tx.stage==='complete'){
-      if(tx.homebridge!==true)throw Error('This is not the selected Homebridge update.');
+      if(tx.homebridge!==true)throw Error(previousError?.message||'The saved operation is not a Homebridge PIN update. No Homebridge result has been confirmed.');
       if(rows.some(row=>row.status.id===tx.id&&!['none','complete'].includes(row.status.stage)))throw Error('The saved update finished, but an integration still needs review. Its hold remains in place.');
       const applied=tx.outcome==='applied';
       view('4 of 4 · Finished',applied?'Homebridge access updated':'Update finished without applying the change');
@@ -168,7 +176,7 @@ window.ConfiguratorHomebridgeFlow=deps=>{
       view('1 of 4 · Review','Update Homebridge access');text('p',options.summary);
       const list=document.createElement('ul');for(const alarm of options.alarms)text('li',alarm,list);$('hb-flow-content').append(list);
       text('p','The PIN will be synchronized with deCONZ and Homebridge. A private policy snapshot is retained; remote gateway credentials need a backup by their administrator.');
-      button('Continue to preparation',async()=>{const tx=await deps.api('transaction',undefined,active.context);if(!['none','complete'].includes(tx.stage))throw Error('Another update is pending. Close this flow and continue the saved update first.');await prepare();});
+      button('Continue to preparation',async()=>{const tx=await deps.api('transaction',undefined,active.context);if(!['none','complete'].includes(tx.stage))throw Error('Another update is pending. Close this flow and continue the saved update first.');active.baselineId=tx.id||null;active.baselineCaptured=true;await prepare();});
     }
     return result;
   }

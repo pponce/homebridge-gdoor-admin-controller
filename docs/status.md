@@ -1,5 +1,9 @@
 # Developer status and validation history
 
+## 2026-10-08 — 0.4.30 Homebridge result correlation
+
+The owner remains on 0.4.28 and sees no saved Homebridge user after the setup dialog reports an unrelated completed operation. Retain the original request error and remember the operation present before submission, refusing to interpret that older record as the new result. Status checks remain read-only; no PIN or restart is replayed. Underlying live failure remains unconfirmed.
+
 ## 2026-10-08 — 0.4.29 Homebridge setup instructions
 
 The owner confirmed the Homebridge-user checkbox is now selectable with 0.4.28. Clarified where to enter and repeat the existing PIN, how to retain the code from a previous installation, and when a separate name/access save is needed. Removed the ambiguous blank-PIN label and save-flow narration. No synchronization, restart confirmation, permission, or controller logic changed. Regenerated the static demo and updated its source asset hash.

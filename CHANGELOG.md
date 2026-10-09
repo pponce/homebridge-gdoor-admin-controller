@@ -2,6 +2,15 @@
 
 User-facing changes for `homebridge-gdoor-admin-controller`. GitHub releases use matching `vVERSION` tags. Development history and validation receipts are in [developer documentation](docs/developer/README.md).
 
+## 0.4.30 — 2026-10-08
+
+### Fixed
+
+- Preserve the original Homebridge PIN setup error when the saved operation still belongs to an earlier change. Repeated status checks retain that error and never resend the PIN or restart request.
+- Do not report an older completed Homebridge operation as success for a new request.
+
+Includes the clearer existing-PIN instructions from 0.4.29. This fixes error reporting; the cause of the owner’s setup failure is not yet established.
+
 ## 0.4.29 — 2026-10-08
 
 ### Improved

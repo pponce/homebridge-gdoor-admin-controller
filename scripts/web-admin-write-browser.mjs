@@ -87,6 +87,29 @@ try {
       await page.locator('[name="homebridge-username"]').fill('BridgeAdmin');
       await page.locator('[name="homebridge-password"]').fill('synthetic-bridge-password');
       await page.locator('[name="homebridge-restart-confirmed"]').check();
+      // A failed submission must not adopt the older completed policy transaction.
+      const beforeFailure = f.writes.length;
+      let failedSubmissions = 0;
+      await page.route('**/api/users/rotate-pin', async route => {
+        failedSubmissions++;
+        await route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ error: 'synthetic_setup_rejected' }) });
+      });
+      await restart.click();
+      await page.getByText('The Homebridge update could not be confirmed', { exact: true }).waitFor();
+      assert.match(await page.locator('#hb-flow-content').textContent(), /synthetic_setup_rejected/);
+      await page.getByRole('button', { name: 'Check saved update', exact: true }).click();
+      assert.match(await page.locator('#hb-flow-content').textContent(), /synthetic_setup_rejected/);
+      assert.equal(failedSubmissions, 1); assert.equal(f.writes.length, beforeFailure);
+      assert.equal(f.maintenance.includes('stop'), false);
+      await page.locator('#hb-flow-close').click(); await ready();
+      await page.unroute('**/api/users/rotate-pin');
+      await page.locator('#hb-use').check(); await page.locator('[data-hb-alarm="1"]').check();
+      await page.locator('#pin').fill('6789'); await page.locator('#pin-repeat').fill('6789');
+      await page.locator('#editor button.primary').click();
+      await page.getByRole('button', { name: 'Continue to preparation', exact: true }).click();
+      await page.locator('[name="homebridge-username"]').fill('BridgeAdmin');
+      await page.locator('[name="homebridge-password"]').fill('synthetic-bridge-password');
+      await page.locator('[name="homebridge-restart-confirmed"]').check();
       const pinWritesBefore = f.writes.filter(([, route]) => route === '/alarmsystems/users/' + 'a'.repeat(32)).length;
       await restart.click(); await page.getByRole('button', { name: 'Done', exact: true }).click();
       await page.getByText('Homebridge access updated.', { exact: true }).waitFor();
