@@ -10,6 +10,19 @@ python3 -m http.server 8080 --bind 127.0.0.1 --directory web/demo
 
 Then open http://127.0.0.1:8080. For public hosting, use HTTPS so browser features such as UUID generation work. Serve this folder as static files; do not point it at a live administration backend. Opening the HTML directly as a `file:` URL is not supported.
 
+## GitHub Pages
+
+The included **Deploy web demo** workflow publishes only `web/demo`, with `index.html` at the site root. Keep the written documentation in `docs`; no directory move is needed.
+
+1. Open this repository's **Settings → Pages**.
+2. Under **Build and deployment → Source**, select **GitHub Actions**.
+3. Open **Actions → Deploy web demo → Run workflow**, select **main**, and run it. If the initial automatic run failed before Pages was enabled, rerun it after selecting the source.
+4. Wait for the deployment to finish. Open the URL in the deployment summary or **Settings → Pages**.
+
+Without a custom domain, the expected address is `https://pponce.github.io/homebridge-gdoor-admin-controller/`. It becomes available after the first successful deployment. Future changes to `web/demo` on `main` deploy automatically. No custom domain, home server, or reverse proxy is required.
+
+If GitHub asks you to choose a static-site starter workflow, you can skip it: this repository already contains `.github/workflows/pages.yml`. GitHub Free supports Pages for public repositories; Pages for private repositories requires an eligible paid plan.
+
 ## What visitors can try
 
 - Explore fictional gateways, users, grants, schedules, and alarms.
