@@ -2,9 +2,9 @@ name: Coordinator checks
 on:
   push:
     branches: [main, config-ui-save-preview, web-admin-lan-controller-timings]
-    paths: ['src/**', 'homebridge-ui/**', 'web-admin/**', 'web/**', 'test/**', 'scripts/**', 'examples/**', 'package.json', 'config.schema.json', '.github/workflows/ci.yml']
+    paths: ['src/**', 'homebridge-ui/**', 'web-admin/**', 'web/**', 'test/**', 'scripts/**', 'examples/**', 'package.json', 'CHANGELOG.md', 'config.schema.json', '.github/workflows/ci.yml']
   pull_request:
-    paths: ['src/**', 'homebridge-ui/**', 'web-admin/**', 'web/**', 'test/**', 'scripts/**', 'examples/**', 'package.json', 'config.schema.json', '.github/workflows/ci.yml']
+    paths: ['src/**', 'homebridge-ui/**', 'web-admin/**', 'web/**', 'test/**', 'scripts/**', 'examples/**', 'package.json', 'CHANGELOG.md', 'config.schema.json', '.github/workflows/ci.yml']
   workflow_dispatch:
 permissions:
   contents: read
