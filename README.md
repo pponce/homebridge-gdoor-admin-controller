@@ -101,7 +101,9 @@ Under **Controller**, select the **Garage Door**, edit controller defaults or de
 
 ## Interactive demo
 
-Explore the interface with fictional users, PIN policies, and garage timing settings. The [static demo and hosting instructions](web/README.md) are ready to publish on your own web server; a hosted demo URL will be added here when available. The demo cannot connect to deCONZ, Homebridge, or real hardware.
+[**Try the interactive demo →**](https://pponce.github.io/homebridge-gdoor-admin-controller/)
+
+See what the web interface offers before installing. Explore user and PIN management, keypad lockout settings, and garage door timings using sample data.
 
 ## Help and reference
 
