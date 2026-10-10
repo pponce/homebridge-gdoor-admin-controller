@@ -56,8 +56,8 @@ test('real socket identity and inventory explicitly report no operational capabi
 test('detailed status is opt-in and legacy inventory, state and mutation responses retain their exact shape', async t => {
   const id=configuration.controllers[0].id;
   const status={controllerId:id,bootId:instanceId,commissioned:true,actuationEnabled:true,held:null,inputStates:{},revision:1,
-    state:{phase:'position-unknown',door:'not-closed',bolt:'unlocked',busy:false,fault:null,reconciling:true,restartCloseAvailable:true,faultAt:null},
-    enabled:true,configurationValid:true,canRecover:false,lastFault:{reason:'door_read_failed',at:null},health:{title:'Position unknown',detail:'Synthetic explanation',code:null}};
+    state:{phase:'position-unknown',door:'not-closed',bolt:'unlocked',busy:false,fault:null,reconciling:true,restartCloseAvailable:true,faultAt:null,lockout:false,disabled:false,blocked:false,closedObservedDuringFault:false},
+    observationEnabled:true,tailwind:true,restarting:false,enabled:true,configurationValid:true,canRecover:false,lastFault:{reason:'door_read_failed',at:null},health:{title:'Position unknown',detail:'Synthetic explanation',code:null}};
   const runtime={configuration,inventory:()=>[{id,status}],status:()=>status,commission:async()=>status,disable:async()=>status,recover:async()=>status,enable:async()=>status};
   const server=createManagementServer({identity:{token,instanceId},configuration,runtime});
   const port=await listenLocal(server,0);t.after(()=>closeServer(server));
@@ -72,9 +72,9 @@ test('detailed status is opt-in and legacy inventory, state and mutation respons
     const recovered=(await request(port,'/v1/controllers/'+id+'/recover',{method:'POST',headers:{...headers,'Content-Type':'application/json'},body:{instanceId,revision:1,bootId:instanceId}})).body.status;
     const resumed=(await request(port,'/v1/controllers/'+id+'/enable',{method:'POST',headers:{...headers,'Content-Type':'application/json'},body:{instanceId,revision:1,bootId:instanceId}})).body.status;
     for(const row of [inventory,single,state,enabled,disabled,recovered,resumed]){
-      for(const key of ['enabled','configurationValid','canRecover','lastFault'])assert.equal(Object.hasOwn(row,key),detailed);
+      for(const key of ['enabled','configurationValid','canRecover','lastFault','observationEnabled','tailwind','restarting'])assert.equal(Object.hasOwn(row,key),detailed);
       assert.equal(Object.hasOwn(row,'health'),detailed);
-      for(const key of ['reconciling','restartCloseAvailable','faultAt'])assert.equal(Object.hasOwn(row.state,key),detailed);
+      for(const key of ['reconciling','restartCloseAvailable','faultAt','lockout','disabled','blocked','closedObservedDuringFault'])assert.equal(Object.hasOwn(row.state,key),detailed);
       assert.equal(row.actuationEnabled,true);assert.equal(row.state.door,'not-closed');
     }
   }

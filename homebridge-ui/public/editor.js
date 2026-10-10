@@ -95,6 +95,7 @@ export class ProfileEditor {
       obj[key]={type:current.type,baseUrl:'',credentialRef:'garage-'+current.type,...(kind==='garage'&&current.type==='tailwind'?{doorIndex:0}:{}),
         ...(kind==='bolt'?{lockedValue:true,...(current.type==='homebridge'?{serviceType:'switch'}:{})}:{}),...(kind==='motor'?{activeValue:true}:{}),
         ...(['button','keypad','switch'].includes(kind)?{kind:current.type==='homebridge'&&kind==='keypad'?'button':kind}: {})};
+      if (kind === 'garage' && current.type !== 'tailwind') { delete obj.exposeTailwindLockout; delete obj.exposeTailwindRestart; }
       this.change();this.render();
     });
   }

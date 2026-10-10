@@ -33,6 +33,7 @@ async function main() {
   const root = fileURLToPath(new URL('../', import.meta.url));
   const directory = await mkdtemp(path.join(os.tmpdir(), 'coordinator-homebridge-'));
   const platform = JSON.parse(await readFile(path.join(root, 'examples/input-routing-config.json'), 'utf8'));
+  platform.controllers[0].exposeTailwindLockout = true; platform.controllers[0].exposeTailwindRestart = true;
   platform.controllers[0].inputs = platform.controllers[0].inputs.slice(0, 1);
   const button = platform.controllers[0].inputs[0]; button.rearmSeconds = 0; button.timing = {};
   platform.controllers[0].motorPaths[0].openPulseSeconds = platform.controllers[0].motorPaths[0].closePulseSeconds = .1;
@@ -80,8 +81,10 @@ async function main() {
     const id=platform.controllers[0].id;const endpoint='/v1/controllers/'+id;
     const enabled=await management(endpoint+'/commission',{revision:1,previousControllerStopped:true,physicalSetupReviewed:true,recover:false});assert.equal(enabled.status.actuationEnabled,true);
     const hapOrigin='http://127.0.0.1:'+platform._bridge.port;let accessories;
-    await until(async()=>{try{const r=await fetch(hapOrigin+'/accessories',{headers:{Authorization:'031-45-154'},signal:AbortSignal.timeout(1000)});accessories=await r.json();return accessories.accessories?.length===3;}catch{return false;}});
+    await until(async()=>{try{const r=await fetch(hapOrigin+'/accessories',{headers:{Authorization:'031-45-154'},signal:AbortSignal.timeout(1000)});accessories=await r.json();return accessories.accessories?.length===5;}catch{return false;}});
     const serviceType=(s,type)=>s.type.toUpperCase().replace(/^0+/,'').startsWith(type+'-')||s.type.toUpperCase()===type;
+    assert.ok(accessories.accessories.some(a=>a.services.some(s=>serviceType(s,'80'))), 'Lockout contact registered');
+    assert.ok(accessories.accessories.some(a=>a.services.some(s=>serviceType(s,'49'))), 'Restart switch registered');
     const garage=accessories.accessories.find(a=>a.services.some(s=>serviceType(s,'41')));
     const garageService=garage.services.find(s=>serviceType(s,'41'));const target=garageService.characteristics.find(c=>serviceType(c,'32'));
     const current=garageService.characteristics.find(c=>serviceType(c,'E'));
@@ -260,6 +263,14 @@ async function main() {
     hardware.state.closed=true;hardware.state.locked=false;
     await until(async()=>{const s=(await management(endpoint+'/state')).status;return s.state.phase==='closed'&&!s.state.reconciling;});
     assert.deepEqual(hardware.state.writes,writes,'Post-restart observation cannot replay a pulse or automatically bolt');
+    const latest = await (await fetch(hapOrigin+'/accessories',{headers:{Authorization:'031-45-154'}})).json();
+    const restartAccessory = latest.accessories.find(a=>a.services.some(s=>serviceType(s,'49')));
+    const restartOn = restartAccessory.services.find(s=>serviceType(s,'49')).characteristics.find(c=>serviceType(c,'25'));
+    const requestRestart = await fetch(hapOrigin+'/characteristics', { method:'PUT', headers:{Authorization:'031-45-154','Content-Type':'application/hap+json'},
+      body:JSON.stringify({characteristics:[{aid:restartAccessory.aid,iid:restartOn.iid,value:true}]}) });
+    assert.ok([204,207].includes(requestRestart.status));
+    await until(async()=>{const r=await (await fetch(hapOrigin+'/characteristics?id='+restartAccessory.aid+'.'+restartOn.iid,{headers:{Authorization:'031-45-154'}})).json();return r.characteristics[0].value===false||r.characteristics[0].value===0;});
+    assert.deepEqual(hardware.state.writes.slice(writes.length), [['tailwind','restart']]);
     child.kill('SIGTERM');
     await until(async () => child.exitCode !== null || child.signalCode !== null, 10000);
     await assert.rejects(fetch(origin + '/v1/identity', { signal: AbortSignal.timeout(1000) }));
