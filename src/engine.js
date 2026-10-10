@@ -95,7 +95,7 @@ export class MovementEngine {
     return this.snapshot();
   }
 
-  async read() {
+  async read({ observationOnly = false } = {}) {
     this.checkRunning();
     const sampledAt = this.clock.now();
     const [door, bolt] = await Promise.all([this.door.read(), this.bolt.read()]);
@@ -109,30 +109,67 @@ export class MovementEngine {
     // The transport evidence and user's configured meaning must both agree.
     const sample = { ...door, locked: bolt.locked, boltEvidence: bolt.evidence };
     this.sample = sample; this.sampledAt = sampledAt; this.observedAt = Date.now();
-    this.update({ door: sample.door, bolt: sample.locked ? 'locked' : 'unlocked', obstruction: sample.obstruction, unavailable: null });
-    requireValue(!door.blocked, 'door_blocked');
-    requireValue(!door.obstruction, 'obstruction');
+    this.update({ door: sample.door, bolt: sample.locked ? 'locked' : 'unlocked', obstruction: sample.obstruction, lockout: sample.lockout ?? null, disabled: sample.disabled ?? null, blocked: sample.blocked, ...(sample.door !== 'closed' ? { closedObservedDuringFault: false } : {}), unavailable: null });
+    if (!observationOnly) {
+      requireValue(!door.blocked, 'door_blocked');
+      requireValue(!door.obstruction, 'obstruction');
+    }
     return sample;
   }
 
   async fail(reason) {
     this.admitInterruption(false); this.travel = null; this.partialOwner = null; this.autoClosePending = false;
-    this.initialized = false; this.startupRetry = false;
+    this.initialized = false; this.startupRetry = false; this.recoveryClosedSince = null;
     reason = faultCode(reason) ?? 'unexpected_adapter_error';
+    this.recoverableInterruptedClose = reason === 'interrupted_travel_timeout' && this.state.target === 'closed';
     const faultAt = new Date().toISOString();
     try { await this.journal.write({ inProgress: false, fault: true, reason, at: faultAt }); }
     catch { reason = 'journal_write_failed'; }
     try { await this.recordFault({ reason, at: faultAt }); }
     catch { reason = 'journal_write_failed'; }
-    this.update({ phase: 'fault', fault: reason, faultAt, unavailable: null, openEstimated: false, closeEstimated: false });
+    this.update({ closedObservedDuringFault: false, phase: 'fault', fault: reason, faultAt, unavailable: null, openEstimated: false, closeEstimated: false });
+  }
+
+  // Fault monitoring never operates a motor or bolt, including after recovery.
+  // Unknown/ambiguous writes and physical contradictions retain their holds.
+  async observeFault() {
+    const previousBolt = this.lastBolt;
+    try {
+      const sample = await this.read({ observationOnly: true });
+      if (previousBolt === true && !sample.locked) this.update({ externalUnlockOverride: true });
+      const closed = sample.door === 'closed' && sample.evidence === 'closed-sensor';
+      requireValue(closed || !sample.locked, 'startup_bolt_state_requires_review');
+      if (!closed) this.recoveryClosedSince = null;
+      else this.recoveryClosedSince ??= this.clock.now();
+      const stable = closed && this.clock.now() - this.recoveryClosedSince >= this.timing.closedStableMs;
+      const recoverable = ['door_close_timeout', 'closed_confirmation_timeout', 'door_blocked'].includes(this.state.fault) || this.state.fault === 'interrupted_travel_timeout' && this.recoverableInterruptedClose;
+      if (stable && recoverable && !sample.blocked && !sample.obstruction) {
+        await this.journal.write({ inProgress: false, fault: false });
+        this.initialized = true;
+        this.update({ phase: 'closed', target: 'closed', fault: null, faultAt: null, reconciling: false,
+          closedObservedDuringFault: false, openEstimated: false, closeEstimated: false });
+      } else {
+        this.update({ closedObservedDuringFault: stable,
+          phase: stable ? 'closed' : 'fault', ...(stable ? { target: 'closed' } : {}),
+          openEstimated: false, closeEstimated: false });
+      }
+      this.autoClosePending = false;
+    } catch (error) {
+      this.recoveryClosedSince = null;
+      if (!this.stopped) {
+        if (retryableRead(code(error))) this.update({ unavailable: code(error), closedObservedDuringFault: false });
+        else await this.fail(code(error));
+      }
+    }
+    return this.snapshot();
   }
 
   async observe() {
-    requireValue(this.initialized && !this.state.fault && !this.busy && !this.observation, 'engine_unavailable');
+    requireValue((this.initialized || this.state.fault) && !this.stopped && !this.busy && !this.observation, 'engine_unavailable');
     // Routine reads must not repeatedly disarm inputs or reject HomeKit writes.
     // An admitted operation claims busy immediately and waits for this read to
     // finish before it journals intent or operates any output.
-    const observation = this.observeOnce();
+    const observation = this.state.fault ? this.observeFault() : this.observeOnce();
     this.observation = observation;
     try { return await observation; }
     finally { if (this.observation === observation) this.observation = null; }

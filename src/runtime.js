@@ -34,7 +34,7 @@ export class CoordinatorRuntime {
     this.credentials = credentials ?? (() => readCredentials(storagePath)); this.clock = clock;
     this.store = new PrivateStore(storagePath, 'profiles.json', stateValid); this.entries = new Map();
     this.bootId = randomUUID(); this.stopped = false; this.changing = false; this.tickets = new Map(); this.reviews = new Map();
-    this.pendingWrites = Promise.resolve();
+    this.pendingWrites = Promise.resolve(); this.tailwindRestarts = new Map();
   }
   async save() { const snapshot = structuredClone(this.state); this.pendingWrites = this.pendingWrites.then(() => this.store.write(snapshot));
     try { await this.pendingWrites; } catch (error) { this.storageFault = true; for (const e of this.entries.values()) { e.ready = false; e.engine?.stop(); } throw error; } }
@@ -88,7 +88,7 @@ export class CoordinatorRuntime {
           this.state.faults[p.id] = fault; this.event(p.id, 'fault-recorded', fault.reason); await this.save();
         };
         entry.engine = engine; entry.hardware = hw; entry.router = new InputRouter(engine, p.inputs, this.clock);
-        entry.router.inhibited = () => this.stopped || this.changing || Boolean(this.state.maintenance) || Boolean(entry.job);
+        entry.router.inhibited = () => this.stopped || this.changing || Boolean(this.state.maintenance) || Boolean(entry.job) || Date.now() < (entry.restartingUntil ?? 0);
         await this.initializeEntry(entry, acknowledge);
         this.schedule(entry);
       } catch (error) { entry.held = error instanceof Fault ? error.message : 'controller_unavailable'; }
@@ -105,7 +105,7 @@ export class CoordinatorRuntime {
     const task = (async () => {
       await entry.engine.initialize({ acknowledge });
       if (!this.current(entry)) return;
-      entry.ready = entry.engine.initialized;
+      entry.ready = entry.engine.initialized || Boolean(entry.engine.state.fault);
       entry.held = entry.ready ? null : entry.engine.startupRetry ? 'waiting-for-devices' : 'controller_requires_review';
       if (entry.ready) for (const input of entry.profile.inputs.filter(i => i.enabled)) {
         const listener = new (input.source.type === 'deconz' ? DeconzInputListener : HomebridgeInputListener)({
@@ -127,7 +127,7 @@ export class CoordinatorRuntime {
         if (!this.changing && !entry.ready && entry.engine.startupRetry) {
           await this.initializeEntry(entry); return;
         }
-        if (!this.changing && !this.state.maintenance && !entry.job && !entry.engine.busy && entry.engine.initialized) {
+        if (!this.changing && !this.state.maintenance && !entry.job && !entry.engine.busy && !entry.engine.observation && Date.now() >= (entry.restartingUntil ?? 0) && (entry.engine.initialized || entry.engine.state.fault)) {
           await entry.engine.observe();
           if (!this.changing && !this.state.maintenance && !entry.job && !entry.engine.busy && entry.profile.autoBolt && entry.engine.autoClosePending && !entry.engine.snapshot().externalUnlockOverride && entry.engine.initialized) {
             await this.submit(entry.profile.id, { command: 'observed-close', requestId: randomUUID(), issuedAt: Date.now(), bootId: this.bootId }, 'automatic');
@@ -144,7 +144,10 @@ export class CoordinatorRuntime {
     const enabled = this.state.enabled[id] === true, configurationValid = this.state.commissioned[id] === hash(e.profile);
     const status = { controllerId: id, bootId: this.bootId, commissioned: enabled && configurationValid,
       enabled, configurationValid, lastFault: this.state.faults[id] ?? null,
-      actuationEnabled: enabled && configurationValid && e.ready && Boolean(e.engine?.initialized) && !sample?.fault && !sample?.unavailable && !this.storageFault && !this.state.maintenance && !this.changing && !this.stopped,
+      actuationEnabled: enabled && configurationValid && Date.now() >= (e.restartingUntil ?? 0) && e.ready && Boolean(e.engine?.initialized) && !sample?.fault && !sample?.unavailable && !this.storageFault && !this.state.maintenance && !this.changing && !this.stopped,
+      observationEnabled: enabled && configurationValid && e.ready && Boolean(e.engine) && !this.storageFault && !this.state.maintenance && !this.changing && !this.stopped && Date.now() >= (e.restartingUntil ?? 0),
+      tailwind: e.profile.door.type === 'tailwind',
+      restarting: Date.now() < (e.restartingUntil ?? 0),
       held: this.state.maintenance ? 'maintenance' : this.storageFault ? 'private_storage_write_failed' : e.held, inputStates: { ...e.inputStates },
       state: sample ?? { phase: 'not-commissioned', door: 'unknown', bolt: 'unknown', busy: false, fault: null },
       revision: this.state.revision };
@@ -200,6 +203,9 @@ export class CoordinatorRuntime {
     try {
       const candidate = profileWithTimings(current, controllerTimingValues(profile));
       candidate.name = profile.name;
+      for (const key of ['exposeTailwindLockout', 'exposeTailwindRestart']) {
+        if (Object.hasOwn(profile, key)) candidate[key] = profile[key]; else delete candidate[key];
+      }
       for (const group of ['inputs', 'motorPaths']) for (const item of candidate[group]) item.name = profile[group].find(p => p.id === item.id)?.name;
       return hash(candidate) === hash(profile);
     } catch { return false; }
@@ -210,7 +216,7 @@ export class CoordinatorRuntime {
     this.reviews.set(token, { revision, configuration, expires: performance.now() + 300000 });
     return { token, revision, configuration, requiresCommissioning: configuration.controllers.filter(p => !this.retainsCommissioning(p)).map(p => p.id) };
   }
-  assertIdle() { requireValue(!this.stopped && !this.storageFault && !this.changing && [...this.entries.values()].every(e => !e.job && !e.engine?.busy && !e.engine?.observation), 'controller_busy'); }
+  assertIdle() { requireValue(!this.stopped && !this.storageFault && !this.changing && [...this.entries.values()].every(e => !e.job && !e.engine?.busy && !e.engine?.observation && Date.now() >= (e.restartingUntil ?? 0)), 'controller_busy'); }
   cancelReview(token) { this.reviews.delete(token); return { cancelled: true }; }
   async apply(token) {
     const review = this.reviews.get(token);
@@ -258,6 +264,46 @@ export class CoordinatorRuntime {
       await this.build(id); this.changing = false; return this.status(id);
     } finally { this.changing = false; this.publishStates(); }
   }
+  async checkStateNow(id, { revision, bootId }) {
+    this.assertIdle(); this.guard();
+    requireValue(revision === this.state.revision && bootId === this.bootId, 'settings_revision_conflict');
+    const e = this.entry(id);
+    requireValue(this.current(e) && e.engine && Date.now() >= (e.restartingUntil ?? 0), 'controller_not_enabled');
+    requireValue(e.router?.activeInput == null, 'controller_busy');
+    this.changing = true;
+    try {
+      if (e.engine.startupRetry) await this.initializeEntry(e);
+      else await e.engine.observe();
+      e.engine.autoClosePending = false;
+      this.event(id, 'state-checked'); await this.save();
+    } finally { this.changing = false; this.publishStates(); }
+    return this.status(id);
+  }
+  async restartTailwind(id, { revision, bootId }, source = 'admin') {
+    this.assertIdle(); this.guard();
+    requireValue(revision === this.state.revision && bootId === this.bootId, 'settings_revision_conflict');
+    const e = this.entry(id);
+    requireValue(this.current(e) && e.profile.door.type === 'tailwind' && typeof e.hardware?.door.restart === 'function', 'tailwind_restart_unavailable');
+    requireValue(source !== 'homekit' || e.profile.exposeTailwindRestart === true, 'tailwind_restart_unavailable');
+    const affected = [...this.entries.values()].filter(row => row.profile.door.type === 'tailwind' && row.profile.door.baseUrl === e.profile.door.baseUrl);
+    requireValue(affected.every(row => !row.router?.activeInput && !row.engine?.partialOwner && !['opening', 'closing'].includes(row.engine?.state.door)), 'controller_busy');
+    const key = e.profile.door.baseUrl;
+    requireValue(Date.now() - (this.tailwindRestarts.get(key) ?? 0) >= 30000, 'tailwind_restart_cooldown');
+    this.changing = true;
+    try {
+      this.event(id, 'tailwind-restart-requested'); await this.save();
+      this.tailwindRestarts.set(key, Date.now());
+      for (const row of affected) {
+        row.restartingUntil = Date.now() + 10000;
+        if (row.engine) {
+          row.engine.observedAt = 0; row.engine.recoveryClosedSince = null;
+          row.engine.update({ unavailable: 'door_read_failed', closedObservedDuringFault: false });
+        }
+      }
+      await e.hardware.door.restart(); // One attempt, never replay an uncertain restart.
+    } finally { this.changing = false; this.publishStates(); }
+    return this.status(id);
+  }
   async recover(id, { revision, bootId }) {
     this.assertIdle(); this.guard();
     requireValue(revision === this.state.revision && bootId === this.bootId, 'settings_revision_conflict');
@@ -303,7 +349,7 @@ export class CoordinatorRuntime {
     if (duplicate) { requireValue(duplicate.controllerId === id && duplicate.command === body.command, 'command_request_conflict'); return { accepted: false, duplicate: true, requestId: body.requestId, status: duplicate.status }; }
     requireValue(Number.isFinite(body.issuedAt) && Math.abs(Date.now() - body.issuedAt) <= 15000, 'command_request_expired');
     requireValue(['open', 'close', 'lock', 'unlock', ...(source === 'automatic' ? ['observed-close'] : [])].includes(body.command), 'command_invalid');
-    requireValue(!this.stopped && !this.storageFault && !this.changing && !this.state.maintenance && e.ready && e.engine.initialized && !e.engine.state.fault && !e.engine.state.unavailable, 'controller_held');
+    requireValue(!this.stopped && !this.storageFault && !this.changing && !this.state.maintenance && Date.now() >= (e.restartingUntil ?? 0) && e.ready && e.engine.initialized && !e.engine.state.fault && !e.engine.state.unavailable, 'controller_held');
     requireValue(e.engine.acceptsFreshCommand(body.command), 'controller_observing_movement');
     requireValue(!e.job && !e.engine.busy && e.router.activeInput === null, 'controller_busy');
     e.job = true;

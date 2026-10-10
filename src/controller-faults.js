@@ -51,6 +51,8 @@ export function controllerHealth(status) {
     detail: 'Reading current device states before accepting commands.', code: null };
   if (status.held === 'waiting-for-devices' || state.unavailable) return { title: 'Device unavailable',
     detail: 'Device checks retry automatically. Control resumes after fresh checks pass.', code };
+  if (state.fault && state.closedObservedDuringFault) return { title: 'Closed · Control held',
+    detail: 'Closed position is confirmed. ' + (state.lockout ? 'Tailwind is locked out.' : 'A separate controller fault still requires review.'), code };
   if (state.fault || status.held && status.held !== 'not-commissioned') {
     const explanations = {
       startup_bolt_state_requires_review: 'The bolt reports locked while the door is not closed.',
@@ -58,7 +60,9 @@ export function controllerHealth(status) {
       operation_interrupted: 'An operation was interrupted before completion was confirmed.',
       journal_invalid: 'The saved operation record could not be verified.',
       journal_write_failed: 'The operation record could not be saved.',
-      door_blocked: 'The opener reports that the door is blocked.',
+      door_blocked: state.lockout ? 'Tailwind reports a safety lockout.' : 'The opener reports that control is blocked or disabled.',
+      door_close_timeout: 'Close failed: closed position was not confirmed. Monitoring continues.',
+      door_open_timeout: 'Open failed: opening was not confirmed. Monitoring continues.',
       obstruction: 'The door reports an obstruction.',
     };
     return { title: 'Fault', detail: (explanations[code] ?? (code ? 'Controller fault: ' + code.replaceAll('_', ' ') + '.' : 'The controller is unavailable.')) +

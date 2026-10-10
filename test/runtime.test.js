@@ -220,3 +220,29 @@ test('shared address changes require rechecking only garages using the changed d
   assert.equal(f.runtime.status(f.id).actuationEnabled,false);assert.equal(f.runtime.status(f.id).enabled,true);assert.equal(f.runtime.status(f.id).configurationValid,false);assert.equal(f.runtime.status('second-garage').actuationEnabled,true);
   assert.deepEqual(f.hardware.state.writes,[]);assert.deepEqual(f.other.state.writes,[]);
 });
+
+test('troubleshooting checks preserve overrides and restart is explicit, idle-only and never retried', async t => {
+  const f = await fixture(t); await f.commission();
+  const entry = f.runtime.entry(f.id), engine = entry.engine;
+  const body = { revision: f.runtime.state.revision, bootId: f.runtime.bootId };
+  engine.state.externalUnlockOverride = true;
+  const admin = new WebAdminController(f.runtime);
+  await admin.dispatch('controller_check_state', { ...body, controllerId: f.id });
+  assert.equal(entry.engine, engine); assert.equal(engine.state.externalUnlockOverride, true);
+  assert.deepEqual(f.hardware.state.writes, []);
+  engine.busy = true; await assert.rejects(f.runtime.restartTailwind(f.id, body), /controller_busy/); engine.busy = false;
+  await assert.rejects(f.runtime.restartTailwind(f.id, body, 'homekit'), /tailwind_restart_unavailable/);
+  f.hardware.state.blocked = true; await engine.observe();
+  assert.equal(engine.state.lockout, true);
+  await admin.dispatch('controller_restart_tailwind', { ...body, controllerId: f.id });
+  assert.deepEqual(f.hardware.state.writes, [['tailwind', 'restart']]);
+  assert.equal(f.runtime.status(f.id).restarting, true); assert.equal(f.runtime.status(f.id).actuationEnabled, false);
+  await assert.rejects(f.runtime.restartTailwind(f.id, body), /controller_busy|tailwind_restart_cooldown/);
+  entry.restartingUntil = 0; await f.runtime.checkStateNow(f.id, body);
+  assert.equal(f.runtime.status(f.id).actuationEnabled, true); assert.equal(engine.state.lockout, false);
+  assert.equal(engine.state.externalUnlockOverride, true);
+  f.runtime.tailwindRestarts.clear(); f.hardware.state.ambiguousRestart = true;
+  await assert.rejects(f.runtime.restartTailwind(f.id, body), /tailwind_restart_ambiguous/);
+  assert.deepEqual(f.hardware.state.writes, [['tailwind', 'restart'], ['tailwind', 'restart']]);
+  await assert.rejects(f.runtime.restartTailwind(f.id, body), /controller_busy|tailwind_restart_cooldown/);
+});

@@ -11,12 +11,12 @@ const registration = { id: 'test', name: 'Synthetic gateway', identity: '0011223
 test('controller timing routes are global, admin-only, and writes require manage mode', async () => {
   const calls = [], controller = { dispatch: async (...args) => { calls.push(args); return { saved: true }; } };
   const backend = new WebAdminBackend({ controller, accessMode: 'manage' });
-  for (const operation of ['controller_settings', 'controller_timings_save', 'controller_recover']) await assert.rejects(backend.dispatch(regular, operation, {}), /forbidden/);
+  for (const operation of ['controller_settings', 'controller_timings_save', 'controller_recover', 'controller_check_state', 'controller_restart_tailwind']) await assert.rejects(backend.dispatch(regular, operation, {}), /forbidden/);
   await backend.dispatch(admin, 'controller_settings', {}); await backend.dispatch(admin, 'controller_timings_save', { revision: 1 });
   assert.equal(calls.length, 2);
   const observe = new WebAdminBackend({ controller, accessMode: 'observe' });
   await assert.rejects(observe.dispatch(admin, 'controller_timings_save', {}), /read_only/);
-  await assert.rejects(observe.dispatch(admin, 'controller_recover', {}), /read_only/);
+  for (const operation of ['controller_recover', 'controller_check_state', 'controller_restart_tailwind']) await assert.rejects(observe.dispatch(admin, operation, {}), /read_only/);
   assert.equal(calls.length, 2);
   assert.equal(webAdminRoute({ method: 'GET', url: '/api/controller', headers: { 'x-configurator-gateway': 'test' }, rawHeaders: ['X-Configurator-Gateway', 'test'] }, {}).operation, 'controller_settings');
 });

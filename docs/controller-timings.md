@@ -15,3 +15,13 @@ The browser reports success only after a successful save response. A lost or unc
 Browser routes are GET /api/controller and POST /api/controller/timings. They use the existing authenticated session, strict Host/Origin and CSRF checks, administrator authorization and Manage-access requirement. The read response contains timing values, device labels and status only, without connection addresses or credential references. The local management API's full-profile contract is unchanged.
 
 From 0.4.27, saving the same validated timing fields through the Homebridge configuration editor also retains setup approval and the saved Enabled choice. Hardware mappings, input actions, feedback modes and other control-policy changes still require separate setup review; the saved Enabled choice is retained while commands wait for that review.
+
+## Troubleshooting
+
+The Controller page shows Tailwind safety lockout separately from the door position and disabled flag. Status refreshes while the page is visible. **Check state now** performs fresh read-only checks; it keeps manual unlock preferences and unresolved faults. **Check again** retains the existing explicit fault-review/reinitialization behavior.
+
+**Restart Tailwind** sends one local reboot request. It affects all doors on that Tailwind device, temporarily holds control and waits for fresh feedback. It neither moves the door nor retries the previous operation. Restart acknowledgement is not proof that lockout cleared; the subsequent read supplies that evidence. An uncertain restart is never automatically repeated.
+
+In Homebridge plugin settings, Tailwind controllers offer optional **Tailwind Lockout** contact and **Restart Tailwind** switch accessories. Both default off. Contact open/triggered means the actual Tailwind lockout flag is active; contact closed means it is inactive. A disabled door is not treated as a lockout. Unavailable feedback is not reported as clear. The restart switch returns off after an explicit request; switching it off does nothing.
+
+After a movement fault, observation continues. Stable confirmed closed feedback restores the position display even while a separate fault holds control. Failed-close timeout and cleared opener-blocked faults may resolve automatically at confirmed closed. This recovery never operates the bolt or motor. Uncertain position after a timeout still uses the existing unavailable HomeKit presentation; Open/Stopped/inferred-obstruction alternatives remain under discussion.

@@ -16,10 +16,10 @@ export class WebAdminController {
   }
   async dispatch(operation, body) {
     if (operation === 'controller_settings') { requireWeb(exact(body, []), 'invalid_request'); return this.read(); }
-    if (operation === 'controller_recover') {
+    if (['controller_recover', 'controller_check_state', 'controller_restart_tailwind'].includes(operation)) {
       requireWeb(exact(body, ['controllerId', 'revision', 'bootId']) && typeof body.controllerId === 'string' &&
         integer(body.revision, 1, Number.MAX_SAFE_INTEGER) && typeof body.bootId === 'string', 'invalid_request');
-      try { await this.runtime.recover(body.controllerId, body); }
+      try { await this.runtime[{ controller_recover: 'recover', controller_check_state: 'checkStateNow', controller_restart_tailwind: 'restartTailwind' }[operation]](body.controllerId, body); }
       catch (error) { if (error instanceof Fault) throw new WebAdminError(error.message); throw error; }
       return this.read();
     }

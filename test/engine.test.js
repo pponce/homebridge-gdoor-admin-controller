@@ -287,3 +287,49 @@ test('competing requests never queue and shutdown preserves intent for observati
   assert.equal(engine.state.fault, null); assert.equal(engine.state.reconciling, true);
   assert.equal(model.journal.fault, false);
 });
+
+test('fault observation follows late stable closure without replaying motion or auto-bolting', async () => {
+  const { engine, model } = fixture({ model: { door: 'not-closed', locked: false } });
+  await engine.initialize(); await engine.execute('close');
+  assert.equal(engine.state.fault, 'door_close_timeout');
+  const writes = structuredClone(model.writes);
+  await engine.observe(); assert.equal(engine.state.fault, 'door_close_timeout');
+  model.door = 'closed'; await engine.observe();
+  assert.equal(engine.state.closedObservedDuringFault, false);
+  model.now += 20; await engine.observe();
+  assert.equal(engine.state.fault, null); assert.equal(engine.initialized, true);
+  assert.equal(engine.state.phase, 'closed'); assert.equal(engine.state.target, 'closed');
+  assert.equal(engine.autoClosePending, false); assert.deepEqual(model.writes, writes);
+});
+
+test('closed feedback remains readable during lockout and resumes only after lockout clears', async () => {
+  const { engine, model } = fixture({ model: { blocked: true } });
+  await engine.initialize(); assert.equal(engine.state.fault, 'door_blocked');
+  await engine.observe(); model.now += 20; await engine.observe();
+  assert.equal(engine.state.closedObservedDuringFault, true);
+  assert.equal(engine.state.phase, 'closed'); assert.equal(engine.state.fault, 'door_blocked');
+  assert.equal(engine.initialized, false);
+  model.blocked = false; await engine.observe();
+  assert.equal(engine.state.fault, null); assert.equal(engine.initialized, true);
+  assert.deepEqual(model.writes, []);
+});
+
+test('fault monitoring preserves hard holds, detects bolt conflicts and resets stability after read loss', async () => {
+  for (const reason of ['door_write_ambiguous', 'journal_invalid', 'door_open_timeout', 'bolt_retract_timeout']) {
+    const { engine, model } = fixture(); await engine.initialize(); await engine.fail(reason);
+    await engine.observe(); model.now += 20; await engine.observe();
+    assert.equal(engine.state.fault, reason); assert.equal(engine.state.closedObservedDuringFault, true);
+    assert.equal(engine.initialized, false); assert.deepEqual(model.writes, []);
+  }
+  const { engine, model } = fixture({ model: { door: 'not-closed', locked: false } });
+  await engine.initialize(); await engine.fail('door_close_timeout');
+  model.locked = true; await engine.observe();
+  assert.equal(engine.state.fault, 'startup_bolt_state_requires_review');
+  model.door = 'closed'; model.locked = false; await engine.observe();
+  assert.equal(engine.state.externalUnlockOverride, true);
+  const read = engine.door.read; engine.door.read = async () => { throw new Fault('door_read_failed'); };
+  model.now += 100; await engine.observe(); assert.equal(engine.state.closedObservedDuringFault, false);
+  engine.door.read = read; await engine.observe(); assert.equal(engine.state.closedObservedDuringFault, false);
+  model.now += 20; await engine.observe(); assert.equal(engine.state.closedObservedDuringFault, true);
+  assert.equal(engine.state.fault, 'startup_bolt_state_requires_review'); assert.deepEqual(model.writes, []);
+});

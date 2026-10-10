@@ -4,10 +4,10 @@ import { EventEmitter } from 'node:events';
 import { CoordinatorAccessories } from '../src/accessories.js';
 import { MovementEngine } from '../src/engine.js';
 
-function fixture() {
+function fixture(kinds = ['garage', 'bolt']) {
   const values = new Map(); const events = []; const pending = new Map(); const immediates = new Map(); const chars = new Map(); let serial = 0;
   class HapStatusError extends Error {}
-  const Characteristic = Object.fromEntries(['CurrentDoorState','TargetDoorState','ObstructionDetected','LockCurrentState','LockTargetState'].map(key => [key,key]));
+  const Characteristic = Object.fromEntries(['CurrentDoorState','TargetDoorState','ObstructionDetected','LockCurrentState','LockTargetState','ContactSensorState','On'].map(key => [key,key]));
   const api = { hap: { Characteristic, HapStatusError, HAPStatus: { SERVICE_COMMUNICATION_FAILURE: -70402, NOT_ALLOWED_IN_CURRENT_STATE: -70412 } } };
   const status = { actuationEnabled: true, state: {} };
   const entry = { engine: { observedAt: Date.now() }, profile: { timing: { idlePollSeconds: 2 } } };
@@ -15,7 +15,7 @@ function fixture() {
   const timers = { setTimeout(fn, ms) { const id = ++serial; pending.set(id, { fn, ms }); return id; }, clearTimeout(id) { pending.delete(id); },
     setImmediate(fn) { const id = ++serial; immediates.set(id, fn); return id; }, clearImmediate(id) { immediates.delete(id); } };
   const accessories = new CoordinatorAccessories(api, {}, runtime, [], timers);
-  for (const kind of ['garage','bolt']) {
+  for (const kind of kinds) {
     const v = { kind, id: 'example', targetGeneration: 0, service: { getCharacteristic(key) {
       if (!chars.has(key)) {
         const c = new EventEmitter();
@@ -316,4 +316,33 @@ test('startup bypasses diagnostic hooks through complete garage cycles and reads
   assert.equal(calls,0);assert.equal(f.read('CurrentDoorState'),1);
   assert.deepEqual(f.accessories.reporting.events,[]);
   f.accessories.reporting.setRecording(true);f.read('CurrentDoorState');assert.ok(calls>0);
+});
+
+test('fresh confirmed Closed remains visible while control is held; uncertain fault stays unavailable', () => {
+  const f = fixture(); f.status.actuationEnabled = false; f.status.observationEnabled = true;
+  f.publish({ ...closed, fault: 'door_blocked', lockout: true, closedObservedDuringFault: true });
+  assert.equal(f.read('CurrentDoorState'), 1); assert.equal(f.read('TargetDoorState'), 1);
+  assert.equal(f.read('ObstructionDetected'), false);
+  f.publish({ ...closed, phase: 'fault', door: 'not-closed', fault: 'door_close_timeout', closedObservedDuringFault: false });
+  assert.throws(() => f.read('CurrentDoorState'));
+  f.status.observationEnabled = false;
+  f.publish({ ...closed, fault: 'door_blocked', closedObservedDuringFault: true });
+  assert.throws(() => f.read('CurrentDoorState'));
+});
+
+test('lockout contact is active only for explicit lockout; restart switch is momentary and OFF is inert', async () => {
+  const f = fixture(['garage', 'lockout', 'restart']);
+  f.status.actuationEnabled = false; f.status.observationEnabled = true;
+  f.publish({ phase: 'fault', door: 'not-closed', fault: 'door_blocked', lockout: true });
+  assert.equal(f.read('ContactSensorState'), 1); assert.throws(() => f.read('CurrentDoorState'));
+  f.publish({ phase: 'fault', fault: 'door_blocked', lockout: false, disabled: true });
+  assert.equal(f.read('ContactSensorState'), 0);
+  f.publish({ phase: 'fault', fault: 'door_blocked', lockout: null });
+  assert.throws(() => f.read('ContactSensorState'));
+  let restarts = 0; f.runtime.restartTailwind = async (_id, _body, source) => { assert.equal(source, 'homekit'); restarts++; };
+  await f.set('On', false); f.flush(); assert.equal(restarts, 0);
+  await f.set('On', true); f.values.set('On', true); f.flush();
+  assert.equal(restarts, 1); assert.equal(f.values.get('On'), false); assert.equal(f.read('On'), false);
+  f.runtime.restartTailwind = async () => { throw Error('held'); };
+  await assert.rejects(f.set('On', true)); f.flush(); assert.equal(f.values.get('On'), false);
 });

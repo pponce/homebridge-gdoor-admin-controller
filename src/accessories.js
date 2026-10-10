@@ -16,14 +16,15 @@ export class CoordinatorAccessories {
     this.stop(); this.stopped = false;
     const { Service: S, Characteristic: C } = this.api.hap; const retained = new Set();
     for (const p of this.runtime.configuration.controllers) {
-      for (const kind of ['garage', ...(p.exposeBoltLock ? ['bolt'] : [])]) {
+      for (const kind of ['garage', ...(p.exposeBoltLock ? ['bolt'] : []), ...(p.door?.type === 'tailwind' && p.exposeTailwindLockout ? ['lockout'] : []), ...(p.door?.type === 'tailwind' && p.exposeTailwindRestart ? ['restart'] : [])]) {
         const uuid = this.api.hap.uuid.generate('gdoorandbolt:' + this.identity.instanceId + ':' + p.id + ':' + kind); retained.add(uuid);
+        const name = p.name + ({ garage: '', bolt: ' Bolt', lockout: ' Tailwind Lockout', restart: ' Restart Tailwind' }[kind]);
         let a = this.active.get(uuid)?.accessory ?? this.cached.get(uuid);
-        const fresh = !a; if (!a) a = new this.api.platformAccessory(kind === 'garage' ? p.name : p.name + ' Bolt', uuid);
-        a.context = { coordinator: p.id, kind }; a.displayName = kind === 'garage' ? p.name : p.name + ' Bolt';
+        const fresh = !a; if (!a) a = new this.api.platformAccessory(name, uuid);
+        a.context = { coordinator: p.id, kind }; a.displayName = name;
         a.getService(S.AccessoryInformation).setCharacteristic(C.Manufacturer, 'Garage Door and Bolt Coordinator')
-          .setCharacteristic(C.Model, kind === 'garage' ? 'Coordinated Garage' : 'Coordinated Bolt').setCharacteristic(C.SerialNumber, p.id + '-' + kind);
-        const type = kind === 'garage' ? S.GarageDoorOpener : S.LockMechanism;
+          .setCharacteristic(C.Model, { garage: 'Coordinated Garage', bolt: 'Coordinated Bolt', lockout: 'Tailwind Lockout', restart: 'Tailwind Restart' }[kind]).setCharacteristic(C.SerialNumber, p.id + '-' + kind);
+        const type = { garage: S.GarageDoorOpener, bolt: S.LockMechanism, lockout: S.ContactSensor, restart: S.Switch }[kind];
         const service = a.getService(type) ?? a.addService(type, a.displayName);
         service.setCharacteristic(C.Name, a.displayName);
         const v = { accessory: a, service, kind, id: p.id, targetGeneration: 0, initializing: true };
@@ -42,6 +43,8 @@ export class CoordinatorAccessories {
   }
   fields(v) {
     const C = this.api.hap.Characteristic;
+    if (v.kind === 'lockout') return [['current', C.ContactSensorState]];
+    if (v.kind === 'restart') return [['target', C.On]];
     return v.kind === 'garage' ? [['current', C.CurrentDoorState], ['target', C.TargetDoorState], ['obstruction', C.ObstructionDetected]] :
       [['current', C.LockCurrentState], ['target', C.LockTargetState]];
   }
@@ -69,18 +72,36 @@ export class CoordinatorAccessories {
       }
     }
   }
-  fresh(id, observedAt) {
+  fresh(id, observedAt, kind) {
     try {
       const e = this.runtime.entry(id); const s = this.runtime.status(id);
-      return Boolean(s.actuationEnabled && !s.state.fault && !s.state.unavailable && observedAt &&
+      if (kind === 'restart') return true; // Momentary local control, never a device-state claim.
+      const readable = s.observationEnabled ?? s.actuationEnabled;
+      const faultReadable = kind === 'lockout' || s.state.closedObservedDuringFault === true;
+      return Boolean(readable && (!s.state.fault || faultReadable) && !s.state.unavailable && observedAt &&
         Date.now() - observedAt <= Math.max(10000, e.profile.timing.idlePollSeconds * 2500));
     } catch { return false; }
   }
   read(v, field) {
-    if (!v.report?.available || !this.fresh(v.id, v.report.observedAt)) throw this.failure();
+    if (!v.report?.available || !this.fresh(v.id, v.report.observedAt, v.kind)) throw this.failure();
     return v.report[field];
   }
   async command(v, value, callback) {
+    if (v.kind === 'restart') {
+      try {
+        if (value) {
+          const status = this.runtime.status(v.id);
+          await this.runtime.restartTailwind(v.id, { revision: status.revision, bootId: status.bootId }, 'homekit');
+        }
+        callback();
+      } catch { callback(new this.api.hap.HapStatusError(this.api.hap.HAPStatus.NOT_ALLOWED_IN_CURRENT_STATE)); }
+      this.immediates.set(() => {
+        if (!this.stopped && [...this.active.values()].includes(v)) {
+          this.commit(v, this.report(v, this.runtime.status(v.id).state)); this.publish(v);
+        }
+      });
+      return;
+    }
     const generation = v.targetGeneration;
     const command = v.kind === 'garage' ? value === 0 ? 'open' : 'close' : value === 1 ? 'lock' : 'unlock';
     try {
@@ -109,9 +130,13 @@ export class CoordinatorAccessories {
   doorTarget(s) { return (s.target ?? s.phase) === 'open' ? 0 : 1; }
   report(v, state) {
     const observedAt = this.runtime.entry(v.id).engine?.observedAt;
-    const available = !state.fault && !state.unavailable && this.fresh(v.id, observedAt);
+    const available = this.fresh(v.id, observedAt, v.kind);
     const report = { available, observedAt, notificationKey: null };
-    if (v.kind === 'garage') {
+    if (v.kind === 'lockout') {
+      report.current = state.lockout ? 1 : 0; report.available &&= typeof state.lockout === 'boolean';
+    } else if (v.kind === 'restart') {
+      report.target = false;
+    } else if (v.kind === 'garage') {
       report.current = this.doorState(state); report.target = this.doorTarget(state); report.obstruction = state.obstruction === true;
       if (available && ['open', 'closed'].includes(state.phase) && (!state.target || state.target === state.phase))
         report.notificationKey = JSON.stringify([state.phase, state.openEstimated === true, state.closeEstimated === true]);
@@ -168,7 +193,7 @@ export class CoordinatorAccessories {
       let live;
       try { live = this.report(v, this.runtime.status(v.id).state); }
       catch { live = { ...pending.report, available: false }; }
-      if (!live.available || !this.fresh(v.id, pending.report.observedAt)) {
+      if (!live.available || !this.fresh(v.id, pending.report.observedAt, v.kind)) {
         this.cancelNotification(v); this.writeReport(v, false, { ...pending.report, available: false }); return;
       }
       if (!sameReport(live, pending.report)) return;
@@ -210,7 +235,7 @@ export class CoordinatorAccessories {
       let status; let live;
       try { status = this.runtime.status(v.id); live = this.report(v, status.state); }
       catch { this.cancelNotification(v); return; }
-      if (v.notificationKey !== key || v.report.notificationKey !== key || !this.fresh(v.id, v.report.observedAt) ||
+      if (v.notificationKey !== key || v.report.notificationKey !== key || !this.fresh(v.id, v.report.observedAt, v.kind) ||
         live.notificationKey !== key || !live.available || v.kind === 'garage' && status.state.busy ||
         live.current !== v.report.current || live.target !== v.report.target) {
         this.cancelNotification(v); return;

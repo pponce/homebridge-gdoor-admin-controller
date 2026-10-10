@@ -395,6 +395,16 @@
                   }
                 }
               }
+            },
+            "exposeTailwindLockout": {
+              "title": "Show Tailwind Lockout contact sensor",
+              "type": "boolean",
+              "default": false
+            },
+            "exposeTailwindRestart": {
+              "title": "Show Restart Tailwind switch",
+              "type": "boolean",
+              "default": false
             }
           }
         }

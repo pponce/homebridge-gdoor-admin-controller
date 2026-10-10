@@ -170,6 +170,10 @@ export class ProfileEditor {
   devices(root,p){
     root.append(el('p','Devices operate or report on one part of your garage: the door or the bolt. Controls request a coordinated operation; the coordinator handles the door and bolt sequence.','help setup-model'));
     const identity=this.panel(root,'Garage Door Details');const grid=this.grid(identity);this.input(grid,'Garage Door name',p,'name');identity.append(el('p','Controller ID: '+p.id+' · Use this to link the standalone administrator.','help'));this.input(grid,'Show a separate bolt Lock tile',p,'exposeBoltLock',{type:'checkbox'});
+    if (p.door.type === 'tailwind') {
+      this.input(grid,'Show Tailwind Lockout contact sensor',p,'exposeTailwindLockout',{type:'checkbox'});
+      this.input(grid,'Show Restart Tailwind switch',p,'exposeTailwindRestart',{type:'checkbox'});
+    }
     const choices=[{id:'primary',name:'Garage Door opener'},{id:'bolt',name:'Bolt / Lock'},...p.motorPaths.map(path=>({id:path.id,name:path.name}))];
     if(!choices.some(item=>item.id===this.selectedDevices.get(p.id)))this.selectedDevices.set(p.id,'primary');
     const selected=this.selectedDevices.get(p.id),selector=el('div',undefined,'input-selector device-selector');selector.setAttribute('aria-label','Devices for '+p.name);

@@ -103,3 +103,9 @@ Existing input `busyBehavior: interrupt` now also permits native physical keypad
 ### Devices and Controls UI (0.4.19)
 
 User-facing Devices groups the primary opener, bolt and additional opener relays. Controls groups input sources and their selected opener. Schema IDs (`door`, `bolt`, `motorPaths`, `inputs`, `motorPath`) stay unchanged. Device movement edits materialize behavior into linked toggle profiles; new/rerouted toggle profiles use the selected device setting. Divergent legacy profiles are preserved until explicitly reconciled under Devices. Keypad `busyBehavior` is a separate opt-in PIN policy, never automatically enabled by configuring device capability. Explicit open/close controls retain drop behavior.
+
+### Tailwind troubleshooting detail
+
+The opt-in detailed controller status additionally includes `observationEnabled`, `tailwind`, `restarting`, and state fields `lockout`, `disabled`, `blocked`, and `closedObservedDuringFault`. Lockout/disabled are nullable when not supplied by the driver. These fields are stripped from legacy status responses.
+
+The bundled authenticated admin backend provides admin-only manage-mode POST routes `/api/controller/check-state` and `/api/controller/restart-tailwind`, each with `{controllerId, revision, bootId}`. They return the same controller settings view as `/api/controller`. Check-state is read-only and preserves unresolved faults/manual unlock. Restart is an explicit single reboot request; duplicate requests during its hold/cooldown and concurrent movement are rejected. These are bundled web-admin routes, not additions to the legacy `/v1` mutation protocol.

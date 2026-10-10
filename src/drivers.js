@@ -31,7 +31,19 @@ export class TailwindDoor {
       ['open', 'close'].includes(row.status) && flag(row.lockup) && flag(row.disabled), 'door_response_invalid');
     // Tailwind's "open" means the closed sensor has departed; it is not fully open.
     return { door: row.status === 'close' ? 'closed' : 'not-closed',
+      lockout: Boolean(row.lockup), disabled: Boolean(row.disabled),
       blocked: Boolean(row.lockup || row.disabled), obstruction: false, evidence: 'closed-sensor' };
+  }
+
+  async restart() {
+    requireValue(!this.readOnly, 'actuation_disabled');
+    let result;
+    try {
+      result = await this.request({ url: this.config.baseUrl + '/json', method: 'POST',
+        headers: { TOKEN: this.token }, timeoutMs: 8000,
+        body: { product: 'iQ3', version: '0.2', data: { type: 'set', name: 'reboot' } } });
+    } catch { throw new Fault('tailwind_restart_ambiguous'); }
+    requireValue(object(result) && result.result === 'OK', 'tailwind_restart_unconfirmed');
   }
 
   async write(command, { beforeWrite } = {}) {

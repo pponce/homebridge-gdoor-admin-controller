@@ -66,7 +66,7 @@ try {
       trigger: 1002, action: 'toggle', motorPath: 'primary', busyBehavior: 'drop', rearmSeconds: 1.5, timing: {} }];
     let failReads = false; const hardwareWrites = [];
     const drivers = async () => ({
-      door: { read: async () => ({door:'closed',blocked:failReads,obstruction:false,evidence:'closed-sensor'}), write:async()=>hardwareWrites.push('door') },
+      door: { read: async () => ({door:'closed',blocked:failReads,lockout:failReads,disabled:false,obstruction:false,evidence:'closed-sensor'}), write:async()=>hardwareWrites.push('door'), restart:async()=>{ hardwareWrites.push('restart'); failReads=false; } },
       bolt: { read: async () => ({locked:true,evidence:'relay'}), write:async()=>hardwareWrites.push('bolt') },
       motorPaths:{}, inputDrivers:new Map([['button',{inspect:async()=>({}),read:async()=>({})}]])
     });
@@ -75,6 +75,8 @@ try {
     const editor = await context.newPage(); editor.on('pageerror', error => errors.push(error.message)); editor.on('dialog', dialog => dialog.accept());
     await editor.exposeFunction('request', async (path, body) => {
       if (path === 'controller') return controller.dispatch('controller_settings', {});
+      if (path === 'controller/check-state') return controller.dispatch('controller_check_state', body);
+      if (path === 'controller/restart-tailwind') return controller.dispatch('controller_restart_tailwind', body);
       if (path === 'controller/recover') return controller.dispatch('controller_recover', body);
       assert.equal(path, 'controller/timings'); saves++;
       const result = await controller.dispatch('controller_timings_save', body);
@@ -94,7 +96,16 @@ try {
       await editor.getByText(/Enabled · Ready · Closed/).waitFor();
       for (const listener of runtime.entry(id).listeners) listener.stop();
       assert.equal(runtime.status(id).enabled,true); assert.deepEqual(hardwareWrites,[]);
+      await editor.getByRole('button', { name: 'Check state now', exact: true }).click();
+      await editor.getByText('Device states checked. No movement command was sent.', { exact: true }).waitFor();
+      assert.deepEqual(hardwareWrites, []);
       await editor.locator('[data-default-group="timing"][data-key="openRetractSettleSeconds"]').fill('0.3');
+      await editor.getByRole('button', { name: 'Restart Tailwind', exact: true }).click();
+      await editor.getByText('Restart requested. Waiting for fresh Tailwind feedback.', { exact: true }).waitFor();
+      assert.deepEqual(hardwareWrites, ['restart']);
+      assert.equal(await editor.locator('[data-default-group="timing"][data-key="openRetractSettleSeconds"]').inputValue(), '0.3');
+      runtime.entry(id).restartingUntil = 0; await runtime.checkStateNow(id, { revision: runtime.state.revision, bootId: runtime.bootId });
+
       await editor.getByText('Indoor button', { exact: true }).click();
       await editor.locator('[data-inherit="0"][data-key="closeRetractSettleSeconds"]').uncheck();
       await editor.locator('[data-input-index="0"][data-key="closeRetractSettleSeconds"]').fill('0');

@@ -16,8 +16,8 @@ export function createManagementServer({ identity, configuration, diagnostics, r
     // are opt-in, so upgrading this plugin does not require upgrading a client.
     const statusView = value => {
       if (request.headers['x-coordinator-status'] === 'detailed' || !value?.state) return value;
-      const { health, enabled, configurationValid, lastFault, canRecover, state, ...status } = value;
-      const { faultAt, reconciling, restartCloseAvailable, ...legacyState } = state;
+      const { health, enabled, configurationValid, lastFault, canRecover, observationEnabled, tailwind, restarting, state, ...status } = value;
+      const { faultAt, reconciling, restartCloseAvailable, closedObservedDuringFault, lockout, disabled, blocked, ...legacyState } = state;
       return { ...status, state: legacyState };
     };
     const controllerRows = () => controllers().map(row => ({ ...row, status: statusView(row.status) }));

@@ -200,11 +200,15 @@ export function validateConfiguration(input, { allowEmpty = false } = {}) {
   if (!Number.isInteger(port) || port < 1024 || port > 65535) fail('invalid_management_port');
   const ids = new Set(); const resources = new Set();
   const controllers = input.controllers.map(value => {
-    fields(value, ['id', 'name', 'door', 'bolt', 'feedback', 'exposeBoltLock', 'motorPaths', 'inputs', 'timing', 'autoBolt', 'keypad'], 'invalid_controller');
+    fields(value, ['id', 'name', 'door', 'bolt', 'feedback', 'exposeBoltLock', 'exposeTailwindLockout', 'exposeTailwindRestart', 'motorPaths', 'inputs', 'timing', 'autoBolt', 'keypad'], 'invalid_controller');
     if (!identifier(value.id) || ids.has(value.id)) fail('invalid_or_duplicate_controller_id');
     ids.add(value.id);
     if (typeof value.exposeBoltLock !== 'boolean') fail('bolt_tile_choice_required');
     const result = { id: value.id, name: string(value.name, 'invalid_controller_name', 64), door: door(value.door), bolt: bolt(value.bolt), feedback: feedback(value.feedback), exposeBoltLock: value.exposeBoltLock };
+    for (const key of ['exposeTailwindLockout', 'exposeTailwindRestart']) if (value[key] !== undefined) {
+      if (typeof value[key] !== 'boolean' || value[key] && result.door.type !== 'tailwind') fail('invalid_tailwind_tile_choice');
+      result[key] = value[key];
+    }
     const timing = value.timing ?? {};
     const bounds = { operationPollSeconds: [0.1, 5, 0.5], idlePollSeconds: [0.5, 30, 2],
       openRetractSettleSeconds: [0, 120, 2], closeRetractSettleSeconds: [0, 120, 2],

@@ -79,7 +79,9 @@ test('idle read outages recover without movement; active outages remain latched'
   f.state.outage = false; assert.equal((await f.engine.observe()).phase, 'closed');
   f.hook((e,s) => { if (e.interruptionAllowed) s.outage = true; });
   assert.equal((await f.engine.execute('open', f.options)).fault, 'door_read_failed');
-  f.state.outage = false; await assert.rejects(f.engine.observe(), /engine_unavailable/);
+  f.state.outage = false; const writes = structuredClone(f.state.writes);
+  await f.engine.observe(); assert.equal(f.engine.state.fault, 'door_read_failed');
+  assert.deepEqual(f.state.writes, writes); await assert.rejects(f.engine.execute('close', f.options), /engine_unavailable/);
 });
 
 test('new idle closure signals automatic lock work, startup and an external unlock do not', async () => {

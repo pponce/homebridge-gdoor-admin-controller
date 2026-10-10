@@ -22,6 +22,11 @@ export async function hardwareFixture(configuration) {
       if (body?.data?.type === 'get' && body.data.name === 'dev_st') { await state.beforeDoorRead?.(); return send({ result: 'OK', data: {
         ['door' + (config.door.doorIndex + 1)]: { index: config.door.doorIndex, status: state.closed ? 'close' : 'open',
           lockup: state.blocked, disabled: false } } }); }
+      if (body?.data?.type === 'set' && body.data.name === 'reboot' && body.version === '0.2') {
+        state.writes.push(['tailwind', 'restart']);
+        if (state.ambiguousRestart) return request.socket.destroy();
+        state.blocked = false; return send({ result: 'OK' });
+      }
       if (body?.data?.type === 'set' && body.data.name === 'door_op' && body.product === 'iQ3') {
         state.writes.push(['door', body.data.value.cmd]);
         if (body.data.value.cmd === 'close' && state.closeDelayMs > 0) {

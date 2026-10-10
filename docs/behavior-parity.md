@@ -29,3 +29,6 @@ The runtime is connected but starts with every new assembly uncommissioned. Driv
 - [Tailwind local API](https://github.com/Scott--R/Tailwind_Local_Control_API): local TOKEN header, dev_st reads, door_op open/close. No stop/reverse command is assumed.
 - [Tailwind local control key setup](https://gotailwind.zendesk.com/hc/en-us/articles/42573968819725-How-do-I-get-my-local-control-key-for-my-Tailwind-garage-door-controller).
 - Direct deCONZ adapter behavior is taken from the reviewed existing controller: pin bridge/endpoint/type/model/manufacturer, require reachable boolean relay feedback, validate exact write acknowledgement, never retry an uncertain write.
+
+- Fault observation intentionally continues after movement failure. It performs no hardware writes, preserves manual unlock, and cannot replay ambiguous commands. Confirmed stable closed may restore displayed Closed while independent control faults remain. Only closed-outcome timeouts and cleared opener-blocked holds recover automatically; no automatic bolting follows fault recovery.
+- Explicit Tailwind reboot is a separate troubleshooting action, never a motor route or automatic lockout reset. Optional contact reporting distinguishes real lockout from disabled status and communication loss.

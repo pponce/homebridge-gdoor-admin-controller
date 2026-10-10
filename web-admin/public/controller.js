@@ -1,7 +1,7 @@
 'use strict';
 window.ConfiguratorController = ({ root, api, readOnly }) => {
   const esc = value => String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
-  let data, selected, dirty = false, saving = false, uncertain = false, generation = 0;
+  let data, selected, dirty = false, saving = false, uncertain = false, generation = 0, refreshTimer;
   const message = text => { root.querySelector('[data-controller-message]').textContent = text; };
   const explanations = {
     controller_busy: 'A controller is busy or an interrupted movement is unfinished. Finish the operation, then save again.',
@@ -16,10 +16,74 @@ window.ConfiguratorController = ({ root, api, readOnly }) => {
     const result = await api('controller');
     if (turn !== generation) return;
     data = result; selected = data.controllers.some(row => row.id === selected) ? selected : data.controllers[0]?.id;
-    dirty = false; uncertain = false; render();
+    dirty = false; uncertain = false; render(); scheduleRefresh();
   }
-  function clear() { generation++; data = null; selected = null; dirty = false; uncertain = false; saving = false; root.replaceChildren(); }
+  function clear() { clearTimeout(refreshTimer); generation++; data = null; selected = null; dirty = false; uncertain = false; saving = false; root.replaceChildren(); }
   function leave() { return !saving && (!dirty || confirm('Discard unsaved controller timing changes?')); }
+  function troubleshooting(row) {
+    const status = row.status, state = status.state;
+    const lockout = status.restarting ? 'Restart requested; waiting for fresh feedback' : state.unavailable || typeof state.lockout !== 'boolean' ? 'Unknown' : state.lockout ? 'Locked out' : 'Not locked out';
+    return `<h3>Troubleshooting</h3>
+      ${status.tailwind ? `<p role="status"><strong>Tailwind: ${esc(lockout)}</strong>${state.disabled ? ' · Door disabled in Tailwind' : ''}</p>` : ''}
+      <p class="gp-note">Door: ${esc(state.door)} · Bolt: ${esc(state.bolt)}${state.fault ? ' · '+esc(state.fault.replaceAll('_', ' ')) : ''}</p>
+      <button type="button" class="gp-button" data-controller-check-state ${readOnly() || state.busy || !status.observationEnabled ? 'disabled' : ''}>Check state now</button>
+      ${status.tailwind ? `<button type="button" class="gp-button" data-controller-restart-tailwind ${readOnly() || state.busy || status.restarting || !status.observationEnabled ? 'disabled' : ''}>Restart Tailwind</button><p class="gp-sub">Restarts the Tailwind device and clears its safety lockout. All doors connected to that device are briefly unavailable. No door movement is requested.</p>` : ''}
+      <p class="gp-sub">Check state now reads the devices without moving the door or bolt. Unresolved faults remain held.</p>`;
+  }
+  function bindTroubleshooting() {
+    for (const [selector, endpoint, success] of [
+      ['[data-controller-check-state]', 'check-state', 'Device states checked. No movement command was sent.'],
+      ['[data-controller-restart-tailwind]', 'restart-tailwind', 'Restart requested. Waiting for fresh Tailwind feedback.'],
+    ]) {
+      const button = root.querySelector(selector);
+      if (!button) continue;
+      button.onclick = async () => {
+        if (saving || readOnly()) return;
+        saving = true; const turn = generation, row = profile();
+        root.querySelectorAll('[data-controller-troubleshooting] button').forEach(el => { el.disabled = true; });
+        try {
+          const result = await api('controller/' + endpoint, { controllerId: selected, revision: data.revision, bootId: row.status.bootId });
+          if (turn !== generation) return;
+          for (const updated of result.controllers) {
+            const old = data.controllers.find(item => item.id === updated.id);
+            if (old) old.status = updated.status;
+          }
+          message(success);
+        } catch (error) {
+          if (turn !== generation) return;
+          message(explanations[error.code] || (endpoint === 'restart-tailwind' ? 'Restart could not be confirmed. Check status before trying again.' : 'Could not check device states.'));
+        } finally {
+          saving = false;
+          if (turn === generation) { refreshTroubleshooting(); scheduleRefresh(); }
+        }
+      };
+    }
+  }
+  function refreshTroubleshooting() {
+    const panel = root.querySelector('[data-controller-troubleshooting]');
+    if (panel && profile()) { panel.innerHTML = troubleshooting(profile()); bindTroubleshooting(); }
+  }
+  function scheduleRefresh() {
+    clearTimeout(refreshTimer);
+    refreshTimer = setTimeout(async () => {
+      const turn = generation;
+      try {
+        if (!saving && data && root.isConnected && !root.closest('[hidden]')) {
+          const result = await api('controller');
+          if (turn !== generation || saving) return;
+          for (const updated of result.controllers) {
+            const old = data.controllers.find(item => item.id === updated.id);
+            if (old) old.status = updated.status;
+          }
+          refreshTroubleshooting();
+        }
+      } catch { if (turn === generation) {
+        const panel = root.querySelector('[data-controller-troubleshooting]');
+        if (panel) panel.textContent = 'Status unavailable. Reload to check the connection.';
+      } }
+      finally { if (turn === generation && data) scheduleRefresh(); }
+    }, 3000);
+  }
   function render() {
     if (!data.controllers.length) { root.innerHTML = '<p class="gp-note">Add a garage in the Homebridge plugin settings first.</p>'; return; }
     const row = profile(), values = row.values, fields = data.fields;
@@ -29,6 +93,7 @@ window.ConfiguratorController = ({ root, api, readOnly }) => {
       ${row.status.health?.detail ? `<p class="gp-note" role="status">${esc(row.status.health.detail)}${row.status.health.code ? ' Reason: '+esc(row.status.health.code)+'.' : ''}</p>` : ''}
       ${row.status.lastFault ? `<details class="gp-panel gp-body"><summary>Previous fault</summary><p class="gp-note">${esc(row.status.lastFault.reason.replaceAll('_', ' '))}${row.status.lastFault.at ? ' · '+esc(row.status.lastFault.at) : ''}. Historical record; current status is shown above.</p></details>` : ''}
       ${row.status.canRecover ? `<button type="button" class="gp-button" data-controller-recover ${readOnly() ? 'disabled' : ''}>Check again</button>` : ''}
+      <section class="gp-panel gp-body" data-controller-troubleshooting>${troubleshooting(row)}</section>
       <p class="gp-sub">All times are in seconds. Changes apply to the next operation without restarting Homebridge. Save when controllers are idle.</p>
       <p class="gp-sub">Opening feedback: ${esc(row.feedback.opening)} · Closing feedback: ${esc(row.feedback.closing)} · Bolt feedback: ${esc(row.feedback.bolt)}. Travel times are estimates when timed feedback is selected.</p>
       <p data-controller-message role="status" aria-live="polite"></p>
@@ -45,6 +110,7 @@ window.ConfiguratorController = ({ root, api, readOnly }) => {
       <button type="submit" class="gp-button primary">Review timing changes</button></fieldset></form>
       <div data-controller-review class="gp-panel gp-body" hidden></div>
       <button type="button" class="gp-button" data-controller-reload>Reload saved timings</button>`;
+    bindTroubleshooting();
     const form = root.querySelector('form'), review = root.querySelector('[data-controller-review]');
     root.querySelector('[data-controller-select]').onchange = event => {
       if (!leave()) { event.target.value = selected; return; } selected = event.target.value; dirty = false; render();

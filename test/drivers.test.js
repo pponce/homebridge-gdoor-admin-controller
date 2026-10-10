@@ -167,3 +167,18 @@ test('transport rejects redirects, oversized JSON and slow responses with fixed 
   }
   assert.equal(received, 4);
 });
+
+test('Tailwind separates lockout from disabled and restart uses protocol 0.2 exactly once', async () => {
+  const calls = [];
+  const config = { baseUrl: 'http://192.0.2.1', doorIndex: 0 };
+  const request = async value => { calls.push(value); return value.body.data.name === 'dev_st'
+    ? { result: 'OK', data: { door1: { index: 0, status: 'close', lockup: 0, disabled: 1 } } } : { result: 'OK' }; };
+  const door = new TailwindDoor(config, '123456', { request, readOnly: false });
+  const state = await door.read(); assert.equal(state.lockout, false); assert.equal(state.disabled, true); assert.equal(state.blocked, true);
+  await door.restart(); assert.deepEqual(calls[1].body, { product: 'iQ3', version: '0.2', data: { type: 'set', name: 'reboot' } });
+  await assert.rejects(new TailwindDoor(config, '123456', { request }).restart(), /actuation_disabled/);
+  assert.equal(calls.length, 2);
+  door.request = async () => { calls.push('lost'); throw Error('private response'); };
+  await assert.rejects(door.restart(), /^Fault: tailwind_restart_ambiguous$/);
+  assert.equal(calls.length, 3);
+});
