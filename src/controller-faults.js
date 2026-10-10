@@ -68,6 +68,7 @@ export function controllerHealth(status) {
     return { title: 'Fault', detail: (explanations[code] ?? (code ? 'Controller fault: ' + code.replaceAll('_', ' ') + '.' : 'The controller is unavailable.')) +
       ' Resolve the condition, then choose Check again. Setup and enablement are retained.', code };
   }
+  if (state.lockout && !state.fault) return { title: 'Tailwind locked out', detail: 'Tailwind commands are held. Configured physical button/keypad relay routes can operate after their position and bolt checks pass.', code: 'door_blocked' };
   if (state.reconciling && state.door === 'not-closed') return { title: 'Position unknown',
     detail: 'Monitoring resumed. This device confirms only closed; the old travel estimate was discarded.' +
       (state.restartCloseAvailable ? ' A new Close request is available from HomeKit. Relay toggle inputs wait for confirmed position.' : ' New commands wait for confirmed open or closed feedback.'), code: null };

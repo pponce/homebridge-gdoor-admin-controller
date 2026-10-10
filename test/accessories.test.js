@@ -346,3 +346,34 @@ test('lockout contact is active only for explicit lockout; restart switch is mom
   f.runtime.restartTailwind = async () => { throw Error('held'); };
   await assert.rejects(f.set('On', true)); f.flush(); assert.equal(f.values.get('On'), false);
 });
+
+test('admin HomeKit snapshot reports committed values and freshness without GET or hardware commands', () => {
+  const f = fixture(['garage', 'bolt', 'lockout', 'restart']);
+  f.publish({ ...closed, lockout: false });
+  const before = f.events.length;
+  const status = f.accessories.status('example');
+  assert.equal(status.length, 4); assert.equal(status[0].current, 1); assert.equal(status[0].target, 1);
+  assert.equal(status[0].available, true); assert.equal(status[2].current, 0); assert.equal(status[3].target, false);
+  assert.equal(f.events.length, before); assert.deepEqual(f.accessories.status('missing'), []);
+  f.entry.engine.observedAt = 1;
+  // Committed timestamps belong to the report; expire that timestamp explicitly.
+  f.accessories.active.get('garage').report.observedAt = 1;
+  assert.equal(f.accessories.status('example')[0].available, false);
+});
+
+
+test('fresh failed movement reports Open plus obstruction without enabling control or inventing full-open evidence', () => {
+  const f = fixture(); f.status.observationEnabled = true; f.status.actuationEnabled = false;
+  const failure = { phase: 'fault', door: 'not-closed', target: 'closed', bolt: 'unlocked', fault: 'door_close_timeout', inferredObstruction: true };
+  f.publish(failure);
+  assert.equal(f.read('CurrentDoorState'), 0); assert.equal(f.read('TargetDoorState'), 0);
+  assert.equal(f.read('ObstructionDetected'), true); assert.equal(f.status.state.phase, 'fault');
+  assert.equal(f.status.state.openEstimated, undefined); assert.equal(f.status.state.target, 'closed');
+  f.publish({ ...failure, unavailable: 'door_read_failed' });
+  assert.throws(() => f.read('CurrentDoorState'));
+  f.publish({ ...failure, inferredObstruction: false, fault: 'motor_write_ambiguous' });
+  assert.throws(() => f.read('CurrentDoorState'));
+  f.publish({ ...failure, door: 'closed', phase: 'closed', target: 'closed', closedObservedDuringFault: true, inferredObstruction: false, lockout: true });
+  assert.equal(f.read('CurrentDoorState'), 1); assert.equal(f.read('TargetDoorState'), 1);
+  assert.equal(f.read('ObstructionDetected'), false);
+});

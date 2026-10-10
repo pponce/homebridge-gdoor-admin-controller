@@ -333,3 +333,30 @@ test('fault monitoring preserves hard holds, detects bolt conflicts and resets s
   model.now += 20; await engine.observe(); assert.equal(engine.state.closedObservedDuringFault, true);
   assert.equal(engine.state.fault, 'startup_bolt_state_requires_review'); assert.deepEqual(model.writes, []);
 });
+
+
+test('movement timeout latches inferred obstruction through read-only observation until stable closure', async () => {
+  const { engine, model } = fixture({ model: { door: 'not-closed', locked: false } });
+  await engine.initialize(); await engine.execute('close');
+  assert.equal(engine.state.fault, 'door_close_timeout'); assert.equal(engine.state.inferredObstruction, true);
+  const writes = structuredClone(model.writes); await engine.observe();
+  assert.equal(engine.state.inferredObstruction, true); assert.equal(engine.state.obstruction, false);
+  model.door = 'closed'; await engine.observe(); assert.equal(engine.state.inferredObstruction, true);
+  model.now += 20; await engine.observe();
+  assert.equal(engine.state.inferredObstruction, false); assert.equal(engine.state.fault, null);
+  assert.deepEqual(model.writes, writes);
+});
+
+
+test('lockout arriving during motion infers failure; lockout before motion does not', async () => {
+  for (const duringMotion of [false, true]) {
+    const { engine, model } = fixture({ model: { door: 'not-closed', locked: false },
+      door: (_command, m) => { if (duringMotion) m.lockout = true; } });
+    const read = engine.door.read;
+    engine.door.read = async () => ({ ...await read(), blocked: model.lockout === true, lockout: model.lockout === true, disabled: false });
+    await engine.initialize(); if (!duringMotion) model.lockout = true;
+    await engine.execute('close');
+    assert.equal(engine.state.fault, 'door_blocked'); assert.equal(engine.state.inferredObstruction, duringMotion);
+    assert.equal(model.writes.filter(row => row[0] === 'door').length, duringMotion ? 1 : 0);
+  }
+});

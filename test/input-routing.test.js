@@ -115,8 +115,8 @@ function routerFixture() {
   for (const profile of cfg.inputs) { profile.rearmSeconds = 0; profile.timing = {}; }
   const state = { door: 'closed', locked: true, now: 0, commands: [], journal: null };
   const clock = { now: () => state.now, wall: () => 100000 + state.now, sleep: async ms => { state.now += ms; } };
-  const writer = route => ({ capabilities: { interruption: true }, write: async command => { state.commands.push([route, command]); state.door = command === 'open' ? 'not-closed' : 'closed'; } });
-  const primary = { ...writer('primary'), read: async () => ({ door: state.door, blocked: false, obstruction: false, evidence: 'closed-sensor' }) };
+  const writer = route => ({ capabilities: { pulse: route !== 'primary', interruption: true }, write: async command => { state.commands.push([route, command]); state.door = command === 'open' ? 'not-closed' : 'closed'; } });
+  const primary = { ...writer('primary'), read: async () => ({ door: state.door, blocked: state.lockout === true || state.disabled === true || state.blocked === true, lockout: state.lockout === true, disabled: state.disabled === true, obstruction: state.obstruction === true, evidence: 'closed-sensor' }) };
   const engine = new MovementEngine({ door: primary, bolt: { read: async () => ({ locked: state.locked, evidence: 'relay' }),
     write: async value => { state.locked = value; } },
     journal: { read: async () => ({ inProgress: false, fault: false }), write: async value => { state.journal = value; } },
@@ -193,4 +193,47 @@ test('profile timing is scoped to its operation and cannot change the built-in d
   f.arm('indoor-button'); await f.offer('indoor-button', 1002);
   assert.equal(f.state.now, 120); assert.equal(f.engine.timing.openRetractSettleMs, 0);
   assert.equal(f.engine.motor, f.engine.door);
+});
+
+
+test('physical button and keypad pulse through lockout; primary routes remain held', async () => {
+  for (const [id, value, extra] of [['indoor-button', 1002, {}], ['physical-keypad', 'accepted-disarm', { alarmDisarmed: true }]]) {
+    const f = routerFixture(); f.state.lockout = true; await f.engine.initialize();
+    assert.equal(f.engine.initialized, true); assert.deepEqual(f.state.commands, []);
+    f.arm(id); const result = await f.offer(id, value, extra);
+    assert.equal(result.accepted, true); assert.equal(result.result.fault, null);
+    assert.deepEqual(f.state.commands, [['wall-relay', 'open']]); assert.equal(f.state.locked, false);
+    assert.equal(f.engine.state.lockout, true, 'a pulse cannot clear the observed lockout flag');
+    await f.engine.observe(); assert.equal(f.engine.state.fault, null);
+    const primary = await f.router.builtin('homekit', 'close');
+    assert.equal(primary.result.fault, 'door_blocked'); assert.equal(f.state.commands.length, 1);
+  }
+});
+
+test('lockout exception does not override disabled, obstruction, or undifferentiated blocked flags', async () => {
+  for (const flags of [{ lockout: true, disabled: true }, { lockout: true, obstruction: true }, { blocked: true }]) {
+    const f = routerFixture(); Object.assign(f.state, flags); await f.engine.initialize();
+    f.arm('indoor-button'); assert.equal((await f.offer('indoor-button', 1002)).accepted, false);
+    assert.deepEqual(f.state.commands, []); assert.equal(f.state.locked, true);
+  }
+});
+
+test('fresh stable closure permits a physical recovery from lockout hold but never another fault', async () => {
+  const f = routerFixture(); await f.engine.initialize(); f.state.lockout = true;
+  await f.router.builtin('homekit', 'open'); assert.equal(f.engine.state.fault, 'door_blocked');
+  await f.engine.observe(); assert.equal(f.engine.state.closedObservedDuringFault, true);
+  f.arm('indoor-button'); assert.equal((await f.offer('indoor-button', 1002)).result.fault, null);
+  assert.deepEqual(f.state.commands, [['wall-relay', 'open']]);
+  f.state.door = 'closed'; await f.engine.fail('bolt_resource_identity_mismatch'); await f.engine.observe();
+  f.arm('indoor-button'); assert.equal((await f.offer('indoor-button', 1002)).accepted, false);
+  assert.equal(f.state.commands.length, 1);
+});
+
+test('a late disabled flag or uncertain position blocks physical lockout recovery', async () => {
+  for (const change of [s => { s.disabled = true; }, s => { s.door = 'not-closed'; s.locked = false; }]) {
+    const f = routerFixture(); await f.engine.initialize(); f.state.lockout = true;
+    await f.router.builtin('homekit', 'open'); await f.engine.observe();
+    f.arm('indoor-button'); change(f.state); await f.offer('indoor-button', 1002);
+    assert.deepEqual(f.state.commands, []);
+  }
 });

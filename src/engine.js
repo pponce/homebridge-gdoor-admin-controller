@@ -9,6 +9,8 @@ const defaults = Object.freeze({ pollMs: 500, boltTimeoutMs: 10000, motionTimeou
   boltSettleMs: 2000, openingMs: 20000, closingMs: 20000, interruptedOpenMarginMs: 1000 });
 const code = error => error instanceof Fault ? error.message : 'unexpected_adapter_error';
 const commandSampleMaxAgeMs = 1500;
+const movementFailures = new Set(['door_open_timeout', 'door_close_timeout', 'closed_confirmation_timeout', 'interrupted_travel_timeout', 'open_reversed', 'close_reversed']);
+const lockoutOnly = sample => sample.lockout === true && sample.disabled === false && sample.blocked === true;
 
 /** Single-assembly worker shared by every admitted input.
  * No action in construction, initialization, observe(), or state publication.
@@ -41,6 +43,11 @@ export class MovementEngine {
     return !this.state.reconciling && !['opening', 'closing'].includes(this.state.door) ||
       command === 'close' && motorPath === 'primary' && this.restartCloseAvailable();
   }
+  physicalLockoutRecovery(motorPath) {
+    return this.motorPaths.get(motorPath)?.capabilities?.pulse === true && lockoutOnly(this.state) &&
+      this.state.closedObservedDuringFault === true && !this.state.unavailable &&
+      (this.state.fault === 'door_blocked' || movementFailures.has(this.state.fault));
+  }
   update(changes) { Object.assign(this.state, changes); this.publish(this.snapshot()); }
   checkRunning() { requireValue(!this.stopped, 'operation_interrupted'); }
   stop() { this.stopped = true; this.admitInterruption(false); for (const motor of this.motorPaths.values()) motor.stop?.(); }
@@ -70,7 +77,7 @@ export class MovementEngine {
       if (previous.fault) await this.recordFault({ reason: faultCode(previous.reason) ?? 'previous_run_requires_review', at: previous.at ?? null });
       cleanJournal = true;
       this.restartObservation = previous.inProgress || previous.fault;
-      const sample = await this.read();
+      const sample = await this.read({ allowLockout: true });
       requireValue(sample.door === 'closed' || !sample.locked, 'startup_bolt_state_requires_review');
       // An old fault is history, not evidence of a current physical problem.
       // Storage-integrity failures still need an explicit check after repair.
@@ -95,7 +102,7 @@ export class MovementEngine {
     return this.snapshot();
   }
 
-  async read({ observationOnly = false } = {}) {
+  async read({ observationOnly = false, allowLockout = this.physicalRelayOperation === true } = {}) {
     this.checkRunning();
     const sampledAt = this.clock.now();
     const [door, bolt] = await Promise.all([this.door.read(), this.bolt.read()]);
@@ -111,7 +118,7 @@ export class MovementEngine {
     this.sample = sample; this.sampledAt = sampledAt; this.observedAt = Date.now();
     this.update({ door: sample.door, bolt: sample.locked ? 'locked' : 'unlocked', obstruction: sample.obstruction, lockout: sample.lockout ?? null, disabled: sample.disabled ?? null, blocked: sample.blocked, ...(sample.door !== 'closed' ? { closedObservedDuringFault: false } : {}), unavailable: null });
     if (!observationOnly) {
-      requireValue(!door.blocked, 'door_blocked');
+      requireValue(!door.blocked || allowLockout && lockoutOnly(door), 'door_blocked');
       requireValue(!door.obstruction, 'obstruction');
     }
     return sample;
@@ -127,7 +134,7 @@ export class MovementEngine {
     catch { reason = 'journal_write_failed'; }
     try { await this.recordFault({ reason, at: faultAt }); }
     catch { reason = 'journal_write_failed'; }
-    this.update({ closedObservedDuringFault: false, phase: 'fault', fault: reason, faultAt, unavailable: null, openEstimated: false, closeEstimated: false });
+    this.update({ inferredObstruction: movementFailures.has(reason) || reason === 'door_blocked' && this.state.lockout === true && ['opening', 'closing'].includes(this.state.phase), closedObservedDuringFault: false, phase: 'fault', fault: reason, faultAt, unavailable: null, openEstimated: false, closeEstimated: false });
   }
 
   // Fault monitoring never operates a motor or bolt, including after recovery.
@@ -147,9 +154,9 @@ export class MovementEngine {
         await this.journal.write({ inProgress: false, fault: false });
         this.initialized = true;
         this.update({ phase: 'closed', target: 'closed', fault: null, faultAt: null, reconciling: false,
-          closedObservedDuringFault: false, openEstimated: false, closeEstimated: false });
+          closedObservedDuringFault: false, inferredObstruction: false, openEstimated: false, closeEstimated: false });
       } else {
-        this.update({ closedObservedDuringFault: stable,
+        this.update({ closedObservedDuringFault: stable, ...(stable ? { inferredObstruction: false } : {}),
           phase: stable ? 'closed' : 'fault', ...(stable ? { target: 'closed' } : {}),
           openEstimated: false, closeEstimated: false });
       }
@@ -178,7 +185,7 @@ export class MovementEngine {
   async observeOnce() {
     const previousBolt = this.lastBolt; const previousDoor = this.state.door;
     try {
-      const sample = await this.read();
+      const sample = await this.read({ allowLockout: true });
       if (this.state.reconciling) {
         // Reattach to physical feedback only. No replay, timer reconstruction or
         // automatic bolt operation follows a movement interrupted by restart.
@@ -198,7 +205,8 @@ export class MovementEngine {
       // auto-bolting retains Open intent and HomeKit reports Opening again.
       // A command admitted during this read waits for it before setting intent.
       if (sample.door === 'closed') {
-        if (previousDoor !== 'closed' && previousDoor !== 'unknown') this.autoClosePending = true;
+        if (previousDoor !== 'closed' && previousDoor !== 'unknown' && !sample.blocked) this.autoClosePending = true;
+        if (sample.blocked) this.autoClosePending = false;
         this.travel = null; this.partialOwner = null;
         Object.assign(changes, { phase: 'closed', target: 'closed', openEstimated: false, closeEstimated: false });
       }
@@ -260,10 +268,12 @@ export class MovementEngine {
     return { sample: this.sample, at: this.sampledAt, retractionRequestedAt };
   }
 
-  async execute(command, { motorPath = 'primary', timing = {}, interruption = false, owner = null } = {}) {
+  async execute(command, { motorPath = 'primary', timing = {}, interruption = false, owner = null, physicalInput = false } = {}) {
     requireValue(['open', 'close', 'unlock', 'lock', 'observed-close'].includes(command), 'command_invalid');
     requireValue(!this.busy, 'controller_busy');
-    requireValue(this.initialized && !this.state.fault && !this.stopped, 'engine_unavailable');
+    const relayOperation = physicalInput === true && ['open', 'close'].includes(command) && this.motorPaths.get(motorPath)?.capabilities?.pulse === true;
+    const recovery = relayOperation && this.physicalLockoutRecovery(motorPath);
+    requireValue((this.initialized && !this.state.fault || recovery) && !this.stopped, 'engine_unavailable');
     requireValue(this.acceptsFreshCommand(command, motorPath), 'controller_observing_movement');
     requireValue(command !== 'observed-close' || !this.state.externalUnlockOverride, 'manual_unlock_override');
     requireValue(this.motorPaths.has(motorPath), 'motor_path_unavailable');
@@ -277,12 +287,18 @@ export class MovementEngine {
     const previousTiming = this.timing;
     this.busy = true; // Claim ownership synchronously, before any await.
     this.interruptionOperation = interruption; this.operationOwner = owner; this.autoClosePending = false;
-    this.motor = selected; this.timing = { ...this.timing, ...timing };
+    this.motor = selected; this.physicalRelayOperation = relayOperation; this.timing = { ...this.timing, ...timing };
     try {
       if (this.observation) await this.observation;
       this.checkRunning();
-      requireValue(this.initialized && !this.state.fault, this.state.fault ?? 'engine_unavailable');
+      requireValue(this.initialized && !this.state.fault || relayOperation && this.physicalLockoutRecovery(motorPath), this.state.fault ?? 'engine_unavailable');
       this.autoClosePending = false;
+      if (recovery) {
+        const fresh = await this.read();
+        requireValue(fresh.door === 'closed' && fresh.evidence === 'closed-sensor', 'door_position_requires_review');
+        this.initialized = true;
+        this.update({ fault: null, faultAt: null, inferredObstruction: false, closedObservedDuringFault: false, phase: 'closed' });
+      }
       await this.journal.write({ inProgress: true, fault: false }); // Durable intent before any actuator request.
       this.update({ reconciling: false, externalUnlockOverride: command === 'unlock', target: command === 'open' ? 'open' : command === 'close' ? 'closed' : this.state.target });
       const sample = await this.read();
@@ -314,7 +330,7 @@ export class MovementEngine {
         this.update({ phase: 'position-unknown', reconciling: true, openEstimated: false, closeEstimated: false });
       } else await this.fail(code(error));
     }
-    finally { this.admitInterruption(false); this.interruptionOperation = false; this.operationOwner = null; this.motor = this.door; this.timing = previousTiming; this.busy = false; }
+    finally { this.admitInterruption(false); this.interruptionOperation = false; this.operationOwner = null; this.physicalRelayOperation = false; this.motor = this.door; this.timing = previousTiming; this.busy = false; }
     return this.snapshot();
   }
 

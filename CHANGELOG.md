@@ -2,6 +2,13 @@
 
 User-facing changes for `homebridge-gdoor-admin-controller`. GitHub releases use matching `vVERSION` tags. Development history and validation receipts are in [developer documentation](docs/developer/README.md).
 
+## 0.4.42 — 2026-10-10
+
+- Expand Controller troubleshooting with live door/bolt feedback, independent Tailwind flags, actual committed HomeKit values, freshness, input eligibility, motor routes, active holds and recovery state.
+- Allow configured physical button/keypad pulse routes through Tailwind lockout alone. Keep disabled, obstruction, stale-input, uncertain-direction, bolt, identity, storage and restart safeguards; HomeKit/virtual keypad stay on Tailwind. Stable closed feedback permits an explicit physical recovery from a movement/lockout fault only.
+- Report inferred obstruction after a movement timeout or unexpected reversal (or lockout during movement). With fresh not-closed feedback, publish Open/Open plus obstruction as a display-only fallback; internal position remains uncertain and control holds remain. Stable closed feedback clears the inference and publishes Closed even if a separate fault or lockout remains.
+- Never infer an infrared beam signal or clear Tailwind lockout from a pulse acknowledgement. Status observation remains read-only. Actual Apple Home rendering and physical acceptance require owner testing.
+
 ## 0.4.41 — 2026-10-10
 
 - Add Controller troubleshooting with live Tailwind lockout status, Restart Tailwind and a read-only Check state now button.

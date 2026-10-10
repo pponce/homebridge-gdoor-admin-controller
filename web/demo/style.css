@@ -311,5 +311,12 @@ body.gp-extension-embedded{margin:0;padding:0;background:transparent}.gp-extensi
 /* Keep the garage selector compact while fitting narrow screens. */
 #configurator-preview .gp-controller-selector{width:20rem;max-width:100%}
 
+/* Live controller troubleshooting values remain readable on narrow screens. */
+#configurator-preview .gp-controller-status{margin:8px 0 20px;min-width:0}
+#configurator-preview .gp-controller-status>div{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;padding:6px 0;border-bottom:1px solid var(--gp-line)}
+#configurator-preview .gp-controller-status dt{color:var(--gp-muted);font-size:12px}
+#configurator-preview .gp-controller-status dd{margin:0;font-size:13px;overflow-wrap:anywhere}
+#configurator-preview [data-controller-troubleshooting] h4{margin:16px 0 6px}
+
 /* Public demo has no login, live-mode switch, or installation maintenance. */
 #configurator-preview #login,#configurator-preview #logout,#configurator-preview #settings-gear,#configurator-preview label:has(#demo-mode),#configurator-preview label:has(#debug-mode){display:none!important}

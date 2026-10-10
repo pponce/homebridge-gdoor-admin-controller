@@ -246,3 +246,20 @@ test('troubleshooting checks preserve overrides and restart is explicit, idle-on
   assert.deepEqual(f.hardware.state.writes, [['tailwind', 'restart'], ['tailwind', 'restart']]);
   await assert.rejects(f.runtime.restartTailwind(f.id, body), /controller_busy|tailwind_restart_cooldown/);
 });
+
+test('admin troubleshooting shows runtime holds, input state and real publisher values without device requests', async t => {
+  const f = await fixture(t); await f.commission();
+  const entry = f.runtime.entry(f.id);
+  entry.engine.state.externalUnlockOverride = true;
+  f.runtime.homekitStatus = () => [{ kind: 'garage', available: true, current: 1, target: 1, obstruction: false }];
+  const requests = f.hardware.state.requests.length;
+  const row = new WebAdminController(f.runtime).read().controllers[0];
+  assert.equal(row.troubleshooting.initialized, true); assert.equal(row.troubleshooting.fresh, true);
+  assert.equal(row.troubleshooting.homekit[0].current, 1); assert.equal(row.state, undefined);
+  assert.equal(row.status.state.externalUnlockOverride, true);
+  assert.equal(f.hardware.state.requests.length, requests); assert.deepEqual(f.hardware.state.writes, []);
+  const serialized = JSON.stringify(row.troubleshooting);
+  assert.ok(!serialized.includes('credentialRef')); assert.ok(!serialized.includes('baseUrl'));
+  f.runtime.homekitStatus = undefined;
+  assert.equal(new WebAdminController(f.runtime).read().controllers[0].troubleshooting.homekit, null);
+});

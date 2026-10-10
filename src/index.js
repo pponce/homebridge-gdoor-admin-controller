@@ -34,6 +34,7 @@ export class CoordinatorPlatform {
     if (this.api.hap && this.api.platformAccessory) {
       this.accessories = new CoordinatorAccessories(this.api, identity, this.runtime, this.cached); this.accessories.sync();
     }
+    this.runtime.homekitStatus = id => this.accessories?.status(id) ?? null;
     const diagnostics = new Diagnostics(this.runtime.configuration, () => readCredentials(storagePath));
     const probe = diagnostics.probe.bind(diagnostics); diagnostics.probe = id => { diagnostics.configuration = this.runtime.configuration; return probe(id); };
     this.webAdmin = new WebAdminManager({ storagePath, configPath: this.api.user.configPath?.(), coordinatorBridge: this.coordinatorBridge, runtime: this.runtime });

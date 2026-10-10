@@ -17,7 +17,7 @@ export function createManagementServer({ identity, configuration, diagnostics, r
     const statusView = value => {
       if (request.headers['x-coordinator-status'] === 'detailed' || !value?.state) return value;
       const { health, enabled, configurationValid, lastFault, canRecover, observationEnabled, tailwind, restarting, state, ...status } = value;
-      const { faultAt, reconciling, restartCloseAvailable, closedObservedDuringFault, lockout, disabled, blocked, ...legacyState } = state;
+      const { faultAt, reconciling, restartCloseAvailable, closedObservedDuringFault, inferredObstruction, lockout, disabled, blocked, ...legacyState } = state;
       return { ...status, state: legacyState };
     };
     const controllerRows = () => controllers().map(row => ({ ...row, status: statusView(row.status) }));

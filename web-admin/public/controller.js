@@ -21,17 +21,78 @@ window.ConfiguratorController = ({ root, api, readOnly }) => {
   function clear() { clearTimeout(refreshTimer); generation++; data = null; selected = null; dirty = false; uncertain = false; saving = false; root.replaceChildren(); }
   function leave() { return !saving && (!dirty || confirm('Discard unsaved controller timing changes?')); }
   function troubleshooting(row) {
-    const status = row.status, state = status.state;
-    const lockout = status.restarting ? 'Restart requested; waiting for fresh feedback' : state.unavailable || typeof state.lockout !== 'boolean' ? 'Unknown' : state.lockout ? 'Locked out' : 'Not locked out';
+    const status = row.status, state = status.state, detail = row.troubleshooting || {};
+    const yes = value => value === true ? 'Yes' : value === false ? 'No' : 'Unknown';
+    const value = item => item === null || item === undefined || item === '' ? 'None' : String(item);
+    const date = item => item && Number.isFinite(new Date(item).getTime()) ? new Date(item).toLocaleString() : 'None';
+    const rows = entries => `<dl class="gp-controller-status">${entries.map(([label, item]) => `<div><dt>${esc(label)}</dt><dd>${esc(value(item))}</dd></div>`).join('')}</dl>`;
+    const group = (title, entries) => `<section><h4>${esc(title)}</h4>${rows(entries)}</section>`;
+    const lockout = status.restarting ? 'Restart requested; waiting for fresh feedback' : state.unavailable || detail.fresh === false || typeof state.lockout !== 'boolean' ? 'Unknown' : state.lockout ? 'Locked out' : 'Not locked out';
+    const inputName = id => row.inputs.find(input => input.id === id)?.name || id;
+    const motorName = id => id === 'primary' ? 'Primary opener' : row.motorPaths.find(motor => motor.id === id)?.name || id;
+    const doorStates = ['Open (0)', 'Closed (1)', 'Opening (2)', 'Closing (3)', 'Stopped (4)'];
+    const lockStates = ['Unlocked (0)', 'Locked (1)', 'Jammed (2)', 'Unknown (3)'];
+    const homekit = detail.homekit?.map(tile => {
+      const name = { garage: 'Garage door', bolt: 'Bolt lock', lockout: 'Tailwind Lockout contact', restart: 'Restart Tailwind switch' }[tile.kind] || tile.kind;
+      const fields = [['Availability', tile.available ? 'Available' : 'Unavailable / No Response'], ['Publication pending', yes(tile.publicationPending)]];
+      if (tile.kind === 'garage') fields.push(['Current value', doorStates[tile.current] || 'Unknown'], ['Target value', ['Open (0)', 'Closed (1)'][tile.target] || 'Unknown'], ['Obstruction value', yes(tile.obstruction)]);
+      else if (tile.kind === 'bolt') fields.push(['Current value', lockStates[tile.current] || 'Unknown'], ['Target value', lockStates[tile.target] || 'Unknown']);
+      else if (tile.kind === 'lockout') fields.push(['Contact value', tile.current === 1 ? 'Open / lockout active (1)' : tile.current === 0 ? 'Closed / lockout inactive (0)' : 'Unknown']);
+      else if (tile.kind === 'restart') fields.push(['Switch value', tile.target ? 'On' : 'Off']);
+      return group(name, fields);
+    }).join('');
     return `<h3>Troubleshooting</h3>
-      ${status.tailwind ? `<p role="status"><strong>Tailwind: ${esc(lockout)}</strong>${state.disabled ? ' · Door disabled in Tailwind' : ''}</p>` : ''}
-      <p class="gp-note">Door: ${esc(state.door)} · Bolt: ${esc(state.bolt)}${state.fault ? ' · '+esc(state.fault.replaceAll('_', ' ')) : ''}</p>
+      <p role="status"><strong>${esc(status.health?.title || state.phase || 'Unknown')}</strong>${status.tailwind ? ' · Tailwind: '+esc(lockout) : ''}</p>
+      ${status.health?.detail ? `<p class="gp-note">${esc(status.health.detail)}</p>` : ''}
+      <p class="gp-sub">Refreshes every 3 seconds while visible. Device values describe the last successful sample; unavailable or stale values are not current confirmation.</p>
+      <div class="gp-two">
+      ${group('Door and bolt', [
+        ['Door feedback', state.door], ['Controller phase', state.phase], ['Requested target', state.target],
+        ['Bolt feedback', state.bolt], ['Bolt feedback source', row.feedback.bolt],
+        ['Opening feedback', row.feedback.opening], ['Closing feedback', row.feedback.closing],
+        ['Open is estimated', yes(state.openEstimated === true)], ['Closed is estimated', yes(state.closeEstimated === true)],
+        ['Closed confirmed during fault', yes(state.closedObservedDuringFault === true)],
+        ['Obstruction reported by adapter', yes(state.obstruction)], ['Inferred movement obstruction', yes(state.inferredObstruction === true)],
+        ['HomeKit position fallback', state.inferredObstruction && ['open', 'not-closed'].includes(state.door) ? 'Open means not closed; full opening unconfirmed' : 'None'], ['Infrared beam signal', status.tailwind ? 'Not available' : 'Not independently verified'],
+      ])}
+      ${group('Control and recovery', [
+        ['Saved enabled setting', yes(status.enabled)], ['Setup valid', yes(status.configurationValid)], ['Commissioned', yes(status.commissioned)],
+        ['Primary opener commands enabled', yes(status.actuationEnabled)], ['Observation enabled', yes(status.observationEnabled)],
+        ['Engine initialized', yes(detail.initialized)], ['Controller busy', yes(state.busy)], ['Operation pending', yes(detail.operationPending)],
+        ['Read in progress', yes(detail.observationInProgress)], ['Reconciling position', yes(state.reconciling === true)],
+        ['Fresh directional Close available', yes(state.restartCloseAvailable === true)], ['Explicit recovery available', yes(status.canRecover)],
+        ['Automatic bolting configured', yes(detail.autoBolt)], ['Automatic bolt work pending', yes(detail.autoClosePending)],
+        ['Manual unlock override', yes(state.externalUnlockOverride === true)],
+      ])}
+      ${group('Faults and feedback age', [
+        ['Active fault', state.fault], ['Fault time', date(state.faultAt)], ['Device unavailable reason', state.unavailable], ['Runtime hold', status.held],
+        ['Previous fault', status.lastFault?.reason], ['Previous fault time', date(status.lastFault?.at)],
+        ['Last successful device sample', date(detail.observedAt)], ['Sample age', detail.ageMs == null ? 'Unknown' : (detail.ageMs / 1000).toFixed(1)+' seconds'],
+        ['Sample fresh', yes(detail.fresh)], ['Plugin version', detail.pluginVersion],
+      ])}
+      ${status.tailwind ? group('Tailwind feedback', [
+        ['Lockout flag', yes(state.lockout)], ['Disabled flag', yes(state.disabled)], ['Combined blocked flag', yes(state.blocked)],
+        ['Restart waiting', yes(status.restarting)], ['Restart wait remaining', detail.restartWaitMs == null ? 'Unknown' : Math.ceil(detail.restartWaitMs / 1000)+' seconds'],
+        ['Native Tailwind HomeKit tile', 'Not read by this plugin'],
+      ]) : ''}
+      ${group('Inputs and motor routes', [
+        ['Active input', inputName(detail.activeInput)], ['Active motor route', motorName(detail.activeMotorPath)],
+        ['Interruption currently allowed', yes(detail.interruptionAllowed)], ['Partial-stop owner', inputName(detail.partialStopOwner)],
+        ...row.inputs.flatMap(input => [[input.name+' listener', input.enabled ? status.inputStates?.[input.id] || 'Unknown' : 'Disabled'], [input.name+' eligible now', yes(detail.inputEligibility?.[input.id])]]),
+        ...(detail.motorPaths || []).map(motor => [motor.name+' worker', motor.stopped ? 'Stopped' : motor.busy ? 'Busy' : 'Idle']),
+      ])}
+      </div>
+      <h4>HomeKit values from this plugin</h4>
+      <p class="gp-sub">Committed accessory values, not a reading of the Apple Home screen. If unavailable, the values below are not a valid position report. No native Tailwind HomeKit state is inferred.</p>
+      ${homekit ? `<div class="gp-two">${homekit}</div>` : '<p class="gp-note">HomeKit publisher status is unavailable here.</p>'}
       <button type="button" class="gp-button" data-controller-check-state ${readOnly() || state.busy || !status.observationEnabled ? 'disabled' : ''}>Check state now</button>
-      ${status.tailwind ? `<button type="button" class="gp-button" data-controller-restart-tailwind ${readOnly() || state.busy || status.restarting || !status.observationEnabled ? 'disabled' : ''}>Restart Tailwind</button><p class="gp-sub">Restarts the Tailwind device and clears its safety lockout. All doors connected to that device are briefly unavailable. No door movement is requested.</p>` : ''}
-      <p class="gp-sub">Check state now reads the devices without moving the door or bolt. Unresolved faults remain held.</p>`;
+      ${status.canRecover ? `<button type="button" class="gp-button" data-controller-recover ${readOnly() ? 'disabled' : ''}>Check again</button>` : ''}
+      ${status.tailwind ? `<button type="button" class="gp-button" data-controller-restart-tailwind ${readOnly() || state.busy || status.restarting || !status.observationEnabled ? 'disabled' : ''}>Restart Tailwind</button><p class="gp-sub">Restarts the Tailwind device. All doors connected to it are briefly unavailable. Fresh feedback confirms whether lockout cleared.</p>` : ''}
+      <p class="gp-sub">Check state now reads devices without moving the door or bolt. Check again reinitializes the controller and clears resolved faults after fresh checks.</p>`;
   }
   function bindTroubleshooting() {
     for (const [selector, endpoint, success] of [
+      ['[data-controller-recover]', 'recover', 'Device states checked. No movement command was sent.'],
       ['[data-controller-check-state]', 'check-state', 'Device states checked. No movement command was sent.'],
       ['[data-controller-restart-tailwind]', 'restart-tailwind', 'Restart requested. Waiting for fresh Tailwind feedback.'],
     ]) {
@@ -46,7 +107,7 @@ window.ConfiguratorController = ({ root, api, readOnly }) => {
           if (turn !== generation) return;
           for (const updated of result.controllers) {
             const old = data.controllers.find(item => item.id === updated.id);
-            if (old) old.status = updated.status;
+            if (old) { old.status = updated.status; old.troubleshooting = updated.troubleshooting; }
           }
           message(success);
         } catch (error) {
@@ -73,7 +134,7 @@ window.ConfiguratorController = ({ root, api, readOnly }) => {
           if (turn !== generation || saving) return;
           for (const updated of result.controllers) {
             const old = data.controllers.find(item => item.id === updated.id);
-            if (old) old.status = updated.status;
+            if (old) { old.status = updated.status; old.troubleshooting = updated.troubleshooting; }
           }
           refreshTroubleshooting();
         }
@@ -89,10 +150,6 @@ window.ConfiguratorController = ({ root, api, readOnly }) => {
     const row = profile(), values = row.values, fields = data.fields;
     const state = row.status.state;
     root.innerHTML = `<label class="gp-field gp-controller-selector">Garage Door<select data-controller-select>${data.controllers.map(c => `<option value="${esc(c.id)}" ${c.id === selected ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>
-      <p class="gp-note">${esc((row.status.enabled ?? row.status.actuationEnabled) ? 'Enabled' : 'Disabled')}${row.status.health?.title && row.status.health.title !== 'Disabled' ? ' · '+esc(row.status.health.title) : ''} · Door: ${esc(state.door)} · Bolt: ${esc(state.bolt)}${state.busy ? ' · Busy' : ''}. Status at last reload.</p>
-      ${row.status.health?.detail ? `<p class="gp-note" role="status">${esc(row.status.health.detail)}${row.status.health.code ? ' Reason: '+esc(row.status.health.code)+'.' : ''}</p>` : ''}
-      ${row.status.lastFault ? `<details class="gp-panel gp-body"><summary>Previous fault</summary><p class="gp-note">${esc(row.status.lastFault.reason.replaceAll('_', ' '))}${row.status.lastFault.at ? ' · '+esc(row.status.lastFault.at) : ''}. Historical record; current status is shown above.</p></details>` : ''}
-      ${row.status.canRecover ? `<button type="button" class="gp-button" data-controller-recover ${readOnly() ? 'disabled' : ''}>Check again</button>` : ''}
       <section class="gp-panel gp-body" data-controller-troubleshooting>${troubleshooting(row)}</section>
       <p class="gp-sub">All times are in seconds. Changes apply to the next operation without restarting Homebridge. Save when controllers are idle.</p>
       <p class="gp-sub">Opening feedback: ${esc(row.feedback.opening)} · Closing feedback: ${esc(row.feedback.closing)} · Bolt feedback: ${esc(row.feedback.bolt)}. Travel times are estimates when timed feedback is selected.</p>
@@ -116,22 +173,6 @@ window.ConfiguratorController = ({ root, api, readOnly }) => {
       if (!leave()) { event.target.value = selected; return; } selected = event.target.value; dirty = false; render();
     };
     root.querySelector('[data-controller-reload]').onclick = async () => { if (leave()) { try { await load(); } catch { message('Could not reload. Check your connection and try again.'); } } };
-    const recover = root.querySelector('[data-controller-recover]');
-    if (recover) recover.onclick = async () => {
-      if (saving || readOnly() || !leave()) return;
-      saving = true; const turn = generation;
-      root.querySelectorAll('button,select').forEach(element => { element.disabled = true; });
-      try {
-        const result = await api('controller/recover', { controllerId: selected, revision: data.revision, bootId: row.status.bootId });
-        if (turn !== generation) return;
-        data = result; dirty = false; render(); message('Device states checked. No movement command was sent.');
-      } catch (error) {
-        if (turn !== generation) return;
-        uncertain = true;
-        message(explanations[error.code] || 'Could not confirm the check result. Reload to see the current status.');
-        root.querySelector('[data-controller-reload]').disabled = false;
-      } finally { saving = false; }
-    };
     form.oninput = () => {
       if (!uncertain) message('');
       dirty = true;

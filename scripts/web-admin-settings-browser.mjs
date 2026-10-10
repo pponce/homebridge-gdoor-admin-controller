@@ -89,16 +89,23 @@ try {
       for (const listener of runtime.entry(id).listeners) listener.stop();
       failReads=true; await runtime.entry(id).engine.observe(); await editor.evaluate(()=>panel.load());
       assert.equal(runtime.status(id).enabled,true); assert.equal(runtime.status(id).health.title,'Fault');
-      await editor.getByText(/Enabled · Fault/).waitFor();
+      await editor.locator('[data-controller-troubleshooting] strong').filter({hasText:'Fault'}).waitFor();
       assert.equal(await editor.getByRole('button',{name:'Check again',exact:true}).count(),1);
       failReads=false; await editor.getByRole('button',{name:'Check again',exact:true}).click();
       await editor.getByText('Device states checked. No movement command was sent.',{exact:true}).waitFor();
-      await editor.getByText(/Enabled · Ready · Closed/).waitFor();
+      await editor.locator('[data-controller-troubleshooting] strong').filter({hasText:'Ready · Closed'}).waitFor();
       for (const listener of runtime.entry(id).listeners) listener.stop();
       assert.equal(runtime.status(id).enabled,true); assert.deepEqual(hardwareWrites,[]);
+      const statusValue = label => editor.getByText(label, {exact:true}).locator('..').locator('dd');
+      assert.equal(await statusValue('Controller phase').textContent(), 'closed');
+      assert.equal(await statusValue('Primary opener commands enabled').textContent(), 'Yes');
+      assert.equal(await statusValue('Infrared beam signal').textContent(), 'Not available');
+      runtime.entry(id).engine.state.externalUnlockOverride = true;
+
       await editor.getByRole('button', { name: 'Check state now', exact: true }).click();
       await editor.getByText('Device states checked. No movement command was sent.', { exact: true }).waitFor();
       assert.deepEqual(hardwareWrites, []);
+      assert.equal(await statusValue('Manual unlock override').textContent(), 'Yes');
       await editor.locator('[data-default-group="timing"][data-key="openRetractSettleSeconds"]').fill('0.3');
       await editor.getByRole('button', { name: 'Restart Tailwind', exact: true }).click();
       await editor.getByText('Restart requested. Waiting for fresh Tailwind feedback.', { exact: true }).waitFor();

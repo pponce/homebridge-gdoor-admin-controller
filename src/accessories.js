@@ -77,7 +77,8 @@ export class CoordinatorAccessories {
       const e = this.runtime.entry(id); const s = this.runtime.status(id);
       if (kind === 'restart') return true; // Momentary local control, never a device-state claim.
       const readable = s.observationEnabled ?? s.actuationEnabled;
-      const faultReadable = kind === 'lockout' || s.state.closedObservedDuringFault === true;
+      const faultReadable = kind === 'lockout' || s.state.closedObservedDuringFault === true ||
+        kind === 'garage' && s.state.inferredObstruction === true && ['open', 'not-closed'].includes(s.state.door);
       return Boolean(readable && (!s.state.fault || faultReadable) && !s.state.unavailable && observedAt &&
         Date.now() - observedAt <= Math.max(10000, e.profile.timing.idlePollSeconds * 2500));
     } catch { return false; }
@@ -120,6 +121,8 @@ export class CoordinatorAccessories {
     } catch { callback(new this.api.hap.HapStatusError(this.api.hap.HAPStatus.NOT_ALLOWED_IN_CURRENT_STATE)); }
   }
   doorState(s) {
+    // Display-only not-closed fallback: never fed back into movement admission.
+    if (s.fault && s.inferredObstruction && ['open', 'not-closed'].includes(s.door)) return 0;
     // The engine publishes its target before the pre-movement read completes.
     // Report preparation as a coherent current/target pair, as the old
     // controller did for unbolting; never report Open with Target Closed.
@@ -127,7 +130,7 @@ export class CoordinatorAccessories {
     return s.phase === 'opening' || s.phase === 'unbolting' && s.target === 'open' ? 2 :
       ['closing','bolting'].includes(s.phase) || s.phase === 'unbolting' && s.target === 'closed' ? 3 : s.phase === 'closed' ? 1 : s.phase === 'open' ? 0 : 4;
   }
-  doorTarget(s) { return (s.target ?? s.phase) === 'open' ? 0 : 1; }
+  doorTarget(s) { if (s.fault && s.inferredObstruction && ['open', 'not-closed'].includes(s.door)) return 0; return (s.target ?? s.phase) === 'open' ? 0 : 1; }
   report(v, state) {
     const observedAt = this.runtime.entry(v.id).engine?.observedAt;
     const available = this.fresh(v.id, observedAt, v.kind);
@@ -137,7 +140,7 @@ export class CoordinatorAccessories {
     } else if (v.kind === 'restart') {
       report.target = false;
     } else if (v.kind === 'garage') {
-      report.current = this.doorState(state); report.target = this.doorTarget(state); report.obstruction = state.obstruction === true;
+      report.current = this.doorState(state); report.target = this.doorTarget(state); report.obstruction = state.obstruction === true || state.inferredObstruction === true;
       if (available && ['open', 'closed'].includes(state.phase) && (!state.target || state.target === state.phase))
         report.notificationKey = JSON.stringify([state.phase, state.openEstimated === true, state.closeEstimated === true]);
     } else {
@@ -146,6 +149,16 @@ export class CoordinatorAccessories {
       if (available && report.current !== 3) report.notificationKey = String(report.current);
     }
     return report;
+  }
+  status(id) {
+    // Read the publisher's committed values, without hardware I/O, GET handlers,
+    // diagnostic recording, or a claim that an Apple client received an event.
+    return [...this.active.values()].filter(v => v.id === id).map(v => ({
+      kind: v.kind, available: Boolean(v.report?.available && this.fresh(id, v.report.observedAt, v.kind)),
+      current: v.report?.current ?? null, target: v.report?.target ?? null,
+      obstruction: v.report?.obstruction ?? null, observedAt: v.report?.observedAt ?? null,
+      publicationPending: Boolean(v.pendingReport),
+    }));
   }
   commit(v, report) {
     if (v.report?.target !== report.target) v.targetGeneration = (v.targetGeneration ?? 0) + 1;

@@ -82,15 +82,15 @@
       "path": "web-admin/public/style.css",
       "gitBlob": "a989313e78d1454a31c6a9b7327647066e510942",
       "sha256": "38bee5eb6eaa4bc8a7344fee7fbb6c790498ca46db3553cc3dc8ea76b10d93e8",
-      "adaptedSha256": "2e86000e9701d30c4965c6c05ce2065f66f7290a8f9ec5a4471b01fb8762a109",
-      "adaptation": "Separate the signed-in account password section from web account management and identify the current user. Keep the Controller garage selector compact and responsive."
+      "adaptedSha256": "c7936c99f170775ed61b7f8ecdf5fc848d3e666231dac6b200d5ff3d7e95d32c",
+      "adaptation": "Separate the signed-in account password section from web account management and identify the current user. Keep the Controller garage selector compact and responsive. Add responsive controller troubleshooting status rows."
     }
   ],
   "additions": [
     {
       "path": "web-admin/public/controller.js",
-      "sha256": "525222f1900ffb48e167046623acf004f6bc4d43dbaf6782c16f016e4075a312",
-      "purpose": "Plugin-native editor for controller defaults and device timing overrides."
+      "sha256": "504008aa6c0db8687553d80ec5520d32759e9974e65bef23eb9839ff6aa4c442",
+      "purpose": "Plugin-native controller timing editor and read-only live troubleshooting state view."
     }
   ]
 }

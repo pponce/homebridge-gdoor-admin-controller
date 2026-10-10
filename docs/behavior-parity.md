@@ -32,3 +32,10 @@ The runtime is connected but starts with every new assembly uncommissioned. Driv
 
 - Fault observation intentionally continues after movement failure. It performs no hardware writes, preserves manual unlock, and cannot replay ambiguous commands. Confirmed stable closed may restore displayed Closed while independent control faults remain. Only closed-outcome timeouts and cleared opener-blocked holds recover automatically; no automatic bolting follows fault recovery.
 - Explicit Tailwind reboot is a separate troubleshooting action, never a motor route or automatic lockout reset. Optional contact reporting distinguishes real lockout from disabled status and communication loss.
+
+
+### 0.4.42 intentional recovery/display changes
+
+Configured physical **button/keypad** inputs using a pulse motor route may operate while Tailwind reports lockout=true, disabled=false. HomeKit, virtual keypad, generic switch routes and automatic bolting do not gain that exception. Existing receipt, PIN/outcome, motor identity/idle, bolt retraction, known start/direction, same-input interruption, busy/restart/maintenance/storage and no-retry checks remain. Initialization and idle observation preserve lockout as an independent status. A prior movement/lockout fault permits a new physical recovery only once fresh stable closed-sensor feedback is present; unrelated faults never qualify. Uncertain not-closed position remains held rather than guessed for a toggle.
+
+Movement timeouts/unexpected reversals and Tailwind lockout arising during movement infer obstruction; idle lockout, read loss and intentional same-input stop/reverse do not. The raw adapter obstruction remains separate. Fresh not-closed feedback during this inferred fault publishes HomeKit Current Open / Target Open / Obstruction true solely for display. Internally the operation remains faulted, its target is retained, and fully open is not confirmed. Stable closed feedback clears the inferred indication and publishes Closed/Closed; independent lockout/faults retain their own holds. Missing/stale feedback still reports unavailable. Apple Home tile wording/rendering requires owner observation.
