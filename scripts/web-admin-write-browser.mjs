@@ -59,8 +59,18 @@ try {
       assert.equal(f.data.responses['/alarmsystems/1'].config.armed_stay_entry_delay, 17);
       f.state.loseNextAlarmReply = true; await timer.fill('19'); await page.locator('#alarm-save').click();
       await page.locator('#recovery-review').waitFor({ state: 'visible' });
-      const count = f.writes.length; await page.locator('#recovery-review').click();
-      await page.locator('#recovery-completion').waitFor({ state: 'visible' }); await page.locator('#recovery-ack').check(); await page.locator('#recovery-confirm').click();
+      const count = f.writes.length;
+      // Alarm refresh uses the page's busy guard but does not disable these
+      // recovery buttons. Admit each synthetic click atomically while idle;
+      // otherwise act() can drop it between Playwright's actionability check
+      // and dispatch. Each function returns true immediately after one click.
+      const recoveryClick = id => page.waitForFunction(id => {
+        const button = document.getElementById(id);
+        if (!button || button.disabled || document.getElementById('settings-gear').disabled) return false;
+        button.click(); return true;
+      }, id);
+      await recoveryClick('recovery-review');
+      await page.locator('#recovery-completion').waitFor({ state: 'visible' }); await page.locator('#recovery-ack').check(); await recoveryClick('recovery-confirm');
       await page.getByText('Recovery completed. The gateway write was not repeated.', { exact: true }).waitFor(); assert.equal(f.writes.length, count);
       await page.locator('#settings-gear').click(); await page.locator('#settings-content').waitFor({ state: 'visible' });
       await page.locator('#settings-home-screen-name').fill('My keypad'); await page.locator('#settings-preferences button').click();
