@@ -47,6 +47,8 @@ window.ConfiguratorController = ({ root, api, readOnly }) => {
       <p class="gp-sub">Refreshes every 3 seconds while visible. Device values describe the last successful sample; unavailable or stale values are not current confirmation.</p>
       <div class="gp-two">
       ${group('Door and bolt', [
+        ['Opener backend', detail.openerBackend === 'ratgdo-homekit' ? 'ratgdo HomeKit firmware — experimental, untested' : detail.openerBackend],
+        ['Opener lockout reporting', detail.lockoutReporting === 'not-supported' ? 'Not supported by this adapter; not a confirmed clear flag' : lockout],
         ['Door feedback', state.door], ['Controller phase', state.phase], ['Requested target', state.target],
         ['Bolt feedback', state.bolt], ['Bolt feedback source', row.feedback.bolt],
         ['Opening feedback', row.feedback.opening], ['Closing feedback', row.feedback.closing],
@@ -56,6 +58,7 @@ window.ConfiguratorController = ({ root, api, readOnly }) => {
         ['HomeKit position fallback', state.inferredObstruction && ['open', 'not-closed'].includes(state.door) ? 'Open means not closed; full opening unconfirmed' : 'None'], ['Infrared beam signal', status.tailwind ? 'Not available' : 'Not independently verified'],
       ])}
       ${group('Control and recovery', [
+        ['Opener disabled / remote lock', yes(state.disabled)], ['Combined blocked flag', yes(state.blocked)],
         ['Saved enabled setting', yes(status.enabled)], ['Setup valid', yes(status.configurationValid)], ['Commissioned', yes(status.commissioned)],
         ['Primary opener commands enabled', yes(status.actuationEnabled)], ['Observation enabled', yes(status.observationEnabled)],
         ['Engine initialized', yes(detail.initialized)], ['Controller busy', yes(state.busy)], ['Operation pending', yes(detail.operationPending)],
@@ -155,6 +158,10 @@ window.ConfiguratorController = ({ root, api, readOnly }) => {
       <p class="gp-sub">Opening feedback: ${esc(row.feedback.opening)} · Closing feedback: ${esc(row.feedback.closing)} · Bolt feedback: ${esc(row.feedback.bolt)}. Travel times are estimates when timed feedback is selected.</p>
       <p data-controller-message role="status" aria-live="polite"></p>
       <form data-controller-form><fieldset ${readOnly() ? 'disabled' : ''}>
+      <h3>Operation during opener lockout</h3>
+      <p class="gp-sub">Both the relay device and the initiating physical button/keypad must allow it. HomeKit, the virtual keypad and primary opener routes cannot bypass lockout. Obstruction, disabled state, uncertain position and bolt safeguards remain in force.</p>
+      ${row.motorPaths.map((motor,index)=>`<label class="gp-check"><input type="checkbox" data-lockout-group="motorPaths" data-lockout-index="${index}" ${values.motorPaths[index].allowDuringOpenerLockout === true ? 'checked' : ''}>${esc(motor.name)} — Allow operation during opener lockout</label>`).join('')}
+      ${row.inputs.map((device,index)=>['button','keypad'].includes(device.kind)?`<label class="gp-check"><input type="checkbox" data-lockout-group="inputs" data-lockout-index="${index}" ${values.inputs[index].allowDuringOpenerLockout === true ? 'checked' : ''}>${esc(device.name)} — Allow operation during opener lockout${device.motorPath === 'primary' ? ' (inactive: primary opener route)' : ''}</label>`:'').join('')}
       <h3>Controller defaults</h3><p class="gp-sub">Used by HomeKit, the virtual keypad and devices without an override.</p>
       <div class="gp-two">${['timing', 'feedback'].flatMap(group => fields[group].map(field => input(field, values[group][field[0]], `data-default-group="${group}" data-key="${field[0]}"`))).join('')}</div>
       <h3>Device timing overrides</h3><p class="gp-sub">Use the controller default or set a different time for an individual button, switch or keypad.</p>
@@ -186,6 +193,10 @@ window.ConfiguratorController = ({ root, api, readOnly }) => {
       event.preventDefault(); if (saving || uncertain || readOnly()) return;
       const next = structuredClone(values), changes = [];
       const change = (target, key, value, label) => { if (target[key] !== value) { changes.push(`${label}: ${target[key] ?? 'Default'} → ${value ?? 'Default'}`); if (value === undefined) delete target[key]; else target[key] = value; } };
+      for (const element of root.querySelectorAll('[data-lockout-group]')) {
+        const target=next[element.dataset.lockoutGroup][Number(element.dataset.lockoutIndex)];
+        if ((target.allowDuringOpenerLockout === true) !== element.checked) change(target, 'allowDuringOpenerLockout', element.checked, element.closest('label').textContent);
+      }
       for (const element of root.querySelectorAll('[data-default-group]')) change(next[element.dataset.defaultGroup], element.dataset.key, Number(element.value), element.closest('label').textContent);
       for (const element of root.querySelectorAll('[data-input-index]')) {
         const index = Number(element.dataset.inputIndex);

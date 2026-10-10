@@ -1,3 +1,28 @@
+## 0.4.43 lockout permissions and experimental ratgdo
+
+Implemented independent Boolean lockout permissions on pulse motor devices and
+physical button/keypad bindings. Both gates are required at command admission
+and fault recovery. New profiles/rows default off. A one-time persisted-profile
+migration preserves pre-permission pulse behavior, explicit choices, enablement
+and matching commissioning hashes across normalization/restart. Web Controller
+idle-only saves update the existing engine/router without commands or fault/
+manual-override resets. Homebridge Devices/Controls expose the same choices.
+
+Added experimental, physically untested homekit-ratgdo local HTTP adapter with
+MAC-pinned status, explicit endpoint/direction/obstruction mapping, optional
+Digest MD5/qop=auth challenge before a single form POST, bounded transport and no
+redirects/retries. Remote-disable is a separate conservative hold, not Tailwind
+lockout or bolt position. Unknown/stopped positions cannot begin primary motor
+commands. No restart, native pairing, ESPHome or MQTT support is advertised.
+Detailed scope/API references are in ratgdo.md and migration rules in
+garage-recovery.md. Existing primary routes and pulse safeguards are retained.
+
+Local initial regression run: 361 tests passed; seven could not complete because
+this reconstructed checkout lacks three binary icons and the Temporal runtime
+dependency. Focused new adapter/permission tests and desktop/mobile CI checks
+are being completed before source approval. No npm publication, installation,
+Tailwind sensor test or live garage command has been performed.
+
 ## PIN update button confirmation
 
 Removed the redundant PIN confirmation checkbox at the owner's request. Clicking Update PIN authorizes submission; other integration preparation checks still apply. Version 0.4.39. The owner confirmed 0.4.38 worked on the live host. CI 37889363684 passed desktop Chromium and mobile WebKit PIN update/recovery checks on source `dcd5cba06961d0fd6aa2b268a49524757d826a41`. Node 22/24 checks passed; combined Homebridge 2.0/2.4 checks passed. Source publication does not mean npm publication or host installation.

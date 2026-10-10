@@ -1,5 +1,13 @@
 # Controller timing settings
 
+Since 0.4.43, the same idle-only editor also exposes Boolean
+`allowDuringOpenerLockout` fields on existing input and motor-path rows. Both
+must be enabled for a physical button/keypad relay operation to bypass only a
+reported Tailwind lockout. Omitted fields retain the stored choice on a partial
+legacy timing payload; new configurations default off. These optional fields
+do not permit connection, source, action or feedback-mode edits. See
+[permission migration and safeguards](garage-recovery.md).
+
 Open **Controller** in the web administrator and select a garage. Administrator accounts can view it; changes require Manage access. Demo mode cannot call the live controller. Creating controllers, changing hardware, input actions, feedback modes and enabling a controller remain in the Homebridge configuration UI.
 
 **Controller defaults** contains opening/closing travel times, pre-movement bolt retraction waits, closed stability and bolt extension settling, active/idle polling, timeouts and the interrupted-opening margin. These defaults apply to HomeKit, the virtual keypad and physical inputs without overrides. Travel times remain estimates when the selected feedback mode is timed.

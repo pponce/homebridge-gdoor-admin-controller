@@ -51,8 +51,7 @@
             "door": {
               "type": "object",
               "required": [
-                "type",
-                "credentialRef"
+                "type"
               ],
               "properties": {
                 "type": {
@@ -60,12 +59,13 @@
                   "type": "string",
                   "enum": [
                     "tailwind",
-                    "homebridge"
+                    "homebridge",
+                    "ratgdo-homekit"
                   ],
                   "default": "tailwind"
                 },
                 "baseUrl": {
-                  "title": "Tailwind local URL",
+                  "title": "Opener local URL",
                   "type": "string",
                   "description": "Origin only, for example http://192.0.2.10. No key or /json suffix."
                 },
@@ -75,6 +75,11 @@
                   "minimum": 0,
                   "maximum": 2,
                   "default": 0
+                },
+                "macAddress": {
+                  "title": "ratgdo MAC address",
+                  "type": "string",
+                  "description": "Experimental homekit-ratgdo firmware only; pin the macAddress from /status.json."
                 },
                 "credentialRef": {
                   "title": "Credential reference",
@@ -90,7 +95,7 @@
                   "type": "string"
                 }
               },
-              "description": "Only Tailwind checks are operational. Homebridge mappings remain development declarations. Use JSON configuration for that future backend."
+              "description": "Tailwind, existing Homebridge garage services, or experimental untested homekit-ratgdo local HTTP API. ratgdo authentication uses a private JSON username/password credential reference."
             },
             "bolt": {
               "type": "object",
@@ -310,7 +315,13 @@
                       "stop-opening-reverse-closing"
                     ],
                     "default": "disabled",
-                    "description": "Only for a verified compatible relay/opener. Declaring this does not enable it; the stop/reverse runtime still needs integration."
+                    "description": "Only for a verified compatible relay/opener."
+                  },
+                  "allowDuringOpenerLockout": {
+                    "title": "Allow operation during opener lockout",
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Requires the initiating physical button/keypad permission too. Other safeguards remain active."
                   }
                 }
               }
@@ -338,6 +349,12 @@
                     "title": "Input ID",
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9-]{0,47}$"
+                  },
+                  "allowDuringOpenerLockout": {
+                    "title": "Allow operation during opener lockout",
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Requires the selected relay device permission too. Primary opener routes and generic switches cannot bypass lockout."
                   },
                   "name": {
                     "title": "Input name",

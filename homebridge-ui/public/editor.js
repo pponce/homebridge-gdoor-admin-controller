@@ -89,13 +89,14 @@ export class ProfileEditor {
     return matched;
   }
   connection(parent, obj, key, kind) {
-    const current=obj[key];const isControl=key==='source';const types=isControl?[['deconz','deCONZ'],['homebridge','Homebridge']]:kind==='garage'?[['tailwind','Tailwind local API'],['homebridge','Existing Homebridge garage']]:[['deconz','deCONZ directly'],['homebridge','Existing Homebridge device']];
+    const current=obj[key];const isControl=key==='source';const types=isControl?[['deconz','deCONZ'],['homebridge','Homebridge']]:kind==='garage'?[['tailwind','Tailwind local API'],['homebridge','Existing Homebridge garage'],['ratgdo-homekit','ratgdo — HomeKit firmware (experimental, untested)']]:[['deconz','deCONZ directly'],['homebridge','Existing Homebridge device']];
     const choice=this.input(this.grid(parent),isControl?'Control source':'Connection',current,'type',{options:types});
     choice.addEventListener('change',()=>{
       obj[key]={type:current.type,baseUrl:'',credentialRef:'garage-'+current.type,...(kind==='garage'&&current.type==='tailwind'?{doorIndex:0}:{}),
         ...(kind==='bolt'?{lockedValue:true,...(current.type==='homebridge'?{serviceType:'switch'}:{})}:{}),...(kind==='motor'?{activeValue:true}:{}),
         ...(['button','keypad','switch'].includes(kind)?{kind:current.type==='homebridge'&&kind==='keypad'?'button':kind}: {})};
       if (kind === 'garage' && current.type !== 'tailwind') { delete obj.exposeTailwindLockout; delete obj.exposeTailwindRestart; }
+      if (kind === 'garage' && current.type === 'ratgdo-homekit') { obj[key]={type:current.type,baseUrl:'',macAddress:''}; obj.feedback.opening='sensor'; obj.feedback.closing='sensor'; }
       this.change();this.render();
     });
   }
@@ -183,7 +184,13 @@ export class ProfileEditor {
     if(selected==='primary'){
     const opener=this.panel(root,'Garage Door opener','The default opener connection and source of door position feedback. HomeKit and the virtual keypad use this device; other controls can choose it or an opener relay.');
     this.connection(opener,p,'door','garage');
-    if(p.door.type==='homebridge')this.bridgeDevice(opener,p.door,'garage');else {
+    if(p.door.type==='homebridge')this.bridgeDevice(opener,p.door,'garage');else if(p.door.type==='ratgdo-homekit') {
+      opener.append(el('p','Experimental and not hardware-tested. Requires homekit-ratgdo firmware, not ESPHome or MQTT firmware. Uses its local HTTP API; no native HomeKit pairing. Unknown or stopped position holds movement.','help'));
+      const dg=this.grid(opener);
+      this.input(dg,'ratgdo local URL',p.door,'baseUrl',{help:'Origin only, including http:// or https://.'});
+      this.input(dg,'ratgdo MAC address',p.door,'macAddress',{help:'Copy macAddress from the device /status.json response to pin its identity.'});
+      this.input(dg,'Credential reference (optional)',p.door,'credentialRef',{help:'If authentication is enabled, reference a private secret containing JSON with username and password. Leave blank only when authentication is not required.'});
+    }else {
       const shared=this.sharedConnection(opener,p.door),dg=this.grid(opener);
       const door=this.input(dg,'Tailwind door',p.door,'doorIndex',{type:'number',options:Array.from({length:shared?.doorCount??3},(_,index)=>[index,'Door '+(index+1)]),help:shared?.doorCount?'Choose which door on this Tailwind controller to use.':'Set the number of doors in General to narrow this list. Door 1 uses API index 0.'});door.required=true;
       const link=el('a','How to get a Tailwind local control key');link.href='https://gotailwind.zendesk.com/hc/en-us/articles/42573968819725-How-do-I-get-my-local-control-key-for-my-Tailwind-garage-door-controller';link.target='_blank';link.rel='noreferrer';opener.append(link);
@@ -215,6 +222,7 @@ export class ProfileEditor {
       if(path.id!==this.selectedDevices.get(p.id))return;
       const card=this.panel(paths,path.name);const g=this.grid(card);this.input(g,'Device name',path,'name').addEventListener('input',()=>{card.querySelector('h3').textContent=path.name;const pick=this.root.querySelector('.device-choice[aria-pressed="true"]');if(pick){pick.querySelector('strong').textContent=path.name||'Unnamed opener';pick.setAttribute('aria-label','Configure device '+(path.name||'Unnamed opener'));}});this.connection(card,path,'connection','motor');this.device(card,path.connection,'motor');this.input(this.grid(card),'Relay ON activates the opener',path.connection,'activeValue',{type:'checkbox'});if(path.connection.type==='homebridge')this.input(this.grid(card),'I verified OFF always releases this output, including repeated OFF commands',path.connection,'inactiveWriteIdempotent',{type:'checkbox',help:'A toggle-only switch cannot be used as the motor relay.'});
       const times=this.grid(card);for(const [k,l] of [['openPulseSeconds','Opening pulse (seconds)'],['closePulseSeconds','Closing pulse (seconds)']])this.input(times,l,path,k,{type:'number',min:.1,max:2,step:.1});
+      this.input(times,'Allow operation during opener lockout',path,'allowDuringOpenerLockout',{type:'checkbox',help:'Only for a physical button or keypad that also allows it. Does not bypass obstruction, disabled state, bolt checks or uncertain position.'});
       this.input(times,'During movement',path,'interruption',{options:[['disabled','No stop / reverse'],['stop-opening-reverse-closing','Stop opening / reverse closing']],help:'Enable only for a relay and opener verified to support this sequence. Applies to toggle buttons and switches using this device; keypad authorization is configured under Controls.'}).addEventListener('change',()=>{this.applyDeviceBehavior(p,path);this.change();this.render();});
       const mismatched=p.inputs.filter(input=>input.motorPath===path.id&&input.action==='toggle'&&input.busyBehavior!==(path.interruption==='stop-opening-reverse-closing'?'interrupt':'drop'));
       if(mismatched.length){card.append(el('p','Saved controls with different movement behavior: '+mismatched.map(input=>input.name).join(', ')+'. Existing behavior is preserved until you apply the device setting.','help'));card.append(this.button('Apply device behavior to linked controls',()=>{this.applyDeviceBehavior(p,path);this.change();this.render();}));}
@@ -222,14 +230,14 @@ export class ProfileEditor {
     });
   }
   addOpenerDevice(p){
-    p.motorPaths.push({id:freshId('motor'),name:'Opener relay',type:'pulse-relay',connection:{type:'deconz',baseUrl:p.bolt.type==='deconz'?p.bolt.baseUrl:'',credentialRef:p.bolt.type==='deconz'?p.bolt.credentialRef:'garage-deconz',activeValue:true},openPulseSeconds:1,closePulseSeconds:1,interruption:'disabled'});delete p.motorPaths.at(-1).connection.lockedValue;p.motorPaths.at(-1).connection.resourceId='';p.motorPaths.at(-1).connection.uniqueId='';this.selectedDevices.set(p.id,p.motorPaths.at(-1).id);this.change();this.render();
+    p.motorPaths.push({id:freshId('motor'),name:'Opener relay',type:'pulse-relay',allowDuringOpenerLockout:false,connection:{type:'deconz',baseUrl:p.bolt.type==='deconz'?p.bolt.baseUrl:'',credentialRef:p.bolt.type==='deconz'?p.bolt.credentialRef:'garage-deconz',activeValue:true},openPulseSeconds:1,closePulseSeconds:1,interruption:'disabled'});delete p.motorPaths.at(-1).connection.lockedValue;p.motorPaths.at(-1).connection.resourceId='';p.motorPaths.at(-1).connection.uniqueId='';this.selectedDevices.set(p.id,p.motorPaths.at(-1).id);this.change();this.render();
   }
 
   inputs(root,p){
     root.append(el('p','Controls request coordinated garage and bolt operation. A button, keypad or Homebridge switch is a control when we listen to it. Choose which opener device carries out its requests; the coordinator handles the bolt automatically.','help setup-model'));
-    root.append(el('div','HomeKit + virtual keypad → '+(p.door.type==='tailwind'?'Tailwind API':'Garage opener (Homebridge)'),'route-note'));
+    root.append(el('div','HomeKit + virtual keypad → '+(p.door.type==='tailwind'?'Tailwind API':p.door.type==='ratgdo-homekit'?'ratgdo local API (experimental)':'Garage opener (Homebridge)'),'route-note'));
     const inputs=this.panel(root,'Your controls','Select a control to edit its source, action and opener device.');
-    const openerLabel='Garage opener ('+(p.door.type==='tailwind'?'Tailwind':'Homebridge')+')';
+    const openerLabel='Garage opener ('+(p.door.type==='tailwind'?'Tailwind':p.door.type==='ratgdo-homekit'?'ratgdo — experimental':'Homebridge')+')';
     const routeLabel=input=>input.motorPath==='primary'?openerLabel:'Relay: '+(p.motorPaths.find(path=>path.id===input.motorPath)?.name??'Missing relay');
     const selector=el('div',undefined,'input-selector');selector.setAttribute('role','group');selector.setAttribute('aria-label','Select a control');inputs.append(selector);
     if(!p.inputs.some(input=>input.id===this.selectedInputs.get(p.id)))this.selectedInputs.set(p.id,p.inputs[0]?.id);
@@ -257,6 +265,7 @@ export class ProfileEditor {
       if(input.source.kind==='keypad')this.input(actions,'Alarm system number',input.source,'alarmId',{type:'number',min:1,max:255,step:1});
       else {if(input.source.kind==='switch')this.input(actions,'Switch transition',input,'trigger',{options:[['on','Turns on'],['off','Turns off'],['either','Either transition']]});else this.input(actions,'Button event',input,'trigger',{type:'number',min:0,max:input.source.type==='homebridge'?2:65535,step:1,help:input.source.type==='homebridge'?'0: single press, 1: double press, 2: long press.':'For example, 1002 is the usual single press on many deCONZ buttons.'});this.input(actions,'Action',input,'action',{options:[['toggle','Open / close toggle'],['open','Open'],['close','Close']]}).addEventListener('change',()=>{input.busyBehavior=input.action==='toggle'&&p.motorPaths.find(path=>path.id===input.motorPath)?.interruption==='stop-opening-reverse-closing'?'interrupt':'drop';this.change();this.render();});}
       this.input(actions,'Operate garage through',input,'motorPath',{options:[['primary',openerLabel],...p.motorPaths.map(path=>[path.id,'Relay: '+path.name])],help:'Choose whether this control sends commands through the garage opener connection or pulses a relay.'}).addEventListener('change',()=>{const supported=p.motorPaths.find(path=>path.id===input.motorPath)?.interruption==='stop-opening-reverse-closing';input.busyBehavior=input.action==='toggle'&&supported?'interrupt':input.source.kind==='keypad'&&supported?input.busyBehavior:'drop';this.change();this.render();});
+      if(['button','keypad'].includes(input.source.kind))this.input(actions,'Allow operation during opener lockout',input,'allowDuringOpenerLockout',{type:'checkbox',help:'Requires a relay route with the same permission enabled. Primary opener commands remain held.'});
       const canInterrupt=p.motorPaths.find(path=>path.id===input.motorPath)?.interruption==='stop-opening-reverse-closing';
       if(input.source.kind==='keypad')this.input(actions,'PIN behavior',input,'busyBehavior',{options:[['drop','Correct PIN opens; incorrect PIN closes'],['interrupt','Correct PIN to open; either PIN to stop, reverse or close',!canInterrupt]],help:'The second option requires a compatible opener relay. It can interrupt only movement started by this keypad. An incorrect PIN never opens a closed door, but can reverse a closing door.'});
       else card.append(el('p',input.action==='toggle'?(input.busyBehavior==='interrupt'?'Movement behavior: stop opening / reverse closing, using the selected opener device.':'Movement behavior: ignore presses during movement. Configure the opener device under Devices.'):'Open-only and close-only controls ignore requests during movement. Use a toggle control for device stop / reverse behavior.','help control-movement'));

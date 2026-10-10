@@ -168,8 +168,12 @@ try{
      await p.getByRole('button',{name:'01 Devices'}).click();
      await p.getByRole('button',{name:'Configure device '+base.motorPaths[0].name,exact:true}).click();
      assert.equal(await p.getByRole('heading',{name:'Additional opener devices',exact:true}).count(),1);
+     assert.equal(await p.getByLabel('Allow operation during opener lockout',{exact:true}).isChecked(),false);
+     await p.getByLabel('Allow operation during opener lockout',{exact:true}).check();
      await p.getByLabel('During movement',{exact:true}).selectOption('disabled');
      await p.getByRole('button',{name:'02 Controls'}).click();
+     assert.equal(await p.getByLabel('Allow operation during opener lockout',{exact:true}).isChecked(),false);
+     await p.getByLabel('Allow operation during opener lockout',{exact:true}).check();
      assert.match(await p.locator('.control-movement').textContent(),/ignore presses/);
      await p.getByRole('button',{name:'01 Devices'}).click();
      await p.getByLabel('During movement',{exact:true}).selectOption('stop-opening-reverse-closing');

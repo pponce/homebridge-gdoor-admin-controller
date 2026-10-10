@@ -11,7 +11,8 @@ export class WebAdminController {
     const observedAt = engine?.observedAt || null;
     const ageMs = observedAt ? Math.max(0, Date.now() - observedAt) : null;
     return {
-      pluginVersion: PLUGIN_VERSION, observedAt, ageMs,
+      pluginVersion: PLUGIN_VERSION, observedAt, ageMs, openerBackend: profile.door.type,
+      lockoutReporting: profile.door.type === 'tailwind' ? 'reported' : 'not-supported',
       fresh: ageMs !== null && ageMs <= Math.max(10000, profile.timing.idlePollSeconds * 2500),
       initialized: engine?.initialized === true, observationInProgress: Boolean(engine?.observation),
       operationPending: Boolean(entry.job), activeInput: entry.router?.activeInput ?? null,
@@ -31,7 +32,7 @@ export class WebAdminController {
       controllers: this.runtime.configuration.controllers.map(profile => ({ id: profile.id, name: profile.name,
         status: this.runtime.status(profile.id), troubleshooting: this.troubleshooting(profile), values: controllerTimingValues(profile),
         feedback: { opening: profile.feedback.opening, closing: profile.feedback.closing, bolt: profile.feedback.bolt },
-        inputs: profile.inputs.map(input => ({ id: input.id, name: input.name, enabled: input.enabled, motorPath: input.motorPath })),
+        inputs: profile.inputs.map(input => ({ id: input.id, name: input.name, enabled: input.enabled, motorPath: input.motorPath, kind: input.source.kind })),
         motorPaths: profile.motorPaths.map(motor => ({ id: motor.id, name: motor.name })),
       })) };
   }

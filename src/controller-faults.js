@@ -26,6 +26,7 @@ const codes = new Set([
   'bolt_retract_confirmation_lost', 'close_or_bolt_confirmation_lost',
   'interruption_precondition_lost', 'interruption_request_expired', 'interrupted_travel_timeout',
   'credentials_unavailable', 'credential_reference_missing', 'tailwind_credential_invalid',
+  'ratgdo_credential_invalid', 'ratgdo_auth_unsupported',
   'bolt_credential_invalid', 'homebridge_credential_invalid', 'input_output_feedback_loop',
   'controller_requires_review', 'controller_unavailable', 'private_storage_write_failed',
 ]);

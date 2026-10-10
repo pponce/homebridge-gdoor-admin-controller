@@ -1,5 +1,31 @@
 # Garage recovery, lockout and displayed state
 
+## 0.4.43 permission controls
+
+The physical button/keypad exception below now requires **both**
+`motorPaths[].allowDuringOpenerLockout=true` on its relay device and
+`inputs[].allowDuringOpenerLockout=true` on the initiating control. Both settings
+are available in Homebridge configuration and on the web Controller page.
+New installations and new rows default off, including omitted fields.
+Persisted pre-permission installations migrate once to preserve the 0.4.42
+physical pulse behavior: existing relays and button/keypad relay bindings receive
+true only where the new field was absent. Explicit true/false choices, other
+settings, enablement and matching commissioning approvals are preserved.
+This compatibility migration also applies when skipping earlier releases;
+review the displayed permissions after updating. It never enables an input or
+controller that was disabled. Newly added rows after migration remain off.
+
+Saving these permissions is idle-only, sends no movement command, and retains
+faults and manual-unlock state. It applies to the next fresh physical event.
+HomeKit, virtual keypad, generic switches and primary opener routes do not gain
+an exception. Both gates are necessary, not sufficient: all existing safety
+checks described below still apply. Settings cannot override firmware lockout.
+
+Non-Tailwind adapters do not manufacture a cleared lockout flag. Unsupported
+lockout reporting stays null and is identified in troubleshooting. Known blocks,
+obstruction, missing feedback and movement failures retain their normal holds.
+See [experimental ratgdo](ratgdo.md) for its separate remote-lock semantics.
+
 Behavior introduced in 0.4.41–0.4.42. This is the detailed operating reference, not a claim of installed-host or Apple Home UI acceptance. See also [behavior parity](behavior-parity.md) and [controller timings](controller-timings.md).
 
 ## What each signal proves

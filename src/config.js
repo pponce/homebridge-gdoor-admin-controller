@@ -31,6 +31,11 @@ function secretRef(value) {
   if (!identifier(value)) fail('invalid_secret_reference');
   return value;
 }
+function lockoutPermission(value) {
+  if (value.allowDuringOpenerLockout === undefined) return {};
+  if (typeof value.allowDuringOpenerLockout !== 'boolean') fail('invalid_lockout_permission');
+  return { allowDuringOpenerLockout: value.allowDuringOpenerLockout };
+}
 function homebridge(value, bolt) {
   fields(value, ['type', 'baseUrl', 'bridgeId', 'serviceId', 'accessoryIdentity', 'credentialRef', ...(bolt ? ['serviceType', 'lockedValue'] : [])], 'invalid_homebridge_connection');
   const result = {
@@ -53,6 +58,12 @@ function homebridge(value, bolt) {
 function door(value) {
   if (!object(value)) fail('door_and_bolt_required');
   if (value.type === 'homebridge') return homebridge(value, false);
+  if (value.type === 'ratgdo-homekit') {
+    fields(value, ['type','baseUrl','macAddress','credentialRef'], 'invalid_ratgdo_connection');
+    if (typeof value.macAddress !== 'string' || !/^([0-9a-f]{2}:){5}[0-9a-f]{2}$/i.test(value.macAddress)) fail('invalid_ratgdo_identity');
+    return { type: value.type, baseUrl: baseUrl(value.baseUrl), macAddress: value.macAddress.toLowerCase(),
+      ...(value.credentialRef ? { credentialRef: secretRef(value.credentialRef) } : {}) };
+  }
   if (value.type !== 'tailwind') fail('unsupported_door_backend');
   fields(value, ['type', 'baseUrl', 'doorIndex', 'credentialRef'], 'invalid_tailwind_connection');
   if (!Number.isInteger(value.doorIndex) || value.doorIndex < 0 || value.doorIndex > 2) fail('invalid_door_index');
@@ -91,6 +102,7 @@ function feedback(value) {
 function resourceKeys(value) {
   if (value.type === 'homebridge') return [JSON.stringify(['homebridge', value.bridgeId.toLowerCase(), value.serviceId])];
   if (value.type === 'tailwind') return [JSON.stringify(['tailwind', value.baseUrl, value.doorIndex])];
+  if (value.type === 'ratgdo-homekit') return [JSON.stringify(['ratgdo', value.macAddress]), JSON.stringify(['ratgdo-url', value.baseUrl])];
   return [
     ['deconz-identity', value.gatewayId.replaceAll(':', '').toLowerCase(), value.uniqueId.toLowerCase()],
     ['deconz-resource', value.gatewayId.replaceAll(':', '').toLowerCase(), value.resourceId],
@@ -120,12 +132,12 @@ function motorPaths(value = []) {
   if (!Array.isArray(value) || value.length > 4) fail('invalid_motor_paths');
   const ids = new Set(['primary']);
   return value.map(row => {
-    fields(row, ['id', 'name', 'type', 'connection', 'openPulseSeconds', 'closePulseSeconds', 'interruption'], 'invalid_motor_path');
+    fields(row, ['id', 'name', 'type', 'connection', 'openPulseSeconds', 'closePulseSeconds', 'interruption', 'allowDuringOpenerLockout'], 'invalid_motor_path');
     if (!identifier(row.id) || ids.has(row.id)) fail('duplicate_motor_path');
     ids.add(row.id);
     if (row.type !== 'pulse-relay') fail('unsupported_motor_path');
     return { id: row.id, name: string(row.name, 'invalid_motor_path_name', 64), type: row.type,
-      connection: pulseConnection(row.connection),
+      connection: pulseConnection(row.connection), ...lockoutPermission(row),
       openPulseSeconds: number(row.openPulseSeconds, 0.1, 2, 'invalid_pulse_duration'),
       closePulseSeconds: number(row.closePulseSeconds, 0.1, 2, 'invalid_pulse_duration'),
       interruption: choice(row.interruption, ['disabled', 'stop-opening-reverse-closing'], 'invalid_interruption_policy') };
@@ -159,7 +171,7 @@ function inputs(value = [], paths) {
   if (!Array.isArray(value) || value.length > 32) fail('invalid_inputs');
   const ids = new Set();
   return value.map(row => {
-    fields(row, ['id', 'name', 'enabled', 'source', 'trigger', 'action', 'motorPath', 'busyBehavior', 'rearmSeconds', 'timing'], 'invalid_input');
+    fields(row, ['id', 'name', 'enabled', 'source', 'trigger', 'action', 'motorPath', 'busyBehavior', 'rearmSeconds', 'timing', 'allowDuringOpenerLockout'], 'invalid_input');
     if (!identifier(row.id) || ['homekit', 'virtual-keypad'].includes(row.id) || ids.has(row.id)) fail('invalid_or_duplicate_input_id');
     ids.add(row.id);
     if (typeof row.enabled !== 'boolean') fail('invalid_input_enabled');
@@ -179,7 +191,7 @@ function inputs(value = [], paths) {
     fields(timing, timingFields, 'invalid_input_timing');
     for (const key of Object.keys(timing)) number(timing[key], key.includes('Retract') ? 0 : 1, key.includes('Retract') ? 120 : 300, 'invalid_input_timing');
     return { id: row.id, name: string(row.name, 'invalid_input_name', 64), enabled: row.enabled, source: selected,
-      trigger, action, motorPath: row.motorPath, busyBehavior,
+      trigger, action, motorPath: row.motorPath, busyBehavior, ...lockoutPermission(row),
       rearmSeconds: number(row.rearmSeconds, 0, 10, 'invalid_input_rearm'), timing: { ...timing } };
   });
 }

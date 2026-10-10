@@ -1,4 +1,5 @@
 import { TailwindDoor, DeconzBolt } from './drivers.js';
+import { RatgdoDoor } from './ratgdo.js';
 import { HomebridgeDoor, HomebridgeBolt, HomebridgeMotorRelay, HomebridgeInput } from './homebridge-devices.js';
 import { DeconzMotorRelay, PulseMotor } from './pulse-motor.js';
 import { DeconzInput } from './deconz-input.js';
@@ -7,6 +8,7 @@ import { Fault, requireValue } from './fault.js';
 export const PROBE_ERRORS = Object.freeze([
   'credentials_unavailable', 'credential_reference_missing', 'backend_not_implemented',
   'tailwind_credential_invalid', 'door_read_failed', 'door_response_invalid',
+  'ratgdo_credential_invalid', 'ratgdo_auth_unsupported',
   'bolt_credential_invalid', 'bolt_identity_configuration_required', 'bolt_read_failed',
   'bolt_gateway_identity_mismatch', 'bolt_resource_identity_mismatch', 'bolt_unreachable', 'bolt_response_invalid',
   'device_probe_failed',
@@ -26,9 +28,9 @@ export const CONTROL_PROBE_ERRORS = Object.freeze([
 ]);
 
 export class Diagnostics {
-  constructor(configuration, credentials, { request } = {}) {
+  constructor(configuration, credentials, { request, ratgdoRequest } = {}) {
     this.configuration = configuration; this.credentials = credentials;
-    this.request = request; this.active = new Set();
+    this.request = request; this.ratgdoRequest = ratgdoRequest; this.active = new Set();
   }
 
   async probeControls(id) {
@@ -75,8 +77,8 @@ export class Diagnostics {
         try {
           if (credentialError) throw credentialError;
           const secret = credentials[configuration.credentialRef];
-          requireValue(typeof secret === 'string', 'credential_reference_missing');
-          const driver = kind === 'door' ? new (configuration.type === 'tailwind' ? TailwindDoor : HomebridgeDoor)(configuration, secret, { request: this.request, feedback: controller.feedback }) :
+          requireValue(configuration.type === 'ratgdo-homekit' && !configuration.credentialRef || typeof secret === 'string', 'credential_reference_missing');
+          const driver = kind === 'door' && configuration.type === 'ratgdo-homekit' ? new RatgdoDoor(configuration, secret, { request: this.ratgdoRequest }) : kind === 'door' ? new (configuration.type === 'tailwind' ? TailwindDoor : HomebridgeDoor)(configuration, secret, { request: this.request, feedback: controller.feedback }) :
             new (configuration.type === 'deconz' ? DeconzBolt : HomebridgeBolt)(configuration, secret, { request: this.request, feedback: controller.feedback.bolt });
           const value = await driver.read();
           return kind === 'door' ? { state: value.door, feedback: value.evidence, blocked: value.blocked, error: null } :

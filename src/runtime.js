@@ -5,6 +5,7 @@ import { PrivateStore } from './private-store.js';
 import { StateJournal } from './journal.js';
 import { readCredentials } from './credentials.js';
 import { TailwindDoor, DeconzBolt } from './drivers.js';
+import { RatgdoDoor } from './ratgdo.js';
 import { DeconzMotorRelay, PulseMotor } from './pulse-motor.js';
 import { MovementEngine } from './engine.js';
 import { InputRouter } from './input-routing.js';
@@ -42,8 +43,22 @@ export class CoordinatorRuntime {
     this.state.events.push({ at: new Date().toISOString(), controllerId, type, detail }); this.state.events = this.state.events.slice(-200);
   }
   async start() {
-    this.state = await this.store.read() ?? { schema: 1, revision: 1, configuration: this.bootstrap, commissioned: {}, maintenance: null, events: [], requests: [] };
+    const saved = await this.store.read();
+    this.state = saved ?? { schema: 1, revision: 1, configuration: this.bootstrap, commissioned: {}, maintenance: null, events: [], requests: [] };
     this.state.configuration = normalize(this.state.configuration);
+    // Preserve the pre-permission release's physical pulse exception only for
+    // persisted installations. New configurations and newly added rows default off.
+    if (saved && this.state.lockoutPermissionsVersion !== 1) {
+      for (const profile of this.state.configuration.controllers) {
+        const approved = this.state.commissioned[profile.id] === hash(profile);
+        for (const motor of profile.motorPaths) motor.allowDuringOpenerLockout ??= true;
+        for (const input of profile.inputs) input.allowDuringOpenerLockout ??=
+          ['button', 'keypad'].includes(input.source.kind) && input.motorPath !== 'primary';
+        if (approved) this.state.commissioned[profile.id] = hash(normalize({ controllers: [profile] }).controllers[0]);
+      }
+      this.state.configuration = normalize(this.state.configuration);
+    }
+    this.state.lockoutPermissionsVersion = 1;
     // Migrate saved approval once. A runtime fault never changes this choice.
     this.state.enabled ??= Object.fromEntries(this.configuration.controllers.map(p => [p.id, this.state.commissioned[p.id] === hash(p)]));
     this.state.faults ??= {};
@@ -58,7 +73,9 @@ export class CoordinatorRuntime {
     if (this.driverFactory) return this.driverFactory(profile, readOnly);
     const keys = await this.credentials();
     const key = ref => { requireValue(typeof keys[ref] === 'string', 'credential_reference_missing'); return keys[ref]; };
-    const door = new (profile.door.type === 'tailwind' ? TailwindDoor : HomebridgeDoor)(profile.door, key(profile.door.credentialRef), { readOnly, feedback: profile.feedback });
+    const door = profile.door.type === 'ratgdo-homekit'
+      ? new RatgdoDoor(profile.door, profile.door.credentialRef ? key(profile.door.credentialRef) : undefined, { readOnly })
+      : new (profile.door.type === 'tailwind' ? TailwindDoor : HomebridgeDoor)(profile.door, key(profile.door.credentialRef), { readOnly, feedback: profile.feedback });
     const bolt = new (profile.bolt.type === 'deconz' ? DeconzBolt : HomebridgeBolt)(profile.bolt, key(profile.bolt.credentialRef), { readOnly, feedback: profile.feedback.bolt });
     const motorPaths = {};
     for (const p of profile.motorPaths) {
@@ -80,7 +97,7 @@ export class CoordinatorRuntime {
       entry.held = 'checking-devices'; this.publish(p.id, this.status(p.id).state);
       try {
         const hw = await this.makeDrivers(p);
-        const engine = new MovementEngine({ ...hw, journal: new StateJournal(this.storagePath, p.id), feedback: p.feedback, timing: timing(p),
+        const engine = new MovementEngine({ ...hw, lockoutMotorPaths: p.motorPaths.filter(m => m.allowDuringOpenerLockout === true).map(m => m.id), journal: new StateJournal(this.storagePath, p.id), feedback: p.feedback, timing: timing(p),
           ...(this.clock ? { clock: this.clock } : {}), publish: snapshot => this.publish(p.id, snapshot) });
         engine.recordFault = async fault => {
           const previous = this.state.faults[p.id];
@@ -176,6 +193,7 @@ export class CoordinatorRuntime {
       current.profile = profile;
       // Keep the same engine, journal, overrides, fault state and live subscriptions.
       if (current.engine) {
+        current.engine.lockoutMotorPaths = new Set(profile.motorPaths.filter(m => m.allowDuringOpenerLockout === true).map(m => m.id));
         Object.assign(current.engine.timing, timing(profile));
         Object.assign(current.engine.feedback, profile.feedback);
         for (const motor of profile.motorPaths) {

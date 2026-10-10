@@ -33,8 +33,8 @@ export function controllerTimingValues(profile) {
   return {
     timing: pick(profile.timing, keys(controllerTimingFields.timing)),
     feedback: pick(profile.feedback, keys(controllerTimingFields.feedback)),
-    inputs: profile.inputs.map(input => ({ id: input.id, rearmSeconds: input.rearmSeconds, timing: { ...input.timing } })),
-    motorPaths: profile.motorPaths.map(motor => ({ id: motor.id, ...pick(motor, keys(controllerTimingFields.motorPaths)) })),
+    inputs: profile.inputs.map(input => ({ id: input.id, rearmSeconds: input.rearmSeconds, timing: { ...input.timing }, ...pick(input, ['allowDuringOpenerLockout']) })),
+    motorPaths: profile.motorPaths.map(motor => ({ id: motor.id, ...pick(motor, [...keys(controllerTimingFields.motorPaths), 'allowDuringOpenerLockout']) })),
   };
 }
 export function profileWithTimings(profile, values) {
@@ -46,7 +46,9 @@ export function profileWithTimings(profile, values) {
     const rows = values[group];
     requireValue(Array.isArray(rows) && rows.length === profile[group].length && new Set(rows.map(row => row?.id)).size === rows.length, 'invalid_controller_timings');
     for (const row of rows) {
-      requireValue(exact(row, group === 'inputs' ? ['id', 'timing', 'rearmSeconds'] : ['id', ...keys(controllerTimingFields.motorPaths)]), 'invalid_controller_timings');
+      const permission = Object.hasOwn(row, 'allowDuringOpenerLockout');
+      requireValue(!permission || typeof row.allowDuringOpenerLockout === 'boolean', 'invalid_controller_timings');
+      requireValue(exact(row, [...(group === 'inputs' ? ['id', 'timing', 'rearmSeconds'] : ['id', ...keys(controllerTimingFields.motorPaths)]), ...(permission ? ['allowDuringOpenerLockout'] : [])]), 'invalid_controller_timings');
       const target = copy[group].find(value => value.id === row.id);
       requireValue(target, 'invalid_controller_timings');
       Object.assign(target, structuredClone(row));

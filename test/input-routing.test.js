@@ -110,9 +110,9 @@ test('stale timestamps, reconnects and busy epochs drop history instead of repla
   assert.equal(f.gate.accept(f.event(15, 1002, { session: 'second', epoch: 3 }), { epoch: 3, eligible: true }), true);
 });
 
-function routerFixture() {
+function routerFixture({ devicePermission = true, inputPermission = true } = {}) {
   const cfg = validateConfiguration(copy()).controllers[0];
-  for (const profile of cfg.inputs) { profile.rearmSeconds = 0; profile.timing = {}; }
+  for (const profile of cfg.inputs) { profile.rearmSeconds = 0; profile.timing = {}; profile.allowDuringOpenerLockout = inputPermission; }
   const state = { door: 'closed', locked: true, now: 0, commands: [], journal: null };
   const clock = { now: () => state.now, wall: () => 100000 + state.now, sleep: async ms => { state.now += ms; } };
   const writer = route => ({ capabilities: { pulse: route !== 'primary', interruption: true }, write: async command => { state.commands.push([route, command]); state.door = command === 'open' ? 'not-closed' : 'closed'; } });
@@ -120,7 +120,7 @@ function routerFixture() {
   const engine = new MovementEngine({ door: primary, bolt: { read: async () => ({ locked: state.locked, evidence: 'relay' }),
     write: async value => { state.locked = value; } },
     journal: { read: async () => ({ inProgress: false, fault: false }), write: async value => { state.journal = value; } },
-    feedback: cfg.feedback, clock, motorPaths: { 'wall-relay': writer('wall-relay') },
+    feedback: cfg.feedback, clock, motorPaths: { 'wall-relay': writer('wall-relay') }, lockoutMotorPaths: devicePermission ? ['wall-relay'] : [],
     timing: { pollMs: 10, openingMs: 20, closedStableMs: 0, boltSettleMs: 0, openRetractSettleMs: 0, closeRetractSettleMs: 0 } });
   const router = new InputRouter(engine, cfg.inputs, clock);
   function arm(id, value = 0) { router.arm(id, { session: 'connected', sequence: 0, value }); }
@@ -208,6 +208,18 @@ test('physical button and keypad pulse through lockout; primary routes remain he
     const primary = await f.router.builtin('homekit', 'close');
     assert.equal(primary.result.fault, 'door_blocked'); assert.equal(f.state.commands.length, 1);
   }
+});
+
+test('lockout permissions require both gates; either missing/false forbids pulse and bolt writes', async () => {
+  for (const devicePermission of [false, true]) for (const inputPermission of [false, true]) {
+    const f = routerFixture({devicePermission,inputPermission}); f.state.lockout=true; await f.engine.initialize();
+    f.arm('indoor-button'); const result=await f.offer('indoor-button',1002);
+    if(devicePermission && inputPermission) assert.equal(result.result.fault,null);
+    else { assert.deepEqual(f.state.commands,[]); assert.equal(f.state.locked,true); }
+  }
+  const f=routerFixture(); delete f.router.profiles.get('indoor-button').allowDuringOpenerLockout;
+  f.state.lockout=true;await f.engine.initialize();f.arm('indoor-button');await f.offer('indoor-button',1002);
+  assert.deepEqual(f.state.commands,[]);assert.equal(f.state.locked,true);
 });
 
 test('lockout exception does not override disabled, obstruction, or undifferentiated blocked flags', async () => {

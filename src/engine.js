@@ -16,12 +16,13 @@ const lockoutOnly = sample => sample.lockout === true && sample.disabled === fal
  * No action in construction, initialization, observe(), or state publication.
  */
 export class MovementEngine {
-  constructor({ door, bolt, journal, feedback, timing = {}, motorPaths = {}, clock = systemClock, publish = () => {}, recordFault = async () => {} }) {
+  constructor({ door, bolt, journal, feedback, timing = {}, motorPaths = {}, lockoutMotorPaths = [], clock = systemClock, publish = () => {}, recordFault = async () => {} }) {
     this.door = door; this.bolt = bolt; this.journal = journal; this.clock = clock; this.publish = publish;
     this.recordFault = recordFault;
     this.feedback = { ...feedback }; this.timing = { ...defaults, ...timing };
     requireValue(motorPaths && typeof motorPaths === 'object' && !Object.hasOwn(motorPaths, 'primary'), 'engine_motor_paths_invalid');
     this.motorPaths = new Map([['primary', door], ...Object.entries(motorPaths)]);
+    this.lockoutMotorPaths = new Set(lockoutMotorPaths);
     this.motor = door; this.interruptionAllowed = false; this.interruptionRequest = null;
     this.travel = null; this.partialOwner = null; this.autoClosePending = false;
     requireValue(['sensor', 'timed'].includes(feedback.opening) && ['sensor', 'timed'].includes(feedback.closing) &&
@@ -44,7 +45,7 @@ export class MovementEngine {
       command === 'close' && motorPath === 'primary' && this.restartCloseAvailable();
   }
   physicalLockoutRecovery(motorPath) {
-    return this.motorPaths.get(motorPath)?.capabilities?.pulse === true && lockoutOnly(this.state) &&
+    return this.lockoutMotorPaths.has(motorPath) && this.motorPaths.get(motorPath)?.capabilities?.pulse === true && lockoutOnly(this.state) &&
       this.state.closedObservedDuringFault === true && !this.state.unavailable &&
       (this.state.fault === 'door_blocked' || movementFailures.has(this.state.fault));
   }
@@ -268,10 +269,10 @@ export class MovementEngine {
     return { sample: this.sample, at: this.sampledAt, retractionRequestedAt };
   }
 
-  async execute(command, { motorPath = 'primary', timing = {}, interruption = false, owner = null, physicalInput = false } = {}) {
+  async execute(command, { motorPath = 'primary', timing = {}, interruption = false, owner = null, physicalInput = false, allowDuringOpenerLockout = false } = {}) {
     requireValue(['open', 'close', 'unlock', 'lock', 'observed-close'].includes(command), 'command_invalid');
     requireValue(!this.busy, 'controller_busy');
-    const relayOperation = physicalInput === true && ['open', 'close'].includes(command) && this.motorPaths.get(motorPath)?.capabilities?.pulse === true;
+    const relayOperation = physicalInput === true && allowDuringOpenerLockout === true && this.lockoutMotorPaths.has(motorPath) && ['open', 'close'].includes(command) && this.motorPaths.get(motorPath)?.capabilities?.pulse === true;
     const recovery = relayOperation && this.physicalLockoutRecovery(motorPath);
     requireValue((this.initialized && !this.state.fault || recovery) && !this.stopped, 'engine_unavailable');
     requireValue(this.acceptsFreshCommand(command, motorPath), 'controller_observing_movement');

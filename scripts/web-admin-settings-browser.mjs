@@ -113,6 +113,8 @@ try {
       assert.deepEqual(hardwareWrites, []);
       assert.equal(await statusValue('Manual unlock override').textContent(), 'Yes');
       await editor.locator('[data-default-group="timing"][data-key="openRetractSettleSeconds"]').fill('0.3');
+      assert.equal(await editor.locator('[data-lockout-group="inputs"]').isChecked(), false);
+      await editor.locator('[data-lockout-group="inputs"]').check();
       await editor.getByRole('button', { name: 'Restart Tailwind', exact: true }).click();
       await editor.getByText('Restart requested. Waiting for fresh Tailwind feedback.', { exact: true }).waitFor();
       assert.deepEqual(hardwareWrites, ['restart']);
@@ -126,6 +128,7 @@ try {
       await editor.getByRole('button', { name: 'Apply timings', exact: true }).click();
       await editor.getByText('Timings saved and active. Homebridge was not restarted.', { exact: true }).waitFor();
       assert.equal(runtime.configuration.controllers[0].timing.openRetractSettleSeconds, 0.3);
+      assert.equal(runtime.configuration.controllers[0].inputs[0].allowDuringOpenerLockout, true);
       assert.equal(runtime.configuration.controllers[0].inputs[0].timing.closeRetractSettleSeconds, 0); assert.equal(saves, 1);
       await editor.getByText('Indoor button', { exact: true }).click();
       await editor.locator('[data-inherit="0"][data-key="closeRetractSettleSeconds"]').check();
