@@ -108,3 +108,10 @@ test('event-only and subscriber-only experiments isolate their respective observ
   f.trace.setRecording(true); assert.equal(f.trace.traceMode,'full');
   assert.throws(()=>f.trace.setMode('unknown')); assert.equal(f.trace.traceMode,'full');
 });
+
+test('troubleshooting tiles never masquerade as bolt feedback in diagnostics', () => {
+  const f = fixture();
+  f.tile.kind = 'lockout'; f.trace.record('publish', f.tile, 'current', 1);
+  f.tile.kind = 'restart'; f.trace.record('publish', f.tile, 'target', false);
+  assert.deepEqual(f.trace.events.map(e => e.field), ['tailwindLockout', 'tailwindRestart']);
+});

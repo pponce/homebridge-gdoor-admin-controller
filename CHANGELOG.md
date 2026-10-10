@@ -2,6 +2,13 @@
 
 User-facing changes for `homebridge-gdoor-admin-controller`. GitHub releases use matching `vVERSION` tags. Development history and validation receipts are in [developer documentation](docs/developer/README.md).
 
+## 0.4.41 — 2026-10-10
+
+- Add Controller troubleshooting with live Tailwind lockout status, Restart Tailwind and a read-only Check state now button.
+- Offer optional Tailwind Lockout contact and momentary Restart Tailwind accessories in HomeKit.
+- Continue read-only observation after faults and restore confirmed Closed status independently of command permission. Resolve failed-close timeouts only when stable closed feedback supports recovery, preserving unrelated faults and manual unlock preferences.
+- Never replay a failed movement or automatically reset Tailwind lockout. Uncertain position after timeout retains its existing HomeKit presentation.
+
 ## 0.4.40 — 2026-10-10
 
 - Fix the combined garage tile retaining an Open target after the door is closed using an OEM remote or another independent control. External closure now reports the matching Closed target and completes normal HomeKit notifications.

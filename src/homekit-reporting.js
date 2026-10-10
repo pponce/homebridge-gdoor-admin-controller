@@ -1,6 +1,6 @@
 // Read-only diagnostics. Never invoke GET/SET, subscribe a client, replace a HAP
 // method, or change a connection. Keep only bounded, non-identifying summaries.
-const fieldName = (kind, field) => field === 'obstruction' ? 'obstruction' :
+const fieldName = (kind, field) => kind === 'lockout' ? 'tailwindLockout' : kind === 'restart' ? 'tailwindRestart' : field === 'obstruction' ? 'obstruction' :
   (kind === 'garage' ? 'door' : 'bolt') + (field === 'current' ? 'Current' : 'Target');
 const scalar = value => typeof value === 'boolean' || Number.isInteger(value) && value >= 0 && value <= 4 ? value : null;
 const version = value => typeof value === 'string' && /^[0-9][0-9A-Za-z.+-]{0,63}$/.test(value) ? value : null;

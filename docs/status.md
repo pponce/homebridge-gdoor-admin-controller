@@ -617,7 +617,7 @@ new opening request. Synthetic checks are not physical acceptance. This is a
 source candidate only; version remains 0.4.39 and no npm release, installation or
 live garage command was performed.
 
-## Tailwind troubleshooting and fault observation (review branch)
+## 0.4.41 Tailwind troubleshooting and fault observation
 
 Implemented admin Controller troubleshooting with live Tailwind lockout/disabled status, explicit Restart Tailwind, and read-only Check state now. Optional Tailwind Lockout contact sensor (1 = lockout) and momentary Restart Tailwind switch default off. Restart uses documented local protocol 0.2 reboot, once, with idle admission, shared-device feedback invalidation, a ten-second settling hold and thirty-second duplicate cooldown. No reset is triggered automatically by fault observation.
 
@@ -625,4 +625,4 @@ Fault monitoring continues without actuator commands. Stable closed feedback can
 
 Unconfirmed position after timeout retains the existing HomeKit communication-error presentation pending discussion of Open versus Stopped and inferred obstruction. No timeout is represented as proof of an infrared beam event. Added fields are excluded from the legacy management status projection.
 
-Validation: 132 focused local tests passed, including existing routing/interruption/reporting checks and new protocol, recovery and HomeKit tests. Expanded desktop/mobile browser checks are ready for CI; local npm dependency download is denied and local Playwright browsers are absent. No npm release, installation or physical testing performed.
+Validation: 132 focused local tests plus 12 diagnostic tests passed. Node 22/24 full-suite checks and Homebridge 2.0/2.4 checks passed the preceding candidate. Final release-revision CI, including desktop/mobile troubleshooting and momentary-switch checks, is required before merge. Local dependency download is denied and local Playwright browsers are absent. No npm publication, installation or physical testing performed. Owner updater scripts/update-owner-0.4.41.sh retains pinned-source checks, npm verification and stop/add/start ordering.

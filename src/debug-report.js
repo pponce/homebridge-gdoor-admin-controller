@@ -8,7 +8,7 @@ const bool=value=>typeof value==='boolean'?value:null;
 const scalar=value=>typeof value==='boolean'||Number.isInteger(value)&&value>=0&&value<=4?value:null;
 const version=value=>typeof value==='string'&&/^\d[0-9A-Za-z.+-]{0,63}$/.test(value)?value:null;
 const client=value=>typeof value==='string'&&/^connection-[0-9]{1,5}$/.test(value)?value:null;
-const field=value=>one(value,['doorCurrent','doorTarget','boltCurrent','boltTarget','obstruction']);
+const field=value=>one(value,['doorCurrent','doorTarget','boltCurrent','boltTarget','obstruction','tailwindLockout','tailwindRestart']);
 const stamp=value=>typeof value==='string'&&/^\d{4}-\d\d-\d\dT/.test(value)&&Number.isFinite(Date.parse(value))?new Date(value).toISOString():null;
 export function debugReport({identity,controllers,reporting,activity},now=new Date()) {
   if(reporting?.schema!==1||typeof reporting.recording!=='boolean')throw Error('diagnostics_unavailable');
@@ -30,7 +30,7 @@ export function debugReport({identity,controllers,reporting,activity},now=new Da
       faultReason:faultCode(v.fault),faultAt:stamp(v.faultAt),unavailableReason:faultCode(v.unavailable),reconciling:!!v.reconciling,
       previousFaultReason:faultCode(s.lastFault?.reason),previousFaultAt:stamp(s.lastFault?.at),
       openEstimated:bool(v.openEstimated),closeEstimated:bool(v.closeEstimated),externalUnlockOverride:bool(v.externalUnlockOverride)};}),
-    tiles:list(reporting.tiles,64).filter(t=>garage(t.controllerId)).map(t=>({garage:garage(t.controllerId),kind:one(t.kind,['garage','bolt']),available:bool(t.available),
+    tiles:list(reporting.tiles,64).filter(t=>garage(t.controllerId)).map(t=>({garage:garage(t.controllerId),kind:one(t.kind,['garage','bolt','lockout','restart']),available:bool(t.available),
       fields:list(t.fields,5).filter(v=>field(v.field)).map(v=>({field:field(v.field),reported:scalar(v.reported),cached:scalar(v.cached),status:num(v.status),supportsEvents:bool(v.supportsEvents),subscribers:list(v.subscribers,32).map(client).filter(Boolean)}))})),
     clients:list(reporting.clients,32).map(c=>({...subscriber(c),requestInProgress:bool(c.requestInProgress),writtenBytes:num(c.writtenBytes),socketWritable:bool(c.socketWritable),
       subscriptions:list(c.subscriptions,160).filter(v=>garage(v.controllerId)&&field(v.field)).map(v=>boundItem(v)),
@@ -39,6 +39,6 @@ export function debugReport({identity,controllers,reporting,activity},now=new Da
       kind:one(e.kind,['publish','get','get-error']),field:field(e.field),value:scalar(e.value),explicit:bool(e.explicit),client:subscriber(e.client),
       subscribers:Array.isArray(e.subscribers)?list(e.subscribers,32).map(subscriber):null})),
     activity:list(activity).filter(e=>e.controllerId===null||garage(e.controllerId)).map(e=>({garage:garage(e.controllerId),at:stamp(e.at),
-      type:one(e.type,['restart-review-required','restart-observation','settings-applied','timings-applied','credentials-change-review','controller-disabled','controller-enabled','recovery-check','fault-recorded','recovery-confirmed','commissioned','held','unknown','complete','command-held','maintenance-completed']),
+      type:one(e.type,['restart-review-required','restart-observation','settings-applied','timings-applied','credentials-change-review','controller-disabled','controller-enabled','recovery-check','state-checked','tailwind-restart-requested','fault-recorded','recovery-confirmed','commissioned','held','unknown','complete','command-held','maintenance-completed']),
       command:one(e.detail,['open','close','toggle','lock','unlock'])}))};
 }

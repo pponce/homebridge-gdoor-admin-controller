@@ -60,7 +60,7 @@ export function controllerHealth(status) {
       operation_interrupted: 'An operation was interrupted before completion was confirmed.',
       journal_invalid: 'The saved operation record could not be verified.',
       journal_write_failed: 'The operation record could not be saved.',
-      door_blocked: state.lockout ? 'Tailwind reports a safety lockout.' : 'The opener reports that control is blocked or disabled.',
+      door_blocked: state.lockout ? 'Tailwind reports a safety lockout.' : state.blocked === false ? 'The opener is no longer blocked; position still needs review.' : 'The opener reports that control is blocked or disabled.',
       door_close_timeout: 'Close failed: closed position was not confirmed. Monitoring continues.',
       door_open_timeout: 'Open failed: opening was not confirmed. Monitoring continues.',
       obstruction: 'The door reports an obstruction.',
