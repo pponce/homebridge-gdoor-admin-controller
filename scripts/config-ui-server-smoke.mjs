@@ -81,9 +81,9 @@ try{
  assert.equal(runtime.status(hardware.config.id).enabled,false);assert.equal(runtime.status(hardware.config.id).configurationValid,true);
  let current=runtime.status(hardware.config.id);
  await request('/enable',{controller:hardware.config.id,revision:current.revision,bootId:current.bootId});
- hardware.state.blocked=true;await runtime.entry(hardware.config.id).engine.observe();
+ hardware.state.disabled=true;await runtime.entry(hardware.config.id).engine.observe();
  current=runtime.status(hardware.config.id);assert.equal(current.enabled,true);assert.equal(current.actuationEnabled,false);
- hardware.state.blocked=false;
+ hardware.state.disabled=false;
  const recovered=await request('/recover',{controller:hardware.config.id,revision:current.revision,bootId:current.bootId});
  assert.equal(recovered.status.enabled,true);assert.equal(recovered.status.state.fault,null);assert.deepEqual(hardware.state.writes,[]);
  const [reference,secret]=Object.entries(hardware.credentials)[0];await request('/credentials',{reference,secret});assert.equal(runtime.status(hardware.config.id).actuationEnabled,false);assert.deepEqual(hardware.state.writes,[]);

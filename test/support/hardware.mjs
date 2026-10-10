@@ -21,7 +21,7 @@ export async function hardwareFixture(configuration) {
     if (request.url === '/json' && request.method === 'POST' && request.headers.token === '123456') {
       if (body?.data?.type === 'get' && body.data.name === 'dev_st') { await state.beforeDoorRead?.(); return send({ result: 'OK', data: {
         ['door' + (config.door.doorIndex + 1)]: { index: config.door.doorIndex, status: state.closed ? 'close' : 'open',
-          lockup: state.blocked, disabled: false } } }); }
+          lockup: state.blocked, disabled: state.disabled === true } } }); }
       if (body?.data?.type === 'set' && body.data.name === 'reboot' && body.version === '0.2') {
         state.writes.push(['tailwind', 'restart']);
         if (state.ambiguousRestart) return request.socket.destroy();

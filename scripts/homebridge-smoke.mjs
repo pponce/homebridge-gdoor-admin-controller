@@ -239,14 +239,22 @@ async function main() {
     hardware.state.reachable=true;
     await until(async()=>(await management(endpoint+'/state')).status.actuationEnabled,12000);
     assert.deepEqual(hardware.state.writes,writes,'Late startup recovery cannot move hardware');
-    // A real fault blocks control, but never changes the saved Enabled setting.
+    // Lockout alone holds primary commands without latching a global fault.
     hardware.state.blocked=true;
+    await until(async()=>(await management(endpoint+'/state')).status.state.lockout===true);
+    state=(await management(endpoint+'/state')).status;
+    assert.equal(state.state.fault,null);assert.equal(state.actuationEnabled,false);
+    state=await restart(false);assert.equal(state.state.lockout,true);assert.equal(state.state.fault,null);
+    assert.equal(state.actuationEnabled,false);assert.deepEqual(hardware.state.writes,writes);
+    hardware.state.blocked=false;
+    // Disabled remains a real fault; the physical lockout exception cannot bypass it.
+    hardware.state.disabled=true;
     await until(async()=>(await management(endpoint+'/state')).status.state.fault==='door_blocked');
     state=(await management(endpoint+'/state')).status;
     assert.equal(state.enabled,true);assert.equal(state.configurationValid,true);assert.equal(state.actuationEnabled,false);
     const writesBeforeFault=structuredClone(hardware.state.writes);
     state=await restart(false);assert.equal(state.enabled,true);assert.equal(state.state.fault,'door_blocked');
-    hardware.state.blocked=false;
+    hardware.state.disabled=false;
     state=await restart(true);assert.equal(state.enabled,true);assert.equal(state.state.fault,null);
     assert.equal(state.lastFault.reason,'door_blocked');assert.equal(state.actuationEnabled,true);
     assert.deepEqual(hardware.state.writes,writesBeforeFault,'Rechecking a saved fault cannot move hardware');
