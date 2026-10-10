@@ -88,9 +88,16 @@ try {
       // substituting only the host service port. No service or hardware exists.
       f.state.homebridgeAvailable = true; await navigate('users');
       await page.locator('#user-list [data-id="' + 'a'.repeat(32) + '"]').click();
+      await ready();
       assert.equal(await page.locator('#pin-guidance').textContent(), 'For user edits, leave both fields blank to keep the current PIN.');
       assert.equal(await page.locator('#hb-use').evaluate(el => el.closest('.gp-identity-options').querySelector('label:first-child input').id), 'enabled');
-      assert.equal(await page.locator('#pin-guidance').evaluate(el => Boolean(el.compareDocumentPosition(document.querySelector('#pin')) & Node.DOCUMENT_POSITION_FOLLOWING)), true);
+      // Resolve both nodes in the same browser task: a user-list refresh can
+      // replace the form between locator resolution and an element evaluation.
+      assert.equal(await page.evaluate(() => {
+        const form = document.querySelector('#editor');
+        const guidance = form.querySelector('#pin-guidance'), pin = form.querySelector('#pin');
+        return Boolean(guidance.compareDocumentPosition(pin) & Node.DOCUMENT_POSITION_FOLLOWING);
+      }), true);
       await page.getByLabel('Use for homebridge', { exact: true }).check();
       assert.match(await page.locator('#pin-guidance').textContent(), /^Enter a PIN in both fields to use for Homebridge and this user\./);
       await page.locator('#hb-use').uncheck();
