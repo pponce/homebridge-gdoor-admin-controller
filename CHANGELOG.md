@@ -2,6 +2,11 @@
 
 User-facing changes for `homebridge-gdoor-admin-controller`. GitHub releases use matching `vVERSION` tags. Development history and validation receipts are in [developer documentation](docs/developer/README.md).
 
+## 0.4.40 — 2026-10-10
+
+- Fix the combined garage tile retaining an Open target after the door is closed using an OEM remote or another independent control. External closure now reports the matching Closed target and completes normal HomeKit notifications.
+- Preserve automatic bolting, manual unlock overrides and existing keypad, indoor button and HomeKit control routes without sending an extra motor command.
+
 ## 0.4.39 — 2026-10-09
 
 - Remove the extra PIN confirmation checkbox. Clicking Update PIN confirms the requested change.

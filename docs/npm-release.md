@@ -1,6 +1,6 @@
 # Developer release workflow
 
-The current release candidate is **0.4.28**. User-facing changes belong in the root [CHANGELOG.md](../CHANGELOG.md), not the README. Earlier publication notes are preserved in [the developer archive](developer/npm-release-history.md).
+The current release candidate is **0.4.40**. User-facing changes belong in the root [CHANGELOG.md](../CHANGELOG.md), not the README. Earlier publication notes are preserved in [the developer archive](developer/npm-release-history.md).
 
 ## Before publishing
 
@@ -26,7 +26,7 @@ npm install --ignore-scripts --no-audit --no-fund --package-lock=false
 bash scripts/publish-npm.sh REVIEWED_COMMIT_SHA
 ```
 
-Use the full reviewed commit SHA, not a moving branch name. The script runs tests, retains one exact package under .release/0.4.28, verifies its tracked-file allowlist and integrity, and publishes it once with the latest tag. npm login and publish use browser authentication with browser=false: open the printed URL manually. A delayed or lost publish response is resolved by checking the registry for up to ten minutes, not by repeatedly publishing. An existing different artifact or an unavailable registry check stops publication.
+Use the full reviewed commit SHA, not a moving branch name. The script runs tests, retains one exact package under .release/0.4.40, verifies its tracked-file allowlist and integrity, and publishes it once with the latest tag. npm login and publish use browser authentication with browser=false: open the printed URL manually. A delayed or lost publish response is resolved by checking the registry for up to ten minutes, not by repeatedly publishing. An existing different artifact or an unavailable registry check stops publication.
 
 Source validation, GitHub release publication, npm publication, and installing on a Homebridge host are separate outcomes. The publisher does not stop, install into, or restart Homebridge. After npm publication is verified, installation on a host uses stop → pinned add → start, leaving Homebridge stopped on install failure. Keep the old movement/controller services stopped.
 
