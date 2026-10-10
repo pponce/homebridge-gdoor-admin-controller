@@ -64,9 +64,9 @@ try {
     config.controllers[0].inputs = [{ id: 'button', name: 'Indoor button', enabled: true,
       source: { type: 'deconz', kind: 'button', baseUrl: 'http://example.invalid', gatewayId: '0011223344556677', resourceId: '80', uniqueId: 'button-endpoint', resourceType: 'ZHASwitch', modelId: 'EXAMPLE', manufacturer: 'Example', credentialRef: 'example-key' },
       trigger: 1002, action: 'toggle', motorPath: 'primary', busyBehavior: 'drop', rearmSeconds: 1.5, timing: {} }];
-    let failReads = false; const hardwareWrites = [];
+    let failReads = false, lockout = false; const hardwareWrites = [];
     const drivers = async () => ({
-      door: { read: async () => ({door:'closed',blocked:failReads,lockout:failReads,disabled:false,obstruction:false,evidence:'closed-sensor'}), write:async()=>hardwareWrites.push('door'), restart:async()=>{ hardwareWrites.push('restart'); failReads=false; } },
+      door: { read: async () => ({door:'closed',blocked:failReads||lockout,lockout,disabled:failReads,obstruction:false,evidence:'closed-sensor'}), write:async()=>hardwareWrites.push('door'), restart:async()=>{ hardwareWrites.push('restart'); failReads=false; } },
       bolt: { read: async () => ({locked:true,evidence:'relay'}), write:async()=>hardwareWrites.push('bolt') },
       motorPaths:{}, inputDrivers:new Map([['button',{inspect:async()=>({}),read:async()=>({})}]])
     });
@@ -100,6 +100,12 @@ try {
       assert.equal(await statusValue('Controller phase').textContent(), 'closed');
       assert.equal(await statusValue('Primary opener commands enabled').textContent(), 'Yes');
       assert.equal(await statusValue('Infrared beam signal').textContent(), 'Not available');
+      lockout = true; await runtime.entry(id).engine.observe(); await editor.evaluate(()=>panel.load());
+      await editor.locator('[data-controller-troubleshooting] strong').filter({hasText:'Tailwind locked out'}).waitFor();
+      assert.equal(await statusValue('Primary opener commands enabled').textContent(), 'No');
+      assert.equal(await statusValue('Lockout flag').textContent(), 'Yes');
+      assert.equal(runtime.entry(id).engine.state.fault, null);
+      lockout = false;
       runtime.entry(id).engine.state.externalUnlockOverride = true;
 
       await editor.getByRole('button', { name: 'Check state now', exact: true }).click();
