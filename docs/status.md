@@ -2,9 +2,12 @@
 
 Implemented independent Boolean lockout permissions on pulse motor devices and
 physical button/keypad bindings. Both gates are required at command admission
-and fault recovery. New profiles/rows default off. A one-time persisted-profile
-migration preserves pre-permission pulse behavior, explicit choices, enablement
-and matching commissioning hashes across normalization/restart. Web Controller
+and fault recovery. Missing permissions default off on new and existing profiles;
+explicit choices, other settings, enablement and matching commissioning hashes
+survive normalization/restart. An early candidate's automatic legacy opt-in was
+removed before release: saved profiles cannot distinguish users upgrading from
+0.4.42 from those skipping it. The 0.4.42 implicit exception therefore now requires
+explicit opt-in at both levels. Web Controller
 idle-only saves update the existing engine/router without commands or fault/
 manual-override resets. Homebridge Devices/Controls expose the same choices.
 
@@ -14,7 +17,7 @@ Digest MD5/qop=auth challenge before a single form POST, bounded transport and n
 redirects/retries. Remote-disable is a separate conservative hold, not Tailwind
 lockout or bolt position. Unknown/stopped positions cannot begin primary motor
 commands. No restart, native pairing, ESPHome or MQTT support is advertised.
-Detailed scope/API references are in ratgdo.md and migration rules in
+Detailed scope/API references are in ratgdo.md and upgrade rules in
 garage-recovery.md. Existing primary routes and pulse safeguards are retained.
 
 Local initial regression run: 361 tests passed; seven could not complete because

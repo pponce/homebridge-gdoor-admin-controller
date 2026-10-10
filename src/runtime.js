@@ -43,22 +43,8 @@ export class CoordinatorRuntime {
     this.state.events.push({ at: new Date().toISOString(), controllerId, type, detail }); this.state.events = this.state.events.slice(-200);
   }
   async start() {
-    const saved = await this.store.read();
-    this.state = saved ?? { schema: 1, revision: 1, configuration: this.bootstrap, commissioned: {}, maintenance: null, events: [], requests: [] };
+    this.state = await this.store.read() ?? { schema: 1, revision: 1, configuration: this.bootstrap, commissioned: {}, maintenance: null, events: [], requests: [] };
     this.state.configuration = normalize(this.state.configuration);
-    // Preserve the pre-permission release's physical pulse exception only for
-    // persisted installations. New configurations and newly added rows default off.
-    if (saved && this.state.lockoutPermissionsVersion !== 1) {
-      for (const profile of this.state.configuration.controllers) {
-        const approved = this.state.commissioned[profile.id] === hash(profile);
-        for (const motor of profile.motorPaths) motor.allowDuringOpenerLockout ??= true;
-        for (const input of profile.inputs) input.allowDuringOpenerLockout ??=
-          ['button', 'keypad'].includes(input.source.kind) && input.motorPath !== 'primary';
-        if (approved) this.state.commissioned[profile.id] = hash(normalize({ controllers: [profile] }).controllers[0]);
-      }
-      this.state.configuration = normalize(this.state.configuration);
-    }
-    this.state.lockoutPermissionsVersion = 1;
     // Migrate saved approval once. A runtime fault never changes this choice.
     this.state.enabled ??= Object.fromEntries(this.configuration.controllers.map(p => [p.id, this.state.commissioned[p.id] === hash(p)]));
     this.state.faults ??= {};

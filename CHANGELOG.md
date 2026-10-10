@@ -4,7 +4,7 @@ User-facing changes for `homebridge-gdoor-admin-controller`. GitHub releases use
 
 ## 0.4.43 — 2026-10-10
 
-- Add two-level “Allow operation during opener lockout” permissions for relay devices and physical buttons/keypads, in plugin configuration and the web Controller page. Both must allow the operation; existing safety holds remain. New settings default off; saved pre-permission profiles preserve their existing pulse exception through a one-time migration.
+- Add two-level “Allow operation during opener lockout” permissions for relay devices and physical buttons/keypads, in plugin configuration and the web Controller page. Both must allow the operation; existing safety holds remain. Missing settings default off on upgrade too; explicit choices and unrelated settings are preserved. The implicit 0.4.42 bypass now requires enabling both permissions.
 - Add experimental, hardware-untested **homekit-ratgdo firmware** support using its local HTTP API, explicit endpoint/direction/obstruction feedback, pinned MAC identity and optional Digest authentication. ESPHome/MQTT firmware are not covered. Unknown/stopped position, remote lock and obstruction remain held; no command retry, automatic fallback or remote-unlock command.
 - Distinguish unsupported lockout reporting from a confirmed clear flag. Tailwind restart and lockout HomeKit tiles remain Tailwind-only. See [ratgdo limitations](docs/ratgdo.md) and [permission/recovery rules](docs/garage-recovery.md).
 

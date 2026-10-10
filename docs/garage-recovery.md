@@ -7,13 +7,13 @@ The physical button/keypad exception below now requires **both**
 `inputs[].allowDuringOpenerLockout=true` on the initiating control. Both settings
 are available in Homebridge configuration and on the web Controller page.
 New installations and new rows default off, including omitted fields.
-Persisted pre-permission installations migrate once to preserve the 0.4.42
-physical pulse behavior: existing relays and button/keypad relay bindings receive
-true only where the new field was absent. Explicit true/false choices, other
-settings, enablement and matching commissioning approvals are preserved.
-This compatibility migration also applies when skipping earlier releases;
-review the displayed permissions after updating. It never enables an input or
-controller that was disabled. Newly added rows after migration remain off.
+Explicit true/false choices, other settings, enablement and matching commissioning
+approvals are preserved. An absent permission stays absent in storage and means
+off, avoiding a commissioning-hash change. Saved profiles do not identify the
+previous installed release, so an upgrade must not silently enable a bypass for
+someone skipping 0.4.42. **Intentional change from 0.4.42:** its implicit physical
+pulse lockout exception now requires enabling both new permission checkboxes.
+Upgrading never enables a disabled input or controller.
 
 Saving these permissions is idle-only, sends no movement command, and retains
 faults and manual-unlock state. It applies to the next fresh physical event.
