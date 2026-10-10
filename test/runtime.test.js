@@ -234,6 +234,9 @@ test('troubleshooting checks preserve overrides and restart is explicit, idle-on
   await assert.rejects(f.runtime.restartTailwind(f.id, body, 'homekit'), /tailwind_restart_unavailable/);
   f.hardware.state.blocked = true; await engine.observe();
   assert.equal(engine.state.lockout, true);
+  assert.equal(engine.state.fault, null);
+  assert.equal(f.runtime.status(f.id).actuationEnabled, false, 'lockout holds the primary route while observation remains active');
+  assert.equal(f.runtime.status(f.id).observationEnabled, true);
   await admin.dispatch('controller_restart_tailwind', { ...body, controllerId: f.id });
   assert.deepEqual(f.hardware.state.writes, [['tailwind', 'restart']]);
   assert.equal(f.runtime.status(f.id).restarting, true); assert.equal(f.runtime.status(f.id).actuationEnabled, false);

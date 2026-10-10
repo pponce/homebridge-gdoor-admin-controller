@@ -144,7 +144,7 @@ export class CoordinatorRuntime {
     const enabled = this.state.enabled[id] === true, configurationValid = this.state.commissioned[id] === hash(e.profile);
     const status = { controllerId: id, bootId: this.bootId, commissioned: enabled && configurationValid,
       enabled, configurationValid, lastFault: this.state.faults[id] ?? null,
-      actuationEnabled: enabled && configurationValid && Date.now() >= (e.restartingUntil ?? 0) && e.ready && Boolean(e.engine?.initialized) && !sample?.fault && !sample?.unavailable && !this.storageFault && !this.state.maintenance && !this.changing && !this.stopped,
+      actuationEnabled: enabled && configurationValid && Date.now() >= (e.restartingUntil ?? 0) && e.ready && Boolean(e.engine?.initialized) && !sample?.fault && !sample?.blocked && !sample?.unavailable && !this.storageFault && !this.state.maintenance && !this.changing && !this.stopped,
       observationEnabled: enabled && configurationValid && e.ready && Boolean(e.engine) && !this.storageFault && !this.state.maintenance && !this.changing && !this.stopped && Date.now() >= (e.restartingUntil ?? 0),
       tailwind: e.profile.door.type === 'tailwind',
       restarting: Date.now() < (e.restartingUntil ?? 0),
