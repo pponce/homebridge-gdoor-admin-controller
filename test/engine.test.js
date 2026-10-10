@@ -220,6 +220,38 @@ test('manual unlock is preserved through idle observations and blocks automatic 
   assert.deepEqual(model.writes.map(x => x.slice(0, 2)), [['bolt', true]]);
 });
 
+test('idle sensor endpoints and directions replace the previous target without actuator writes', async () => {
+  const { engine, model } = fixture({ model: { locked: false }, feedback: { opening: 'sensor' } });
+  await engine.initialize();
+  for (const [door, target] of [['opening', 'open'], ['open', 'open'], ['closing', 'closed'], ['closed', 'closed']]) {
+    model.door = door; await engine.observe();
+    assert.equal(engine.state.phase, door); assert.equal(engine.state.target, target);
+    assert.equal(engine.state.openEstimated, false); assert.equal(engine.state.closeEstimated, false);
+  }
+  assert.deepEqual(model.writes, []);
+});
+
+test('external closed reconciliation preserves a manual unlock override', async () => {
+  const { engine, model } = fixture({ door: (_command, m) => { m.door = 'not-closed'; } });
+  await engine.initialize(); await engine.execute('open'); await engine.execute('unlock');
+  model.door = 'closed'; model.writes.length = 0; await engine.observe();
+  assert.equal(engine.state.target, 'closed'); assert.equal(engine.state.externalUnlockOverride, true);
+  await assert.rejects(engine.execute('observed-close'), /manual_unlock_override/);
+  assert.deepEqual(model.writes, []);
+});
+
+test('an open command admitted during an external-close observation keeps its new target', async () => {
+  const { engine, model } = fixture({ door: (_command, m) => { m.door = 'not-closed'; } });
+  await engine.initialize(); await engine.execute('open'); model.door = 'closed'; model.writes.length = 0;
+  const read = engine.door.read; let release;
+  engine.door.read = () => { engine.door.read = read; return new Promise(resolve => { release = resolve; }); };
+  const observation = engine.observe(); const operation = engine.execute('open');
+  assert.deepEqual(model.writes, []); release(await read());
+  await observation; await operation;
+  assert.equal(engine.state.target, 'open'); assert.equal(engine.state.phase, 'open');
+  assert.equal(engine.state.fault, null); assert.deepEqual(model.writes.map(row => row.slice(0, 2)), [['door', 'open']]);
+});
+
 test('lock tile operation cannot extend while the door is not closed', async () => {
   const { engine, model } = fixture({ model: { door: 'not-closed', locked: false } });
   await engine.initialize(); await engine.execute('lock');

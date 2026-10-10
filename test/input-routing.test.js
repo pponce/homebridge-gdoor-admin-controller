@@ -141,6 +141,22 @@ test('two different button providers and physical keypad share the relay route; 
   assert.deepEqual(f.state.commands, [['wall-relay', 'open'], ['primary', 'close'], ['wall-relay', 'open'], ['primary', 'close'], ['wall-relay', 'open']]);
 });
 
+test('keypad open then external close retains the next button, HomeKit and keypad motor routes', async () => {
+  const f = routerFixture(); await f.engine.initialize();
+  f.arm('physical-keypad'); await f.offer('physical-keypad', 'accepted-disarm', { alarmDisarmed: true });
+  assert.equal(f.engine.state.phase, 'open'); f.state.now += 60000;
+  await f.engine.observe(); f.state.door = 'closed'; await f.engine.observe();
+  assert.equal(f.engine.state.target, 'closed');
+  await f.engine.execute('observed-close'); assert.equal(f.state.locked, true);
+  assert.deepEqual(f.state.commands, [['wall-relay', 'open']], 'external close and auto-bolt never pulse the motor');
+  f.arm('indoor-button'); assert.equal((await f.offer('indoor-button', 1002)).accepted, true);
+  await f.router.builtin('homekit', 'close');
+  await f.router.builtin('virtual-keypad', 'open');
+  f.arm('physical-keypad'); assert.equal((await f.offer('physical-keypad', 'rejected')).accepted, true);
+  assert.deepEqual(f.state.commands, [['wall-relay', 'open'], ['wall-relay', 'open'], ['primary', 'close'], ['primary', 'open'], ['wall-relay', 'close']]);
+  assert.equal(f.engine.state.phase, 'closed'); assert.equal(f.engine.state.target, 'closed');
+});
+
 test('an idle observation does not invalidate an armed physical button or discard a fresh press',async()=>{
   const f=routerFixture();await f.engine.initialize();f.arm('indoor-button');
   const before=f.router.context('indoor-button');const read=f.engine.door.read;let release;

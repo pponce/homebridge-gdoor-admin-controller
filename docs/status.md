@@ -588,3 +588,31 @@ Validation before source publication: 125 focused engine/runtime/driver/journal/
 0.4.26 validation complete: all five CI jobs passed in run 37827999081 at a634c83da7be78688567dd3fa121d917456edd88: full Node 22/24 suites, actual Homebridge 2.0.0/2.4.0 child/full-process restarts with loopback devices, real UI server IPC and desktop Chromium/mobile WebKit configuration and web-administration flows. The 16 unmodified Python/Node cross-repository checks pass against the archived administrator client; the exact v1 contract remains unchanged unless a client explicitly requests X-Coordinator-Status: detailed. The plugin UI opts in. No separate administrator update is required.
 
 The final follow-up also covers an upstream read disconnect arriving during active-command shutdown, preserving interrupted intent without manufacturing a fault. Existing ambiguous-write and physical-conflict holds are unchanged. Source is ready for owner npm publication and the pinned stop/add/start update; installed-host and physical acceptance remain outstanding. The release notes and updater are documentation/owner-workflow follow-ups to the validated runtime.
+# 2026-10-10 — External remote closure target reconciliation (source candidate)
+
+Reviewed main at `086674fa2972b917321f8400f4cd036e32ee302f` (0.4.39).
+After a completed coordinated opening, an OEM remote can close the door directly.
+Tailwind's local closed sensor lets idle observation set phase Closed and request
+the existing observed-close bolt work, but the old implementation retained target
+Open. During that bolt operation, the HomeKit preparation mapping explicitly
+reported Opening; afterward it reported Current Closed / Target Open and suppressed
+the terminal notification sequence. This reproduces a concrete state mismatch;
+the exact Apple Home display and physical bolt position still require live evidence.
+
+The reviewed legacy controller already published matching current/target pairs
+from its idle observation path; this restores that reporting parity. Idle
+observation now reconciles target alongside known endpoints or explicit
+movement direction. Tailwind not-closed remains insufficient to infer direction
+or full opening. No adapters, input routing, timers, actuator sequences, HAP
+notification policy, automatic-bolt admission, manual-unlock override or restart
+recovery policy changed. A new command admitted during an outstanding observation
+still waits for that observation before publishing its new intent.
+
+Five regression cases failed against unmodified main. With the correction, 151
+focused engine, accessory, input, interruption, runtime, restart, driver, pulse,
+live-input and HomeKit-reporting checks passed. Coverage includes a one-minute
+open dwell, external closure with and without automatic bolting, no added motor
+command, next-operation routes, manual unlock, sensor direction and a concurrent
+new opening request. Synthetic checks are not physical acceptance. This is a
+source candidate only; version remains 0.4.39 and no npm release, installation or
+live garage command was performed.

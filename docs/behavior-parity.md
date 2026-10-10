@@ -14,6 +14,7 @@ Known gaps from the source audit: five configurable notification/reconciliation 
 | Closed-sensor departure starts estimated full opening | Tailwind not-closed stays distinct from physical fully-open |
 | Stable closed confirmation then one bolt extension and settle | Fresh reads and unexpected-extension correction; timed closing requires explicit estimated-bolting policy |
 | Manual external unlock override | Preserved until next operation/restart; no startup auto-bolt |
+| External OEM remote or independent door control | Idle endpoint/direction feedback reconciles both phase and target. A newly observed closure can enter the existing automatic bolt sequence, with no motor pulse; auto-bolt disablement and manual unlock overrides remain effective. Tailwind not-closed alone never establishes direction or full opening |
 | Idle outage vs active failure | Fresh idle reads can recover; active failure latches a durable hold |
 | Restart during motion or partial stop | Owner-requested 0.4.26 change: retain commissioning and resume observation without replay. Confirmed endpoints restore readiness; incomplete feedback remains unconfirmed. A new directional Tailwind Close is allowed; relay toggles wait for confirmed position. 0.4.27 separately retains the Enabled setting during all faults. Startup rechecks old faults against current feedback; unresolved conditions still block commands. Recovery never replays a write |
 | Physical keypad | Enrolled source/alarm checks, live freshness/epoch gate, native deCONZ disarm, no legacy alarm-disarm writes |

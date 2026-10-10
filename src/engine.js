@@ -156,13 +156,18 @@ export class MovementEngine {
       }
       const changes = {};
       if (previousBolt === true && !sample.locked) changes.externalUnlockOverride = true;
+      // Outside an operation, observed endpoints/direction supersede the last
+      // command's target (e.g. an OEM remote closed a door we opened). Otherwise
+      // auto-bolting retains Open intent and HomeKit reports Opening again.
+      // A command admitted during this read waits for it before setting intent.
       if (sample.door === 'closed') {
         if (previousDoor !== 'closed' && previousDoor !== 'unknown') this.autoClosePending = true;
         this.travel = null; this.partialOwner = null;
-        Object.assign(changes, { phase: 'closed', openEstimated: false, closeEstimated: false });
+        Object.assign(changes, { phase: 'closed', target: 'closed', openEstimated: false, closeEstimated: false });
       }
-      else if (sample.door === 'open') Object.assign(changes, { phase: 'open', openEstimated: false, closeEstimated: false });
-      else if (['opening', 'closing'].includes(sample.door)) Object.assign(changes, { phase: sample.door, openEstimated: false, closeEstimated: false });
+      else if (sample.door === 'open') Object.assign(changes, { phase: 'open', target: 'open', openEstimated: false, closeEstimated: false });
+      else if (['opening', 'closing'].includes(sample.door)) Object.assign(changes, {
+        phase: sample.door, target: sample.door === 'opening' ? 'open' : 'closed', openEstimated: false, closeEstimated: false });
       else if (this.partialOwner && sample.door === 'not-closed') {
         requireValue(!sample.locked, 'bolt_extended_at_partial_stop'); changes.phase = 'stopped-estimated';
       } else if (!this.state.openEstimated) Object.assign(changes, { phase: 'position-unknown', closeEstimated: false });

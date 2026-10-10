@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { CoordinatorAccessories } from '../src/accessories.js';
+import { MovementEngine } from '../src/engine.js';
 
 function fixture() {
   const values = new Map(); const events = []; const pending = new Map(); const immediates = new Map(); const chars = new Map(); let serial = 0;
@@ -40,6 +41,48 @@ const closed = { phase: 'closed', door: 'closed', bolt: 'locked', target: 'close
 const open = { phase: 'open', door: 'not-closed', bolt: 'unlocked', target: 'open', openEstimated: true, busy: false };
 const doorEvents = f => f.events.filter(([field]) => field.includes('Door'));
 const boltEvents = f => f.events.filter(([field]) => field.startsWith('Lock'));
+
+for (const autoBolt of [false, true]) test(`external close after completed opening reports Closed with auto-bolt ${autoBolt}`, async () => {
+  const f = fixture(); const writes = []; const reports = []; let door = 'closed', locked = true, now = 0;
+  const engine = new MovementEngine({
+    door: { read: async () => ({ door, blocked: false, obstruction: false, evidence: 'closed-sensor' }),
+      write: async command => { writes.push(['door', command]); door = command === 'open' ? 'not-closed' : 'closed'; } },
+    bolt: { read: async () => ({ locked, evidence: 'relay' }), write: async value => { writes.push(['bolt', value]); locked = value; } },
+    journal: { read: async () => ({ inProgress: false, fault: false }), write: async () => {} },
+    clock: { now: () => now, sleep: async ms => { now += ms; } },
+    feedback: { opening: 'timed', closing: 'sensor', bolt: 'relay', allowEstimatedBolting: false },
+    timing: { pollMs: 10, openingMs: 100, openRetractSettleMs: 0, closedStableMs: 20, boltSettleMs: 20 },
+    publish: state => { f.publish(state); reports.push(f.accessories.active.get('garage').report); },
+  });
+  f.entry.engine = engine;
+  await engine.initialize(); await engine.execute('open');
+  assert.equal(f.read('CurrentDoorState'), 0); assert.equal(f.read('TargetDoorState'), 0);
+  now += 60000; await engine.observe();
+  assert.equal(engine.snapshot().openEstimated, true);
+  door = 'closed'; writes.length = 0; f.events.length = 0;
+  await engine.observe();
+  assert.equal(engine.autoClosePending, true); assert.deepEqual(writes, []);
+  reports.length = 0;
+  if (autoBolt) await engine.execute('observed-close');
+  assert.ok(reports.every(report => report.current !== 2 && report.target === 1), 'auto-bolting cannot report Opening or retain Open intent');
+  f.publish(engine.snapshot()); // Runtime publishes again after releasing its job.
+  assert.equal(f.read('CurrentDoorState'), 1);
+  assert.equal(f.read('TargetDoorState'), 1);
+  assert.equal(f.read('LockCurrentState'), autoBolt ? 1 : 0);
+  assert.equal(engine.snapshot().target, 'closed');
+  assert.equal(engine.snapshot().openEstimated, false);
+  assert.equal(engine.snapshot().fault, null);
+  assert.deepEqual(writes, autoBolt ? [['bolt', true]] : []);
+  const before = doorEvents(f).length; f.tick(); f.tick();
+  assert.ok(before >= 2, 'the external close must start terminal notifications');
+  assert.equal(doorEvents(f).length, before + 4, 'bounded terminal repeats remain enabled');
+  assert.ok(doorEvents(f).every(([, value]) => value === 1));
+  await engine.observe(); assert.deepEqual(writes, autoBolt ? [['bolt', true]] : []);
+  // A new command still owns its target and performs the normal opening sequence.
+  writes.length = 0; await engine.execute('open');
+  assert.equal(f.read('CurrentDoorState'), 0); assert.equal(f.read('TargetDoorState'), 0);
+  assert.deepEqual(writes, autoBolt ? [['bolt', false], ['door', 'open']] : [['door', 'open']]);
+});
 
 test('diagnostic on/off preserves notification sequence, final reads and repeats without invoking recording when off', () => {
   function run(recording) {
