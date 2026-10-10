@@ -96,7 +96,7 @@ export class ProfileEditor {
         ...(kind==='bolt'?{lockedValue:true,...(current.type==='homebridge'?{serviceType:'switch'}:{})}:{}),...(kind==='motor'?{activeValue:true}:{}),
         ...(['button','keypad','switch'].includes(kind)?{kind:current.type==='homebridge'&&kind==='keypad'?'button':kind}: {})};
       if (kind === 'garage' && current.type !== 'tailwind') { delete obj.exposeTailwindLockout; delete obj.exposeTailwindRestart; }
-      if (kind === 'garage' && current.type === 'ratgdo-homekit') { obj[key]={type:current.type,baseUrl:'',macAddress:''}; obj.feedback.opening='sensor'; obj.feedback.closing='sensor'; }
+      if (kind === 'garage' && current.type === 'ratgdo-homekit') obj[key]={type:current.type,baseUrl:'',macAddress:''};
       this.change();this.render();
     });
   }

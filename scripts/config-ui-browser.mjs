@@ -189,6 +189,8 @@ try{
      assert.equal(await behavior.inputValue(),'interrupt');
      await review(p);await p.getByRole('button',{name:'Save configuration',exact:true}).click();await saved(p);
      assert.equal(x.configuration().controllers[0].inputs[1].busyBehavior,'interrupt');
+     assert.equal(x.configuration().controllers[0].motorPaths[0].allowDuringOpenerLockout,true);
+     assert.equal(x.configuration().controllers[0].inputs[0].allowDuringOpenerLockout,true);
      assert.equal(x.probes(),0);assert.equal(x.commissions(),0);
      await p.getByLabel('Operate garage through',{exact:true}).selectOption('primary');
      assert.equal(await behavior.inputValue(),'drop');
@@ -196,6 +198,16 @@ try{
      await review(p);await p.getByRole('button',{name:'Save configuration',exact:true}).click();await saved(p);
      assert.equal(x.configuration().controllers[0].inputs[1].motorPath,'primary');
      assert.equal(x.configuration().controllers[0].inputs[1].busyBehavior,'drop');
+     await p.getByRole('button',{name:'01 Devices'}).click();
+     await p.getByRole('button',{name:'Configure device Garage Door opener',exact:true}).click();
+     const beforeFeedback=structuredClone(x.configuration().controllers[0].feedback);
+     await p.getByLabel('Connection',{exact:true}).selectOption('ratgdo-homekit');
+     await p.getByLabel('ratgdo local URL',{exact:true}).fill('http://192.0.2.123');
+     await p.getByLabel('ratgdo MAC address',{exact:true}).fill('02:00:00:00:00:01');
+     await review(p);await p.getByRole('button',{name:'Save configuration',exact:true}).click();await saved(p);
+     assert.equal(x.configuration().controllers[0].door.type,'ratgdo-homekit');
+     assert.deepEqual(x.configuration().controllers[0].feedback,beforeFeedback,'Selecting ratgdo must not silently change feedback policy');
+     assert.equal(x.probes(),0);assert.equal(x.commissions(),0);
      assert.deepEqual(x.errors,[]);await p.close();
    }
    for(const mode of ['enabled','local-unavailable']){
