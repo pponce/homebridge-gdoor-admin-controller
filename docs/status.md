@@ -1,5 +1,14 @@
 ## 2026-10-11 — Selectable position sensor devices (development)
 
+Final source validation: all five Coordinator checks jobs passed on
+20ad659bbcb92b3f81d8326eacc4a598ad393544 in
+https://github.com/pponce/homebridge-gdoor-admin-controller/actions/runs/38174639623:
+Node 22/24 unit, protocol, demo/release/package checks; actual Homebridge
+2.0.0/2.4.0 integration; custom UI IPC; desktop Chromium/mobile WebKit sensor
+setup and saved selection; production web-admin flows and the static demo.
+This following documentation-only receipt does not change validated source.
+Release, owner installation and physical acceptance remain outstanding.
+
 Extended draft PR #6 with per-garage sensors devices and independent closed/open
 confirmation choices. Devices automatically derives Tailwind closed feedback and
 the configured extra open input, plus ratgdo endpoint feedback. Named external
@@ -32,7 +41,7 @@ syntax and whitespace checks passed. Cross-repository legacy client checks:
 documented below; the retired standalone app is not updated for these additive
 sensor settings. Desktop Chromium/mobile WebKit tests cover derived entries,
 default selections, timed override, contact discovery/polarity, source selection,
-duplicate endpoint exclusion and saved choices. Remote CI validation is pending.
+duplicate endpoint exclusion and saved choices. Remote CI validation passed.
 No npm release, installed Homebridge change or physical garage command was made.
 
 ## 2026-10-11 — Initial optional Tailwind fully-open sensor (development)
