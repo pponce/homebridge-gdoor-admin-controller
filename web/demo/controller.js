@@ -55,7 +55,7 @@ window.ConfiguratorController = ({ root, api, readOnly }) => {
         ['Open is estimated', yes(state.openEstimated === true)], ['Closed is estimated', yes(state.closeEstimated === true)],
         ['Closed confirmed during fault', yes(state.closedObservedDuringFault === true)],
         ['Obstruction reported by adapter', yes(state.obstruction)], ['Inferred movement obstruction', yes(state.inferredObstruction === true)],
-        ['HomeKit position fallback', state.inferredObstruction && ['open', 'not-closed'].includes(state.door) ? 'Open means not closed; full opening unconfirmed' : 'None'], ['Infrared beam signal', status.tailwind ? 'Not available' : 'Not independently verified'],
+        ['HomeKit position fallback', state.inferredObstruction && state.door === 'not-closed' ? 'Open means not closed; full opening unconfirmed' : 'None'], ['Infrared beam signal', status.tailwind ? 'Not available' : 'Not independently verified'],
       ])}
       ${group('Control and recovery', [
         ['Opener disabled / remote lock', yes(state.disabled)], ['Combined blocked flag', yes(state.blocked)],
@@ -156,6 +156,7 @@ window.ConfiguratorController = ({ root, api, readOnly }) => {
       <section class="gp-panel gp-body" data-controller-troubleshooting>${troubleshooting(row)}</section>
       <p class="gp-sub">All times are in seconds. Changes apply to the next operation without restarting Homebridge. Save when controllers are idle.</p>
       <p class="gp-sub">Opening feedback: ${esc(row.feedback.opening)} · Closing feedback: ${esc(row.feedback.closing)} · Bolt feedback: ${esc(row.feedback.bolt)}. Travel times are estimates when timed feedback is selected.</p>
+      ${row.feedback.opening === 'sensor' ? '<p class="gp-note">The fully-open sensor confirms opening, including after reversal. Opening travel time, per-device opening overrides and extra opening time after interruption are unused. Movement timeout still limits how long confirmation may take.</p>' : ''}
       <p data-controller-message role="status" aria-live="polite"></p>
       <form data-controller-form><fieldset ${readOnly() ? 'disabled' : ''}>
       <h3>Operation during opener lockout</h3>

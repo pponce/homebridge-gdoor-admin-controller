@@ -127,7 +127,7 @@ try{
      await checkbox.check();
      const sensor=p.getByLabel('Tailwind open sensor input',{exact:true});
      assert.equal(await sensor.inputValue(),'1');
-     assert.equal(await sensor.locator('option[value="0"]').isDisabled(),true);
+     assert.equal(await sensor.locator('option[value="0"]').evaluate(option=>option.disabled),true);
      await sensor.selectOption('2');
      await p.getByRole('button',{name:'03 Behavior'}).click();
      assert.equal(await p.getByLabel('Open means…',{exact:true}).inputValue(),'sensor');
@@ -140,7 +140,7 @@ try{
      await p.getByRole('button',{name:'01 Devices'}).click();await checkbox.uncheck();
      await p.getByRole('button',{name:'03 Behavior'}).click();
      assert.equal(await p.getByLabel('Open means…',{exact:true}).inputValue(),'timed');
-     assert.equal(await p.getByLabel('Open means…',{exact:true}).locator('option[value="sensor"]').isDisabled(),true);
+     assert.equal(await p.getByLabel('Open means…',{exact:true}).locator('option[value="sensor"]').evaluate(option=>option.disabled),true);
      assert.equal(await p.getByLabel('Full opening travel (seconds)',{exact:true}).isEnabled(),true);
      assert.equal(x.probes(),0);assert.equal(x.commissions(),0);assert.deepEqual(x.errors,[]);
      await p.close();

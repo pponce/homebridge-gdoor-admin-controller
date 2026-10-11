@@ -47,6 +47,16 @@ Remote CI/browser validation and physical installation acceptance remain.
 No npm publication, Homebridge installation, hardware command or live setting
 change was performed.
 
+First remote CI passed all Node unit/protocol checks on both Node 22 and 24,
+and the custom UI IPC check. Its freshness gate required regenerating
+web/demo/controller.js. The new browser check used Playwright's isDisabled
+against an option element; changed this to inspect option.disabled, consistent
+with the existing option tests. Rebuilt demo and release-note checks pass locally.
+Legacy cross-repository checks: 14 integration cases pass; two duplicated
+contract-copy checks fail. The legacy snapshot's contract already differs from
+the unchanged 0.4.44 main source; that older client is outside this feature's
+supported configuration UI. No standalone application source was changed.
+
 ## 0.4.44 preserve setup approval for optional permission fields
 
 Reproduced the 0.4.43 Homebridge review/apply regression with the production
