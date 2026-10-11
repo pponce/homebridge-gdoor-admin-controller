@@ -1,3 +1,22 @@
+## 0.4.44 preserve setup approval for optional permission fields
+
+Reproduced the 0.4.43 Homebridge review/apply regression with the production
+runtime and loopback Tailwind/deCONZ fixtures: first adding optional lockout
+permissions put fields in different object positions in the allowed-change
+candidate and normalized configuration. JSON-based comparison dropped approval,
+while leaving the saved Enabled setting true. Device observation then stopped.
+
+Compare candidate/profile values with isDeepStrictEqual, retaining the existing
+durable hash format and approved-change allowlist. Regression coverage exercises
+absent/false permissions, review/apply, restart, disabled controllers, missing
+approvals and changed door mapping, and verifies no hardware writes. Tests for
+first adding permissions and preserving disabled approval failed before the fix.
+Already missing approvals require the existing explicit setup-review flow;
+no automatic restoration or movement is added. All 414 local tests pass, including
+41 focused runtime/configuration/save tests. Static demo freshness, release-note
+generation and updater shell syntax also pass. Repository CI and source publication
+are in progress; no npm publication or live installation is claimed.
+
 ## 0.4.43 lockout permissions and experimental ratgdo
 
 Implemented independent Boolean lockout permissions on pulse motor devices and

@@ -1,5 +1,6 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
+import { isDeepStrictEqual } from 'node:util';
 import { validateConfiguration, inventory, routingInventory } from './config.js';
 import { PrivateStore } from './private-store.js';
 import { StateJournal } from './journal.js';
@@ -211,7 +212,10 @@ export class CoordinatorRuntime {
         if (Object.hasOwn(profile, key)) candidate[key] = profile[key]; else delete candidate[key];
       }
       for (const group of ['inputs', 'motorPaths']) for (const item of candidate[group]) item.name = profile[group].find(p => p.id === item.id)?.name;
-      return hash(candidate) === hash(profile);
+      // New optional fields can be appended here but inserted earlier by
+      // configuration normalization. Compare values, not object key order;
+      // keep the persisted approval hash format unchanged.
+      return isDeepStrictEqual(candidate, profile);
     } catch { return false; }
   }
   async review(value, revision) {

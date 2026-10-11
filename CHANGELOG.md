@@ -2,6 +2,12 @@
 
 User-facing changes for `homebridge-gdoor-admin-controller`. GitHub releases use matching `vVERSION` tags. Development history and validation receipts are in [developer documentation](docs/developer/README.md).
 
+## 0.4.44 — 2026-10-10
+
+- Fix Homebridge configuration saves incorrectly removing setup approval when the new opener-lockout permission fields are first added. Permission-only changes now retain approved setup through save and restart, keeping device monitoring and HomeKit status available.
+- Preserve disabled controllers and setup review for changed device mappings or other unapproved behavior. The existing stored approval format is unchanged; this update does not automatically approve a setup whose approval was already removed.
+- If affected by 0.4.43, use **Garage doors → Review setup → Check connections → Approve updated setup** in the Homebridge plugin settings after reviewing the physical setup. Approval requires the door closed and the opener unblocked. See [recovery instructions](docs/garage-recovery.md).
+
 ## 0.4.43 — 2026-10-10
 
 - Add two-level “Allow operation during opener lockout” permissions for relay devices and physical buttons/keypads, in plugin configuration and the web Controller page. Both must allow the operation; existing safety holds remain. Missing settings default off on upgrade too; explicit choices and unrelated settings are preserved. The implicit 0.4.42 bypass now requires enabling both permissions.

@@ -1,5 +1,29 @@
 # Garage recovery, lockout and displayed state
 
+## 0.4.44 setup-approval fix
+
+In 0.4.43, first adding the opener-lockout permission fields through Homebridge's
+plugin settings could incorrectly invalidate an approved setup. The comparison
+treated a difference in object field order as a difference in configuration.
+The saved Enabled choice remained true, but monitoring stopped and both HomeKit
+tiles could show No Response, with Tailwind shown as Unknown.
+
+0.4.44 compares the allowed configuration changes by value, preserving approval
+through save and restart. Changed device mappings and other unapproved behavior
+still require review. Disabled garages remain disabled. Existing approval hashes
+are unchanged, so the fix itself does not require a new approval for valid setups.
+
+An approval already removed by 0.4.43 cannot be reconstructed safely from the
+current configuration. In Homebridge's plugin settings, open **Garage doors →
+Review setup**, select **Check connections**, review the physical setup
+confirmations, then choose **Approve updated setup**. These checks send no
+movement commands; approval resumes the configured controller and its inputs.
+The door must be physically closed, the motor relay released, and Tailwind must
+report closed without lockout/disabled/obstruction. Lockout permission options
+do not bypass these initial approval checks. If approval reports
+`commissioning_requires_closed_sensor`, inspect the device feedback before
+retrying; restarting Homebridge alone does not restore the missing approval.
+
 ## 0.4.43 permission controls
 
 The physical button/keypad exception below now requires **both**

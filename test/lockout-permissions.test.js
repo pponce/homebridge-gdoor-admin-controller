@@ -1,10 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFile, mkdtemp, rm } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
+import path from 'node:path';
+import os from 'node:os';
 import { CoordinatorRuntime } from '../src/runtime.js';
 import { validateConfiguration } from '../src/config.js';
 import { controllerTimingValues, profileWithTimings } from '../src/controller-timings.js';
+import { loadIdentity } from '../src/storage.js';
+import { hardwareFixture } from './support/hardware.mjs';
 const example=JSON.parse(await readFile(new URL('../examples/input-routing-config.json',import.meta.url)));
 const hash=p=>createHash('sha256').update(JSON.stringify(p)).digest('hex');
 test('saved legacy profiles default permissions off without changing configuration or commissioning',async()=>{
@@ -33,4 +37,80 @@ test('web settings accept only Boolean permissions and preserve unrelated settin
   const updated=profileWithTimings(profile,values);assert.equal(updated.motorPaths[0].allowDuringOpenerLockout,true);
   assert.deepEqual(updated.door,profile.door);assert.deepEqual(updated.inputs[0].source,profile.inputs[0].source);
   values.inputs[0].allowDuringOpenerLockout='true';assert.throws(()=>profileWithTimings(profile,values));
+});
+
+async function approvalFixture(t, initialPermission) {
+  const configuration = structuredClone(example);
+  const profile = configuration.controllers[0];
+  profile.inputs = profile.inputs.slice(0, 2);
+  profile.timing = { idlePollSeconds: 30 };
+  for (const row of [...profile.motorPaths, ...profile.inputs]) {
+    if (initialPermission !== undefined) row.allowDuringOpenerLockout = initialPermission;
+  }
+  const hardware = await hardwareFixture(profile);
+  configuration.controllers = [hardware.config];
+  const storagePath = await mkdtemp(path.join(os.tmpdir(), 'lockout-approval-'));
+  await loadIdentity(storagePath);
+  const runtimes = [];
+  const start = async () => {
+    const runtime = new CoordinatorRuntime({ storagePath, configuration, credentials: async () => hardware.credentials });
+    runtimes.push(runtime); await runtime.start(); return runtime;
+  };
+  t.after(async () => {
+    for (const runtime of runtimes) await runtime.stop();
+    await hardware.close(); await rm(storagePath, { recursive: true, force: true });
+  });
+  const runtime = await start(), id = profile.id;
+  const approve = () => runtime.commission(id, { revision: runtime.state.revision, previousControllerStopped: true, physicalSetupReviewed: true });
+  const draft = () => {
+    const value = runtime.settings();
+    for (const row of [...value.configuration.controllers[0].motorPaths, ...value.configuration.controllers[0].inputs]) row.allowDuringOpenerLockout = true;
+    return value;
+  };
+  return { runtime, hardware, id, start, approve, draft };
+}
+
+for (const initialPermission of [undefined, false]) test(`Homebridge review/apply preserves approval when lockout permissions change from ${initialPermission}`, async t => {
+  const f = await approvalFixture(t, initialPermission); await f.approve();
+  const edited = f.draft();
+  const review = await f.runtime.review(edited.configuration, edited.revision);
+  assert.deepEqual(review.requiresCommissioning, [], 'permission-only edits must retain approved device setup');
+  await f.runtime.apply(review.token);
+  assert.equal(f.runtime.status(f.id).configurationValid, true);
+  assert.equal(f.runtime.status(f.id).observationEnabled, true);
+  assert.equal(f.runtime.status(f.id).actuationEnabled, true);
+  assert.equal(f.runtime.entry(f.id).engine.lockoutMotorPaths.has('wall-relay'), true);
+  await f.runtime.stop();
+  const restarted = await f.start();
+  assert.equal(restarted.status(f.id).configurationValid, true);
+  assert.equal(restarted.status(f.id).observationEnabled, true);
+  assert.equal(restarted.status(f.id).actuationEnabled, true);
+  for (const row of [...restarted.entry(f.id).profile.motorPaths, ...restarted.entry(f.id).profile.inputs]) assert.equal(row.allowDuringOpenerLockout, true);
+  assert.deepEqual(f.hardware.state.writes, []);
+});
+
+test('permission saves retain a disabled controller approval without enabling or operating it', async t => {
+  const f = await approvalFixture(t); await f.approve();
+  await f.runtime.disable(f.id, { revision: f.runtime.state.revision, bootId: f.runtime.bootId });
+  const edited = f.draft(), review = await f.runtime.review(edited.configuration, edited.revision);
+  assert.deepEqual(review.requiresCommissioning, []); await f.runtime.apply(review.token);
+  assert.equal(f.runtime.status(f.id).configurationValid, true);
+  assert.equal(f.runtime.status(f.id).enabled, false);
+  assert.equal(f.runtime.status(f.id).observationEnabled, false);
+  assert.deepEqual(f.hardware.state.writes, []);
+});
+
+test('permission saves cannot restore missing approval or approve a changed door mapping', async t => {
+  const f = await approvalFixture(t);
+  let edited = f.draft(), review = await f.runtime.review(edited.configuration, edited.revision);
+  assert.deepEqual(review.requiresCommissioning, [f.id]); await f.runtime.apply(review.token);
+  assert.equal(f.runtime.status(f.id).configurationValid, false);
+  await f.approve();
+  edited = f.draft(); edited.configuration.controllers[0].door.doorIndex = 1;
+  review = await f.runtime.review(edited.configuration, edited.revision);
+  assert.deepEqual(review.requiresCommissioning, [f.id]); await f.runtime.apply(review.token);
+  assert.equal(f.runtime.status(f.id).enabled, true);
+  assert.equal(f.runtime.status(f.id).configurationValid, false);
+  assert.equal(f.runtime.status(f.id).observationEnabled, false);
+  assert.deepEqual(f.hardware.state.writes, []);
 });
