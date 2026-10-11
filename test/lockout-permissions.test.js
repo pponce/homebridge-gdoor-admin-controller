@@ -4,6 +4,7 @@ import { readFile, mkdtemp, rm } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import os from 'node:os';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { CoordinatorRuntime } from '../src/runtime.js';
 import { validateConfiguration } from '../src/config.js';
 import { controllerTimingValues, profileWithTimings } from '../src/controller-timings.js';
@@ -52,22 +53,34 @@ async function approvalFixture(t, initialPermission) {
   const storagePath = await mkdtemp(path.join(os.tmpdir(), 'lockout-approval-'));
   await loadIdentity(storagePath);
   const runtimes = [];
+  // These tests cover saving an established setup, not aborting a WebSocket
+  // handshake. Let the fixture listeners connect before the next rebuild/stop.
+  const settled = async runtime => {
+    const deadline = Date.now() + 5000;
+    while ([...runtime.entries.values()].some(entry => entry.listeners.some(listener => !listener.ready || listener.checking))) {
+      assert.ok(Date.now() < deadline, 'fixture input listeners did not become ready');
+      await sleep(20);
+    }
+  };
   const start = async () => {
     const runtime = new CoordinatorRuntime({ storagePath, configuration, credentials: async () => hardware.credentials });
-    runtimes.push(runtime); await runtime.start(); return runtime;
+    runtimes.push(runtime); await runtime.start(); await settled(runtime); return runtime;
   };
   t.after(async () => {
     for (const runtime of runtimes) await runtime.stop();
     await hardware.close(); await rm(storagePath, { recursive: true, force: true });
   });
   const runtime = await start(), id = profile.id;
-  const approve = () => runtime.commission(id, { revision: runtime.state.revision, previousControllerStopped: true, physicalSetupReviewed: true });
+  const approve = async () => {
+    await runtime.commission(id, { revision: runtime.state.revision, previousControllerStopped: true, physicalSetupReviewed: true });
+    await settled(runtime);
+  };
   const draft = () => {
     const value = runtime.settings();
     for (const row of [...value.configuration.controllers[0].motorPaths, ...value.configuration.controllers[0].inputs]) row.allowDuringOpenerLockout = true;
     return value;
   };
-  return { runtime, hardware, id, start, approve, draft };
+  return { runtime, hardware, id, start, approve, draft, settled };
 }
 
 for (const initialPermission of [undefined, false]) test(`Homebridge review/apply preserves approval when lockout permissions change from ${initialPermission}`, async t => {
@@ -76,6 +89,7 @@ for (const initialPermission of [undefined, false]) test(`Homebridge review/appl
   const review = await f.runtime.review(edited.configuration, edited.revision);
   assert.deepEqual(review.requiresCommissioning, [], 'permission-only edits must retain approved device setup');
   await f.runtime.apply(review.token);
+  await f.settled(f.runtime);
   assert.equal(f.runtime.status(f.id).configurationValid, true);
   assert.equal(f.runtime.status(f.id).observationEnabled, true);
   assert.equal(f.runtime.status(f.id).actuationEnabled, true);
