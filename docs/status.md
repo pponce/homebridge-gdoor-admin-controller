@@ -1,5 +1,15 @@
 ## 2026-10-11 — Optional Tailwind fully-open sensor (development)
 
+Final source validation: all five Coordinator checks jobs passed on
+2af5234a65c7dc52f8f80cfab12d854d41dab4f8 in
+https://github.com/pponce/homebridge-gdoor-admin-controller/actions/runs/38171726685:
+Node 22/24 unit and protocol tests, demo/release/package checks, actual Homebridge
+2.0.0/2.4.0 integration, custom UI IPC, desktop Chromium/mobile WebKit setup,
+production web-admin flows and the static demo. Draft PR:
+https://github.com/pponce/homebridge-gdoor-admin-controller/pull/6.
+The following documentation-only receipt does not alter the validated source.
+Release, owner installation and physical acceptance remain outstanding.
+
 Added optional door.openSensorDoorIndex, selected by a checkbox and spare-input
 picker under Garage doors → Devices → Garage Door opener. Enabling it selects
 sensor feedback for both endpoints; Behavior shows the Tailwind open-sensor
