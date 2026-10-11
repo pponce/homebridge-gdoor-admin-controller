@@ -30,7 +30,7 @@ contract. The retired standalone Python administrator is unchanged; its strict
 probe validator does not accept the new evidence, so configure this option
 through Homebridge and use the bundled web administrator.
 
-Validation: 14 focused Tailwind/engine/configuration/commissioning tests pass,
+Validation: 15 focused Tailwind/engine/configuration/commissioning tests pass,
 covering disabled extra control, invalid and conflicting readings, primary-only
 writes, estimate bypass, timeouts, reversal, stop/close stability, endpoint
 interruption races and restart/external observation. The full Node suite ran
@@ -56,6 +56,15 @@ Legacy cross-repository checks: 14 integration cases pass; two duplicated
 contract-copy checks fail. The legacy snapshot's contract already differs from
 the unchanged 0.4.44 main source; that older client is outside this feature's
 supported configuration UI. No standalone application source was changed.
+
+Follow-up: normal primary-route closing now also recognizes a return to the
+fully-open sensor after departure as close_reversed. It tolerates the initial
+open sensor engagement while closing begins, then faults without another motor
+command or bolt extension if the door comes back. The dedicated regression and
+all engine tests pass (46 checks). This matches the endpoint handling already
+used by the two-sensor interruption loop. The first remote run also passed
+actual Homebridge 2.0.0 and 2.4.0 smoke checks; the next run passed Node 22/24,
+demo freshness, release notes and exact npm package checks.
 
 ## 0.4.44 preserve setup approval for optional permission fields
 

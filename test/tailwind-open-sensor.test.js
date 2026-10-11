@@ -209,3 +209,12 @@ test('restart between endpoints cannot reconstruct fully open from elapsed time'
   assert.equal(f.engine.state.phase, 'open'); assert.equal(f.engine.state.reconciling, false);
   assert.equal(f.engine.state.openEstimated, false); assert.deepEqual(f.model.writes, []);
 });
+
+test('normal closing detects a return to fully open after departure without another command', async () => {
+  const f = fixture('open'); await f.engine.initialize();
+  f.tick(m => { m.position = m.now < 100 || m.now >= 200 ? 'open' : 'not-closed'; });
+  const result = await f.engine.execute('close');
+  assert.equal(result.fault, 'close_reversed'); assert.equal(result.door, 'open');
+  assert.equal(result.openEstimated, false); assert.equal(f.model.now, 200);
+  assert.deepEqual(f.model.writes, [['door', {door_idx:0,cmd:'close'}]]);
+});

@@ -411,13 +411,16 @@ export class MovementEngine {
       this.update({ phase: 'closed', closeEstimated: false, openEstimated: false }); return;
     }
     let started = this.clock.now(); const deadline = started + this.timing.motionTimeoutMs;
+    const senseOpen = this.feedback.opening === 'sensor' && this.door.capabilities?.openSensor === true;
+    let openDeparted = sample.door !== 'open';
     this.update({ phase: 'closing', openEstimated: false, closeEstimated: false });
     if (!(sample.door === 'closed' && this.feedback.closing === 'sensor' && sample.evidence === 'closed-sensor')) await this.motorCommand('close', checked);
     started = this.clock.now(); // A timed close allows full travel after the command acknowledgement.
     let closedSince = null; let retractPending = checked?.retractionRequestedAt ?? null;
     for (;;) {
       sample = await this.read();
-      requireValue(sample.door !== 'opening', 'close_reversed');
+      requireValue(sample.door !== 'opening' && !(senseOpen && openDeparted && sample.door === 'open'), 'close_reversed');
+      if (sample.door !== 'open') openDeparted = true;
       // An observed extension during closing gets one OFF attempt. The original
       // travel deadline remains in force; no second motor command is allowed.
       if (sample.locked) {
