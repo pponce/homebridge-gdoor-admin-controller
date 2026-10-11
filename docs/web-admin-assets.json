@@ -89,7 +89,7 @@
   "additions": [
     {
       "path": "web-admin/public/controller.js",
-      "sha256": "4ffa56aa5f824aa38c030bf6bb5af9e82854d12fb16c0ad51e87ad994450d7cf",
+      "sha256": "450a3a21b722a5b68b565d8733b93d062541e897d3c77718fc68655d7f5f6ea0",
       "purpose": "Plugin-native controller timing editor and read-only live troubleshooting state view."
     }
   ]

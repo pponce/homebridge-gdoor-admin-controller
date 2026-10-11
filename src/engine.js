@@ -211,7 +211,10 @@ export class MovementEngine {
         this.travel = null; this.partialOwner = null;
         Object.assign(changes, { phase: 'closed', target: 'closed', openEstimated: false, closeEstimated: false });
       }
-      else if (sample.door === 'open') Object.assign(changes, { phase: 'open', target: 'open', openEstimated: false, closeEstimated: false });
+      else if (sample.door === 'open') {
+        this.travel = null; this.partialOwner = null;
+        Object.assign(changes, { phase: 'open', target: 'open', openEstimated: false, closeEstimated: false });
+      }
       else if (['opening', 'closing'].includes(sample.door)) Object.assign(changes, {
         phase: sample.door, target: sample.door === 'opening' ? 'open' : 'closed', openEstimated: false, closeEstimated: false });
       else if (this.partialOwner && sample.door === 'not-closed') {
@@ -283,7 +286,9 @@ export class MovementEngine {
     requireValue(!this.partialOwner || command === 'close' && owner === this.partialOwner && interruption === true,
       'partial_stop_requires_original_input');
     const selected = this.motorPaths.get(motorPath);
-    requireValue(!interruption || selected.capabilities?.interruption === true && this.feedback.opening === 'timed' && this.feedback.closing === 'sensor',
+    requireValue(!interruption || selected.capabilities?.interruption === true &&
+      (this.feedback.opening === 'timed' || this.feedback.opening === 'sensor' && this.door.capabilities?.openSensor === true) &&
+      this.feedback.closing === 'sensor',
       'interruption_not_supported');
     const previousTiming = this.timing;
     this.busy = true; // Claim ownership synchronously, before any await.
@@ -352,10 +357,10 @@ export class MovementEngine {
     const sample = await this.read();
     requireValue(!sample.locked, 'bolt_extended_before_motion');
     if (sample.door === 'open' && this.feedback.opening === 'sensor') return this.update({ phase: 'open', openEstimated: false, closeEstimated: false });
-    if (sample.door === 'not-closed' && this.state.openEstimated) return this.update({ phase: 'open' });
+    if (sample.door === 'not-closed' && this.feedback.opening === 'timed' && this.state.openEstimated) return this.update({ phase: 'open' });
     requireValue(sample.door === 'closed', 'opening_requires_known_start');
     if (this.interruptionOperation) {
-      this.travel = new TravelEstimate(this.timing.openingMs);
+      this.travel = this.feedback.opening === 'timed' ? new TravelEstimate(this.timing.openingMs) : null;
       await followInterruptedTravel(this, 'opening', true); return;
     }
     this.update({ phase: 'opening', openEstimated: false, closeEstimated: false });
@@ -396,7 +401,7 @@ export class MovementEngine {
     requireValue(!['opening', 'closing'].includes(sample.door), 'external_movement');
     if (this.interruptionOperation) {
       if (sample.door !== 'closed') {
-        this.travel ??= new TravelEstimate(this.timing.openingMs, this.timing.openingMs);
+        if (this.feedback.opening === 'timed') this.travel ??= new TravelEstimate(this.timing.openingMs, this.timing.openingMs);
         const result = await followInterruptedTravel(this, 'closing', false, checked);
         if (!result.closed) return;
         await this.confirmClosed(result.deadline);

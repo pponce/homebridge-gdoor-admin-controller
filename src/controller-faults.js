@@ -4,6 +4,7 @@ const codes = new Set([
   'previous_run_requires_review', 'startup_bolt_state_requires_review',
   'journal_invalid', 'journal_write_failed', 'unexpected_adapter_error',
   'door_read_failed', 'door_response_invalid', 'door_blocked', 'obstruction',
+  'door_open_sensor_invalid', 'door_sensor_conflict',
   'door_write_ambiguous', 'door_write_unconfirmed', 'door_position_requires_review',
   'door_open_timeout', 'door_close_timeout', 'opening_requires_known_start',
   'bolt_read_failed', 'bolt_unreachable', 'bolt_response_invalid', 'bolt_feedback_mismatch',
@@ -64,6 +65,8 @@ export function controllerHealth(status) {
       door_blocked: state.lockout ? 'Tailwind reports a safety lockout.' : state.blocked === false ? 'The opener is no longer blocked; position still needs review.' : 'The opener reports that control is blocked or disabled.',
       door_close_timeout: 'Close failed: closed position was not confirmed. Monitoring continues.',
       door_open_timeout: 'Open failed: opening was not confirmed. Monitoring continues.',
+      door_open_sensor_invalid: 'The configured Tailwind open sensor input did not return valid position data.',
+      door_sensor_conflict: 'Both Tailwind endpoint sensors report engaged. Check the input mapping and sensor placement.',
       obstruction: 'The door reports an obstruction.',
     };
     return { title: 'Fault', detail: (explanations[code] ?? (code ? 'Controller fault: ' + code.replaceAll('_', ' ') + '.' : 'The controller is unavailable.')) +
@@ -71,12 +74,12 @@ export function controllerHealth(status) {
   }
   if (state.lockout && !state.fault) return { title: 'Tailwind locked out', detail: 'Tailwind commands are held. Configured physical button/keypad relay routes can operate after their position and bolt checks pass.', code: 'door_blocked' };
   if (state.reconciling && state.door === 'not-closed') return { title: 'Position unknown',
-    detail: 'Monitoring resumed. This device confirms only closed; the old travel estimate was discarded.' +
+    detail: 'Monitoring resumed. Neither endpoint is confirmed; the old travel estimate was discarded.' +
       (state.restartCloseAvailable ? ' A new Close request is available from HomeKit. Relay toggle inputs wait for confirmed position.' : ' New commands wait for confirmed open or closed feedback.'), code: null };
   if (state.reconciling) return { title: state.door === 'opening' ? 'Opening' : state.door === 'closing' ? 'Closing' : 'Monitoring movement',
     detail: 'Reading current movement without replaying a command. New commands wait for confirmed open or closed feedback.', code: null };
   if (state.phase === 'position-unknown') return { title: 'Position unknown',
-    detail: 'The door is not closed. This device does not confirm whether it is fully open or moving; the previous travel estimate was not restored.', code: null };
+    detail: 'Neither fully closed nor fully open is confirmed. The previous travel estimate was not restored.', code: null };
   if (state.busy || ['opening', 'closing'].includes(state.door)) return { title: state.phase === 'opening' ? 'Opening' : state.phase === 'closing' ? 'Closing' : 'Operating', detail: '', code: null };
   return { title: state.door === 'closed' ? 'Ready · Closed' : state.door === 'open' ? 'Ready · Open' : 'Ready', detail: '', code: null };
 }

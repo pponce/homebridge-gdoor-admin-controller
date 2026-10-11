@@ -100,6 +100,28 @@ To use a deCONZ user's PIN for the Homebridge alarm, follow [Homebridge alarm-PI
 
 Under **Controller**, select the **Garage Door**, edit controller defaults or device timing overrides, then review and apply. Save while the controller is idle; changes take effect on the next operation **without a Homebridge or child-bridge restart**. Hardware mappings and other controller configuration remain in the Homebridge plugin settings.
 
+## Optional Tailwind fully-open sensor
+
+In **Homebridge → Plugins → Garage Door Admin Controller → Settings → Garage doors**, select your garage, then **01 Devices → Garage Door opener**:
+
+1. Keep **Tailwind door** set to the input connected to the actual opener and closed-position sensor.
+2. Check **Use an extra Tailwind sensor to confirm fully open**.
+3. Select the spare **Tailwind open sensor input**. It must differ from the primary input and cannot belong to another configured garage. If General lists a door count, include the spare input in that count.
+4. Under **03 Behavior**, **Open means…** now selects **A sensor confirms fully open**, with the Tailwind sensor input shown below. Review the mapping, check connections and approve the updated setup.
+
+The spare input needs only its sensor. Its Tailwind **Door control** may stay disabled. Mount the sensor so the magnet engages at the fully-open endpoint. Tailwind reports that engagement as `close`; this plugin interprets it as fully open because of the input's assigned role. Commands still go only to the primary opener input.
+
+| Closed-position sensor | Fully-open sensor | Position |
+| --- | --- | --- |
+| Engaged | Disengaged | Closed |
+| Disengaged | Engaged | Fully open |
+| Disengaged | Disengaged | Between endpoints; direction is not proven by these sensors |
+| Engaged | Engaged | Conflicting readings; control held |
+
+The extra sensor replaces opening travel estimates, including per-control overrides and extra opening time after a relay reversal. **Movement timeout** remains a failure limit, never proof of arrival. Closed confirmation and its stability wait still govern bolting. Missing/invalid sensor data holds control rather than reverting to time estimates. Restart and idle observation read the current endpoints without sending commands.
+
+Uncheck the extra sensor under Devices to return to timed opening; the saved travel times are retained. Previously, the sensor-opening setting required a backend that already reported fully open. A single Tailwind sensor reports only closed/not-closed, so it could not satisfy that setting.
+
 ## Interactive demo
 
 [**Try the interactive demo →**](https://pponce.github.io/homebridge-gdoor-admin-controller/)

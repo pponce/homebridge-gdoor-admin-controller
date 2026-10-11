@@ -2,6 +2,12 @@
 
 User-facing changes for `homebridge-gdoor-admin-controller`. GitHub releases use matching `vVERSION` tags. Development history and validation receipts are in [developer documentation](docs/developer/README.md).
 
+## Unreleased
+
+- Add an optional Tailwind fully-open sensor on a different door input. Its Door control may remain disabled. The original input still controls the opener and confirms closed.
+- Connect the extra sensor to Behavior → “A sensor confirms fully open.” Normal opening, relay reversals, idle observation and restart recovery use physical endpoint readings; opening estimates and per-control opening times are unused in this mode.
+- Reject duplicate sensor/opener inputs, missing or invalid readings, and simultaneous closed/open sensor engagement. Keep existing single-sensor timed behavior unchanged.
+
 ## 0.4.44 — 2026-10-10
 
 - Fix Homebridge configuration saves incorrectly removing setup approval when the new opener-lockout permission fields are first added. Permission-only changes now retain approved setup through save and restart, keeping device monitoring and HomeKit status available.

@@ -59,7 +59,7 @@ export function withConnections(configuration){
   for(const {connection} of endpoints(result)){
     if(connection.type!=='tailwind')continue;
     const shared=result.connections.find(row=>sameConnection(row,connection));
-    if(shared?.doorCount!=null&&connection.doorIndex>=shared.doorCount)fail('tailwind_door_out_of_range');
+    if(shared?.doorCount!=null&&(connection.doorIndex>=shared.doorCount||connection.openSensorDoorIndex>=shared.doorCount))fail('tailwind_door_out_of_range');
   }
   return result;
 }

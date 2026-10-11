@@ -76,6 +76,13 @@
                   "maximum": 2,
                   "default": 0
                 },
+                "openSensorDoorIndex": {
+                  "title": "Tailwind fully-open sensor input index (optional)",
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 2,
+                  "description": "Use a different input from doorIndex. Magnet engaged means fully open. Requires opening and closing feedback set to sensor. Door control may be disabled on this extra input."
+                },
                 "macAddress": {
                   "title": "ratgdo MAC address",
                   "type": "string",
@@ -197,7 +204,7 @@
                     "timed"
                   ],
                   "default": "timed",
-                  "description": "For Tailwind choose timed: its open state only means not closed. Opening time starts after the closed sensor departs."
+                  "description": "Tailwind uses timed opening unless an extra fully-open sensor input is configured. With that input, choose sensor. Elapsed travel time is never proof of fully open."
                 },
                 "bolt": {
                   "title": "What proves the bolt state?",

@@ -10,7 +10,10 @@ export class TailwindDoor {
     requireValue(typeof token === 'string' && /^[0-9]{6}$/.test(token), 'tailwind_credential_invalid');
     this.config = structuredClone(configuration); this.token = token;
     this.request = request; this.readOnly = readOnly;
-    this.capabilities = Object.freeze({ directional: true });
+    const index = configuration.openSensorDoorIndex;
+    requireValue(index === undefined || Number.isInteger(index) && index >= 0 && index <= 2 && index !== configuration.doorIndex,
+      'door_open_sensor_invalid');
+    this.capabilities = Object.freeze({ directional: true, ...(index !== undefined ? { openSensor: true } : {}) });
   }
 
   async call(data, write = false) {
@@ -29,10 +32,21 @@ export class TailwindDoor {
     const row = result.data?.['door' + (this.config.doorIndex + 1)];
     requireValue(object(row) && row.index === this.config.doorIndex &&
       ['open', 'close'].includes(row.status) && flag(row.lockup) && flag(row.disabled), 'door_response_invalid');
-    // Tailwind's "open" means the closed sensor has departed; it is not fully open.
-    return { door: row.status === 'close' ? 'closed' : 'not-closed',
+    let door = row.status === 'close' ? 'closed' : 'not-closed';
+    let evidence = 'closed-sensor';
+    if (this.capabilities.openSensor) {
+      const extra = result.data?.['door' + (this.config.openSensorDoorIndex + 1)];
+      requireValue(object(extra) && extra.index === this.config.openSensorDoorIndex &&
+        ['open', 'close'].includes(extra.status) && flag(extra.lockup) && flag(extra.disabled), 'door_open_sensor_invalid');
+      // "close" means magnet engaged, here at the physical fully-open endpoint.
+      // Control may be disabled on this sensor-only input; its flags never gate the motor.
+      requireValue(!(door === 'closed' && extra.status === 'close'), 'door_sensor_conflict');
+      if (extra.status === 'close') { door = 'open'; evidence = 'open-sensor'; }
+      else if (door !== 'closed') evidence = 'position-sensors';
+    }
+    return { door,
       lockout: Boolean(row.lockup), disabled: Boolean(row.disabled),
-      blocked: Boolean(row.lockup || row.disabled), obstruction: false, evidence: 'closed-sensor' };
+      blocked: Boolean(row.lockup || row.disabled), obstruction: false, evidence };
   }
 
   async restart() {

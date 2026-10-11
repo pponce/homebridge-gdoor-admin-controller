@@ -120,6 +120,31 @@ try{
  for(const [browserType,mobile,dark]of [[chromium,false,false],[webkit,true,true]]){
   const browser=await browserType.launch({headless:true});
   try{
+   {
+     const x=await fixture(browser,{mobile,dark,mode:'enabled'}),p=x.page;
+     const checkbox=p.getByLabel('Use an extra Tailwind sensor to confirm fully open',{exact:true});
+     assert.equal(await checkbox.isChecked(),false);
+     await checkbox.check();
+     const sensor=p.getByLabel('Tailwind open sensor input',{exact:true});
+     assert.equal(await sensor.inputValue(),'1');
+     assert.equal(await sensor.locator('option[value="0"]').isDisabled(),true);
+     await sensor.selectOption('2');
+     await p.getByRole('button',{name:'03 Behavior'}).click();
+     assert.equal(await p.getByLabel('Open means…',{exact:true}).inputValue(),'sensor');
+     assert.equal(await p.getByLabel('Tailwind open sensor input',{exact:true}).inputValue(),'2');
+     assert.equal(await p.getByLabel('Full opening travel (seconds)',{exact:true}).isDisabled(),true);
+     await p.getByLabel('Tailwind open sensor input',{exact:true}).selectOption('1');
+     await review(p);await p.getByRole('button',{name:'Save configuration',exact:true}).click();await saved(p);
+     assert.equal(x.configuration().controllers[0].door.openSensorDoorIndex,1);
+     assert.equal(x.configuration().controllers[0].feedback.opening,'sensor');
+     await p.getByRole('button',{name:'01 Devices'}).click();await checkbox.uncheck();
+     await p.getByRole('button',{name:'03 Behavior'}).click();
+     assert.equal(await p.getByLabel('Open means…',{exact:true}).inputValue(),'timed');
+     assert.equal(await p.getByLabel('Open means…',{exact:true}).locator('option[value="sensor"]').isDisabled(),true);
+     assert.equal(await p.getByLabel('Full opening travel (seconds)',{exact:true}).isEnabled(),true);
+     assert.equal(x.probes(),0);assert.equal(x.commissions(),0);assert.deepEqual(x.errors,[]);
+     await p.close();
+   }
    for(const mode of ['restart-wait','restart-fault']){
      const x=await fixture(browser,{mobile,dark,mode}),p=x.page;
      await p.getByRole('button',{name:/^View status /}).click();

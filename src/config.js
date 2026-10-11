@@ -65,9 +65,12 @@ function door(value) {
       ...(value.credentialRef ? { credentialRef: secretRef(value.credentialRef) } : {}) };
   }
   if (value.type !== 'tailwind') fail('unsupported_door_backend');
-  fields(value, ['type', 'baseUrl', 'doorIndex', 'credentialRef'], 'invalid_tailwind_connection');
+  fields(value, ['type', 'baseUrl', 'doorIndex', 'openSensorDoorIndex', 'credentialRef'], 'invalid_tailwind_connection');
   if (!Number.isInteger(value.doorIndex) || value.doorIndex < 0 || value.doorIndex > 2) fail('invalid_door_index');
-  return { type: 'tailwind', baseUrl: baseUrl(value.baseUrl), doorIndex: value.doorIndex, credentialRef: secretRef(value.credentialRef) };
+  if (value.openSensorDoorIndex !== undefined && (!Number.isInteger(value.openSensorDoorIndex) ||
+    value.openSensorDoorIndex < 0 || value.openSensorDoorIndex > 2 || value.openSensorDoorIndex === value.doorIndex)) fail('invalid_open_sensor_door_index');
+  return { type: 'tailwind', baseUrl: baseUrl(value.baseUrl), doorIndex: value.doorIndex, credentialRef: secretRef(value.credentialRef),
+    ...(value.openSensorDoorIndex !== undefined ? { openSensorDoorIndex: value.openSensorDoorIndex } : {}) };
 }
 function bolt(value) {
   if (!object(value)) fail('door_and_bolt_required');
@@ -101,7 +104,8 @@ function feedback(value) {
 }
 function resourceKeys(value) {
   if (value.type === 'homebridge') return [JSON.stringify(['homebridge', value.bridgeId.toLowerCase(), value.serviceId])];
-  if (value.type === 'tailwind') return [JSON.stringify(['tailwind', value.baseUrl, value.doorIndex])];
+  if (value.type === 'tailwind') return [value.doorIndex, value.openSensorDoorIndex].filter(index => index !== undefined)
+    .map(index => JSON.stringify(['tailwind', value.baseUrl, index]));
   if (value.type === 'ratgdo-homekit') return [JSON.stringify(['ratgdo', value.macAddress]), JSON.stringify(['ratgdo-url', value.baseUrl])];
   return [
     ['deconz-identity', value.gatewayId.replaceAll(':', '').toLowerCase(), value.uniqueId.toLowerCase()],
@@ -217,6 +221,8 @@ export function validateConfiguration(input, { allowEmpty = false } = {}) {
     ids.add(value.id);
     if (typeof value.exposeBoltLock !== 'boolean') fail('bolt_tile_choice_required');
     const result = { id: value.id, name: string(value.name, 'invalid_controller_name', 64), door: door(value.door), bolt: bolt(value.bolt), feedback: feedback(value.feedback), exposeBoltLock: value.exposeBoltLock };
+    if (result.door.type === 'tailwind' && result.door.openSensorDoorIndex !== undefined &&
+      (result.feedback.opening !== 'sensor' || result.feedback.closing !== 'sensor')) fail('tailwind_two_sensors_require_sensor_feedback');
     for (const key of ['exposeTailwindLockout', 'exposeTailwindRestart']) if (value[key] !== undefined) {
       if (typeof value[key] !== 'boolean' || value[key] && result.door.type !== 'tailwind') fail('invalid_tailwind_tile_choice');
       result[key] = value[key];

@@ -14,6 +14,7 @@ export class TravelEstimate {
 
 // Runs inside the assembly's existing durable operation and single worker.
 export async function followInterruptedTravel(engine, direction, departing = false, checked = null) {
+  if (engine.feedback.opening === 'sensor') return followSensorTravel(engine, direction, checked);
   const e = engine;
   e.admitInterruption(false);
   e.update({ phase: direction, target: direction === 'opening' ? 'open' : 'closed', openEstimated: false, closeEstimated: false });
@@ -66,6 +67,59 @@ export async function followInterruptedTravel(engine, direction, departing = fal
         }
         e.admitInterruption(retractPending === null);
       }
+    }
+    requireValue(e.clock.now() < deadline, 'interrupted_travel_timeout');
+    await e.clock.sleep(Math.min(e.timing.pollMs, deadline - e.clock.now()));
+  }
+}
+
+// Two endpoint sensors replace every travel estimate, including relay reversals.
+// A stop pulse still cannot prove stationary position between those endpoints.
+async function followSensorTravel(e, direction, checked) {
+  e.travel = null;
+  e.admitInterruption(false);
+  e.update({ phase: direction, target: direction === 'opening' ? 'open' : 'closed', openEstimated: false, closeEstimated: false });
+  const deadline = e.clock.now() + e.timing.motionTimeoutMs;
+  let departed = false;
+  let retractPending = checked?.retractionRequestedAt ?? null;
+  await e.motorCommand(direction === 'opening' ? 'open' : 'close', checked);
+  for (;;) {
+    const s = await e.read(); const now = e.clock.now();
+    if (direction === 'closing') {
+      if (s.locked) {
+        e.admitInterruption(false);
+        if (retractPending === null) { retractPending = now; await e.bolt.write(false); }
+        requireValue(now - retractPending < e.timing.boltTimeoutMs, 'bolt_retract_timeout');
+      } else retractPending = null;
+    } else requireValue(!s.locked, 'bolt_extended_during_open');
+    requireValue(['closed', 'open', 'not-closed'].includes(s.door), 'external_movement');
+    const start = direction === 'opening' ? 'closed' : 'open';
+    const endpoint = direction === 'opening' ? 'open' : 'closed';
+    if (s.door === endpoint) {
+      e.admitInterruption(false);
+      if (retractPending === null) {
+        e.partialOwner = null;
+        if (direction === 'opening') e.update({ phase: 'open', target: 'open', openEstimated: false, closeEstimated: false });
+        return { closed: direction === 'closing', deadline };
+      }
+    } else {
+      requireValue(!(departed && s.door === start), direction === 'opening' ? 'open_reversed' : 'close_reversed');
+      if (s.door === 'not-closed') departed = true;
+      if (s.door === 'not-closed' && retractPending === null && e.takeInterruption()) {
+        e.admitInterruption(false);
+        await e.motor.interrupt({ beforeWrite: async () => {
+          const fresh = await e.read();
+          requireValue(fresh.door === 'not-closed' && !fresh.locked, 'interruption_precondition_lost');
+        } });
+        if (direction === 'opening') {
+          e.partialOwner = e.operationOwner;
+          e.update({ phase: 'stopped-estimated', target: null, openEstimated: false, closeEstimated: false });
+          return { closed: false };
+        }
+        direction = 'opening'; departed = true;
+        e.update({ phase: 'opening', target: 'open' });
+      }
+      e.admitInterruption(s.door === 'not-closed' && retractPending === null);
     }
     requireValue(e.clock.now() < deadline, 'interrupted_travel_timeout');
     await e.clock.sleep(Math.min(e.timing.pollMs, deadline - e.clock.now()));

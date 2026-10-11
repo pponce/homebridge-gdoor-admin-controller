@@ -1,3 +1,52 @@
+## 2026-10-11 — Optional Tailwind fully-open sensor (development)
+
+Added optional door.openSensorDoorIndex, selected by a checkbox and spare-input
+picker under Garage doors → Devices → Garage Door opener. Enabling it selects
+sensor feedback for both endpoints; Behavior shows the Tailwind open-sensor
+selection. Primary and extra inputs must differ, fit the shared connection's
+door count and have exclusive ownership across configured garages. Disabling
+the extra sensor returns opening to timed mode and retains the stored timings.
+Changing the mapping requires the existing setup review.
+
+Both rows are read from the same Tailwind dev_st response. The spare input's
+close means its magnet is engaged at fully open. Its disabled/lockup flags are
+accepted without blocking the primary door, matching the owner's sensor-only
+test. Primary flags still apply. No motor command addresses the sensor-only
+input. Invalid/missing extra readings and simultaneous endpoint engagement
+produce fixed faults; neither condition falls back to time estimates.
+
+Parity: primary opener, physical relay and keypad routes retain their existing
+authorization and bolt rules. Timed single-sensor behavior is unchanged.
+Two-sensor opening and closing-to-opening relay reversals now await endpoint
+feedback rather than openingMs, per-input overrides or interruption margin.
+Partial stops retain ownership and do not claim measured stationary position.
+Restart/idle observations use current sensors without commands; departure from
+fully open returns to unknown position until another endpoint is confirmed.
+Closed stability and explicit closed feedback remain the basis for bolting.
+UI help marks opening estimates as unused. No API endpoint or response field
+was added; probe evidence/error values and configuration are documented in
+api-v1.md. The bundled administrator consumes the new state through its existing
+contract. The retired standalone Python administrator is unchanged; its strict
+probe validator does not accept the new evidence, so configure this option
+through Homebridge and use the bundled web administrator.
+
+Validation: 14 focused Tailwind/engine/configuration/commissioning tests pass,
+covering disabled extra control, invalid and conflicting readings, primary-only
+writes, estimate bypass, timeouts, reversal, stop/close stability, endpoint
+interruption races and restart/external observation. The full Node suite ran
+426 checks: 423 initially passed; three asset-dependent checks passed on rerun
+after restoring the unchanged PNGs omitted from the source snapshot and updating
+the changed controller.js asset hash. Two subsequent sensor cases and related
+configuration/timing/maintenance checks pass (34 focused checks). JS syntax and
+git diff whitespace checks pass.
+
+Added desktop Chromium/mobile WebKit coverage for checkbox, input selection,
+Behavior linkage, saved configuration and return to timed mode. Local browser
+execution is blocked: no browser is installed and its CDN download returns 403.
+Remote CI/browser validation and physical installation acceptance remain.
+No npm publication, Homebridge installation, hardware command or live setting
+change was performed.
+
 ## 0.4.44 preserve setup approval for optional permission fields
 
 Reproduced the 0.4.43 Homebridge review/apply regression with the production

@@ -8,6 +8,7 @@ import { Fault, requireValue } from './fault.js';
 export const PROBE_ERRORS = Object.freeze([
   'credentials_unavailable', 'credential_reference_missing', 'backend_not_implemented',
   'tailwind_credential_invalid', 'door_read_failed', 'door_response_invalid',
+  'door_open_sensor_invalid', 'door_sensor_conflict',
   'ratgdo_credential_invalid', 'ratgdo_auth_unsupported',
   'bolt_credential_invalid', 'bolt_identity_configuration_required', 'bolt_read_failed',
   'bolt_gateway_identity_mismatch', 'bolt_resource_identity_mismatch', 'bolt_unreachable', 'bolt_response_invalid',
@@ -90,7 +91,8 @@ export class Diagnostics {
       };
       const [door, bolt] = await Promise.all([run(controller.door, 'door'), run(controller.bolt, 'bolt')]);
       const limitations = [];
-      if (controller.door.type === 'tailwind' && controller.feedback.opening !== 'timed') limitations.push('tailwind_open_requires_estimate');
+      if (controller.door.type === 'tailwind' && controller.feedback.opening !== 'timed' &&
+        controller.door.openSensorDoorIndex === undefined) limitations.push('tailwind_open_requires_estimate');
       if (controller.door.type === 'tailwind' && controller.feedback.closing !== 'sensor') limitations.push('tailwind_closed_sensor_available');
       if (controller.bolt.type === 'deconz' && controller.feedback.bolt !== 'relay') limitations.push('deconz_relay_is_not_position');
       if (door.blocked) limitations.push('door_blocked');

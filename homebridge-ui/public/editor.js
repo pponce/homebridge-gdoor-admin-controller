@@ -193,6 +193,19 @@ export class ProfileEditor {
     }else {
       const shared=this.sharedConnection(opener,p.door),dg=this.grid(opener);
       const door=this.input(dg,'Tailwind door',p.door,'doorIndex',{type:'number',options:Array.from({length:shared?.doorCount??3},(_,index)=>[index,'Door '+(index+1)]),help:shared?.doorCount?'Choose which door on this Tailwind controller to use.':'Set the number of doors in General to narrow this list. Door 1 uses API index 0.'});door.required=true;
+      door.addEventListener('change',()=>{this.change();this.render();});
+      const enabled=p.door.openSensorDoorIndex!==undefined;
+      const extra=this.input(dg,'Use an extra Tailwind sensor to confirm fully open',{enabled},'enabled',{type:'checkbox',help:'Uses a spare door input on this Tailwind. Its Door control may remain disabled. Movement commands still use the primary door above.'});
+      extra.disabled=!enabled&&shared?.doorCount===1;
+      extra.addEventListener('change',()=>{
+        if(extra.checked){
+          p.door.openSensorDoorIndex=Array.from({length:shared?.doorCount??3},(_,i)=>i).find(i=>i!==p.door.doorIndex);
+          p.feedback.opening='sensor';p.feedback.closing='sensor';
+        }else{delete p.door.openSensorDoorIndex;p.feedback.opening='timed';}
+        this.change();this.render();
+      });
+      if(enabled)this.tailwindOpenSensor(dg,p,shared);
+      if(shared?.doorCount===1)opener.append(el('p','Set this Tailwind connection to at least 2 doors in General before adding an open sensor.','help'));
       const link=el('a','How to get a Tailwind local control key');link.href='https://gotailwind.zendesk.com/hc/en-us/articles/42573968819725-How-do-I-get-my-local-control-key-for-my-Tailwind-garage-door-controller';link.target='_blank';link.rel='noreferrer';opener.append(link);
     }
     opener.append(el('p','During movement: stop / reverse is unavailable through this garage opener connection. Use a compatible opener relay for that behavior.','help'));
@@ -273,7 +286,8 @@ export class ProfileEditor {
       const advanced=el('details');advanced.append(el('summary','Timing for this control'));const tg=this.grid(advanced);input.timing??={};
       for(const [key,label] of [['openRetractSettleSeconds','Retract before opening'],['closeRetractSettleSeconds','Retract before closing'],['openingSeconds','Estimated opening travel'],['closingSeconds','Estimated closing travel']]){
         const help='Leave blank to use the garage default.'+(key==='closeRetractSettleSeconds'?' 0 starts closing after any needed unlock command is acknowledged; retraction is monitored during travel. Above 0 waits for unlocked feedback, then this settling time.':'');
-        this.input(tg,label+' (seconds)',input.timing,key,{type:'number',min:key.includes('Retract')?0:1,max:300,step:.1,help,emptyUnset:true});
+        const field=this.input(tg,label+' (seconds)',input.timing,key,{type:'number',min:key.includes('Retract')?0:1,max:300,step:.1,help:key==='openingSeconds'&&p.feedback.opening==='sensor'?'Unused: the fully-open sensor confirms arrival.':help,emptyUnset:true});
+        if(key==='openingSeconds'&&p.feedback.opening==='sensor')field.disabled=true;
       }card.append(advanced);card.append(this.button('Remove control',()=>{p.inputs.splice(index,1);this.selectedInputs.set(p.id,p.inputs[Math.min(index,p.inputs.length-1)]?.id);this.change();this.render();},'danger'));
     });
     if(p.inputs.length&&this.saveConfiguration){const actions=el('div',undefined,'actions');const saveButton=this.button('Save configuration',()=>this.saveConfiguration(),'primary');saveButton.dataset.controlSave='true';actions.append(saveButton);inputs.append(actions,el('p','Saves all pending configuration changes and keeps this page open.','help'));}
@@ -303,18 +317,32 @@ export class ProfileEditor {
     this.sharedConnection(virtual,p.keypad);const g=this.grid(virtual);this.input(g,'Gateway identity',p.keypad,'gatewayId');this.input(g,'Alarm number',p.keypad,'alarmId',{type:'number',min:1,max:255,step:1});
     virtual.append(el('p','Selecting a physical keypad copies its alarm details. Later changes to that physical control do not change this saved connection.','help'));
   }
+  tailwindOpenSensor(grid,p,shared=this.configuration.connections.find(row=>sameConnection(row,p.door))){
+    this.input(grid,'Tailwind open sensor input',p.door,'openSensorDoorIndex',{type:'number',
+      options:Array.from({length:shared?.doorCount??3},(_,i)=>[i,'Door '+(i+1),i===p.door.doorIndex]),
+      help:'Choose a different input from the actual garage door. Magnet engaged at this sensor means fully open.'}).required=true;
+    if(p.door.openSensorDoorIndex===p.door.doorIndex)grid.append(el('p','Choose a different Tailwind input for the fully-open sensor.','help'));
+  }
   behavior(root,p){
+    const extra=p.door.type==='tailwind'&&p.door.openSensorDoorIndex!==undefined;
     const feedback=this.panel(root,'What does your hardware actually report?','The coordinator uses this to decide when it may move or bolt the door.');const g=this.grid(feedback);
-    this.input(g,'Closed means…',p.feedback,'closing',{options:[['sensor','A door sensor confirms closed'],['timed','A command / estimate only']],help:'Tailwind provides a closed sensor. Use that feedback for your installation.',rerender:true});
-    this.input(g,'Open means…',p.feedback,'opening',{options:[['timed','Not closed; estimate full travel'],['sensor','A sensor confirms fully open']],help:'Tailwind reports not-closed. Full opening travel is estimated.'});
+    this.input(g,'Closed means…',p.feedback,'closing',{options:[['sensor','A door sensor confirms closed'],['timed','A command / estimate only',extra]],help:'Tailwind provides a closed sensor. Use that feedback for your installation.',rerender:true});
+    this.input(g,'Open means…',p.feedback,'opening',{options:[['timed','Not closed; estimate full travel',extra],['sensor','A sensor confirms fully open',p.door.type==='tailwind'&&!extra]],help:p.door.type==='tailwind'?(extra?'Using the Tailwind open sensor. Disable the extra sensor under Devices to return to estimated opening.':'Enable an extra Tailwind sensor under Devices to confirm fully open.'):'Choose sensor only when the connection reports a physical fully-open endpoint.',rerender:true});
+    if(extra)this.tailwindOpenSensor(g,p);
     this.input(g,'Bolt feedback',p.feedback,'bolt',{options:[['relay','Relay ON / OFF state'],['position','Physical position sensor']],help:'The direct deCONZ relay uses relay state.'});
     if(p.feedback.closing==='timed')this.input(g,'Allow bolting after estimated closure',p.feedback,'allowEstimatedBolting',{type:'checkbox',help:'Elapsed time cannot prove the door closed. This policy requires explicit acceptance.'});else p.feedback.allowEstimatedBolting=false;
     const travel=this.panel(root,'Movement timing');const tg=this.grid(travel);
-    for(const [key,label,help] of [['openingSeconds','Full opening travel','Starts after the closed sensor departs.'],['closingSeconds','Full closing travel','Used when closure is estimated.'],['closedStableSeconds','Stable closed confirmation','How long the closed sensor must remain active before bolting.'],['boltSettleSeconds','Bolt extension settling','Time to allow the mechanism to finish extending.']])this.input(tg,label+' (seconds)',p.feedback,key,{type:'number',min:key.includes('Seconds')&&['openingSeconds','closingSeconds'].includes(key)?1:0,max:300,step:.1,help});
+    for(const [key,label,help] of [['openingSeconds','Full opening travel','Starts after the closed sensor departs.'],['closingSeconds','Full closing travel','Used when closure is estimated.'],['closedStableSeconds','Stable closed confirmation','How long the closed sensor must remain active before bolting.'],['boltSettleSeconds','Bolt extension settling','Time to allow the mechanism to finish extending.']]){
+      const unused=key==='openingSeconds'&&p.feedback.opening==='sensor';
+      this.input(tg,label+' (seconds)',p.feedback,key,{type:'number',min:key.includes('Seconds')&&['openingSeconds','closingSeconds'].includes(key)?1:0,max:300,step:.1,help:unused?'Unused: wait for the fully-open sensor. Movement timeout still limits the operation.':help}).disabled=unused;
+    }
     const settling=this.panel(root,'Bolt retraction');const sg=this.grid(settling);
     this.input(sg,'Before opening (seconds)',p.timing,'openRetractSettleSeconds',{type:'number',min:0,max:120,step:.1});this.input(sg,'Before closing (seconds)',p.timing,'closeRetractSettleSeconds',{type:'number',min:0,max:120,step:.1,help:'0 starts closing after any needed unlock command is acknowledged; retraction is monitored during travel. Above 0 waits for unlocked feedback, then this settling time.'});
     this.input(sg,'Automatically bolt a newly closed door',p,'autoBolt',{type:'checkbox',help:'An external unlock remains in effect until the next operation or restart.'});
     const advanced=el('details');advanced.append(el('summary','Polling and timeouts'));const ag=this.grid(advanced);
-    for(const [key,label,min,max] of [['operationPollSeconds','Operation poll',.1,5],['idlePollSeconds','Idle poll',.5,30],['boltTimeoutSeconds','Bolt timeout',1,120],['motionTimeoutSeconds','Movement timeout',5,300],['interruptedOpenMarginSeconds','Extra travel after reversal',0,30]])this.input(ag,label+' (seconds)',p.timing,key,{type:'number',min,max,step:.1});root.append(advanced);
+    for(const [key,label,min,max] of [['operationPollSeconds','Operation poll',.1,5],['idlePollSeconds','Idle poll',.5,30],['boltTimeoutSeconds','Bolt timeout',1,120],['motionTimeoutSeconds','Movement timeout',5,300],['interruptedOpenMarginSeconds','Extra travel after reversal',0,30]]){
+      const unused=key==='interruptedOpenMarginSeconds'&&p.feedback.opening==='sensor';
+      this.input(ag,label+' (seconds)',p.timing,key,{type:'number',min,max,step:.1,help:unused?'Unused: reversal waits for the fully-open sensor.':undefined}).disabled=unused;
+    }root.append(advanced);
   }
 }
