@@ -1,4 +1,5 @@
 import { withConnections } from '../homebridge-ui/public/connections.js';
+import { OPENER_CLOSED, OPENER_OPEN, selectedSensor, sensorChoices } from '../homebridge-ui/public/position-sensors.js';
 export class ConfigurationError extends Error {
   constructor(code) { super(code); this.name = 'ConfigurationError'; }
 }
@@ -89,11 +90,15 @@ function bolt(value) {
   };
 }
 function feedback(value) {
-  fields(value, ['closing', 'opening', 'bolt', 'openingSeconds', 'closingSeconds', 'closedStableSeconds', 'boltSettleSeconds', 'allowEstimatedBolting'], 'invalid_feedback');
+  fields(value, ['closing', 'opening', 'closedSensor', 'openSensor', 'bolt', 'openingSeconds', 'closingSeconds', 'closedStableSeconds', 'boltSettleSeconds', 'allowEstimatedBolting'], 'invalid_feedback');
   if (typeof value.allowEstimatedBolting !== 'boolean') fail('estimated_bolting_policy_required');
   return {
     closing: choice(value.closing, ['sensor', 'timed'], 'invalid_closing_feedback'),
     opening: choice(value.opening, ['sensor', 'timed'], 'invalid_opening_feedback'),
+    ...Object.fromEntries(['closedSensor', 'openSensor'].filter(key => value[key] !== undefined).map(key => {
+      if (!identifier(value[key])) fail('invalid_feedback_sensor');
+      return [key, value[key]];
+    })),
     bolt: choice(value.bolt, ['position', 'relay', 'timed'], 'invalid_bolt_feedback'),
     openingSeconds: number(value.openingSeconds, 1, 300, 'invalid_opening_time'),
     closingSeconds: number(value.closingSeconds, 1, 300, 'invalid_closing_time'),
@@ -101,6 +106,21 @@ function feedback(value) {
     boltSettleSeconds: number(value.boltSettleSeconds, 0, 60, 'invalid_bolt_settle'),
     allowEstimatedBolting: value.allowEstimatedBolting,
   };
+}
+function sensors(value) {
+  if (!Array.isArray(value) || value.length > 16) fail('invalid_position_sensors');
+  const ids = new Set([OPENER_CLOSED, OPENER_OPEN]);
+  return value.map(row => {
+    fields(row, ['id', 'name', 'connection', 'activeValue'], 'invalid_position_sensor');
+    if (!identifier(row.id) || ids.has(row.id)) fail('invalid_sensor_id');
+    ids.add(row.id);
+    if (row.connection?.type !== 'homebridge') fail('unsupported_sensor_backend');
+    const connection = homebridge(row.connection, false);
+    if (!connection.baseUrl || !/^[1-9][0-9]*\.[1-9][0-9]*$/.test(connection.serviceId) ||
+      !/^[a-f0-9]{64}$/.test(connection.accessoryIdentity ?? '')) fail('sensor_identity_required');
+    return { id: row.id, name: string(row.name, 'invalid_sensor_name', 64), connection,
+      activeValue: choice(row.activeValue, [0, 1], 'invalid_sensor_mapping') };
+  });
 }
 function resourceKeys(value) {
   if (value.type === 'homebridge') return [JSON.stringify(['homebridge', value.bridgeId.toLowerCase(), value.serviceId])];
@@ -216,13 +236,18 @@ export function validateConfiguration(input, { allowEmpty = false } = {}) {
   if (!Number.isInteger(port) || port < 1024 || port > 65535) fail('invalid_management_port');
   const ids = new Set(); const resources = new Set();
   const controllers = input.controllers.map(value => {
-    fields(value, ['id', 'name', 'door', 'bolt', 'feedback', 'exposeBoltLock', 'exposeTailwindLockout', 'exposeTailwindRestart', 'motorPaths', 'inputs', 'timing', 'autoBolt', 'keypad'], 'invalid_controller');
+    fields(value, ['id', 'name', 'door', 'bolt', 'sensors', 'feedback', 'exposeBoltLock', 'exposeTailwindLockout', 'exposeTailwindRestart', 'motorPaths', 'inputs', 'timing', 'autoBolt', 'keypad'], 'invalid_controller');
     if (!identifier(value.id) || ids.has(value.id)) fail('invalid_or_duplicate_controller_id');
     ids.add(value.id);
     if (typeof value.exposeBoltLock !== 'boolean') fail('bolt_tile_choice_required');
     const result = { id: value.id, name: string(value.name, 'invalid_controller_name', 64), door: door(value.door), bolt: bolt(value.bolt), feedback: feedback(value.feedback), exposeBoltLock: value.exposeBoltLock };
-    if (result.door.type === 'tailwind' && result.door.openSensorDoorIndex !== undefined &&
-      (result.feedback.opening !== 'sensor' || result.feedback.closing !== 'sensor')) fail('tailwind_two_sensors_require_sensor_feedback');
+    if (value.sensors !== undefined) result.sensors = sensors(value.sensors);
+    for (const [endpoint, key] of [['closed', 'closedSensor'], ['open', 'openSensor']]) {
+      if (result.feedback[key] !== undefined && !sensorChoices(result, endpoint).some(sensor => sensor.id === result.feedback[key]))
+        fail('feedback_sensor_not_found');
+    }
+    if (result.feedback.opening === 'sensor' && result.feedback.closing === 'sensor' &&
+      selectedSensor(result, 'closed') === selectedSensor(result, 'open')) fail('duplicate_endpoint_sensor');
     for (const key of ['exposeTailwindLockout', 'exposeTailwindRestart']) if (value[key] !== undefined) {
       if (typeof value[key] !== 'boolean' || value[key] && result.door.type !== 'tailwind') fail('invalid_tailwind_tile_choice');
       result[key] = value[key];
@@ -244,7 +269,7 @@ export function validateConfiguration(input, { allowEmpty = false } = {}) {
     }
     result.motorPaths = motorPaths(value.motorPaths);
     result.inputs = inputs(value.inputs, result.motorPaths);
-    for (const item of [result.door, result.bolt, ...result.motorPaths.map(path => path.connection)]) {
+    for (const item of [result.door, result.bolt, ...result.motorPaths.map(path => path.connection), ...(result.sensors ?? []).map(sensor => sensor.connection)]) {
       for (const key of resourceKeys(item)) {
         if (resources.has(key)) fail('duplicate_hardware_owner');
         resources.add(key);

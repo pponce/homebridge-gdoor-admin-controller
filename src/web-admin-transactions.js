@@ -17,6 +17,7 @@ const failureReasons = new Set(['homebridge_ui_result_unknown', 'homebridge_ui_r
   'maintenance_verification_required', 'physical_confirmation_required', 'physical_preparation_required',
   'door_read_failed', 'door_response_invalid', 'door_blocked', 'bolt_read_failed', 'bolt_unreachable', 'bolt_response_invalid',
   'door_open_sensor_invalid', 'door_sensor_conflict',
+  'door_sensor_invalid',
   'bolt_gateway_identity_mismatch', 'bolt_resource_identity_mismatch', 'bolt_feedback_mismatch',
   'motor_not_idle', 'relay_not_idle', 'homebridge_cache_owner_unavailable', 'homebridge_file_permissions_invalid',
   'homebridge_cache_write_unverified', 'homebridge_alarm_inventory_unavailable', 'homebridge_alarm_mapping_changed',

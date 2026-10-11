@@ -3,11 +3,11 @@ import assert from 'node:assert/strict';
 import http from 'node:http';
 import net from 'node:net';
 import { once } from 'node:events';
-import { discoverHomebridge, HomebridgeDoor, HomebridgeBolt, HomebridgeMotorRelay, HomebridgeInput, HapSubscription } from '../src/homebridge-devices.js';
+import { discoverHomebridge, HomebridgeDoor, HomebridgeBolt, HomebridgeMotorRelay, HomebridgeInput, HomebridgeContactSensor, HapSubscription } from '../src/homebridge-devices.js';
 const c=(type,iid,value,perms=['pr','pw','ev'])=>({type,iid,value,perms});
 const info=(serial)=>({type:'3E',iid:1,characteristics:[c('20',2,'Fixture'),c('21',3,'Test'),c('30',4,serial),c('23',5,'Test accessory')]});
 async function fixture(t){
- const data={accessories:[{aid:1,services:[info('AA:BB:CC:DD:EE:FF')]},{aid:2,services:[info('garage'),{type:'41',iid:10,characteristics:[c('E',11,1),c('24',12,false),c('32',13,1)]},{type:'49',iid:20,characteristics:[c('25',21,true)]},{type:'89',iid:30,characteristics:[c('73',31,null,['pr','ev'])]}]}]};const writes=[];let broken=false;
+ const data={accessories:[{aid:1,services:[info('AA:BB:CC:DD:EE:FF')]},{aid:2,services:[info('garage'),{type:'41',iid:10,characteristics:[c('E',11,1),c('24',12,false),c('32',13,1)]},{type:'49',iid:20,characteristics:[c('25',21,true)]},{type:'89',iid:30,characteristics:[c('73',31,null,['pr','ev'])]},{type:'00000080-0000-1000-8000-0026BB765291',iid:40,characteristics:[c('6A',41,0,['pr','ev']),c('77',42,0,['pr','ev']),c('75',43,true,['pr','ev'])]}]}]};const writes=[];let broken=false;
  const server=http.createServer(async(req,res)=>{assert.equal(req.headers.authorization,'031-45-154');
   if(req.url==='/accessories')return res.end(JSON.stringify(data));
   if(req.method==='GET'){const ids=new URL(req.url,'http://test').searchParams.get('id').split(',');return res.end(JSON.stringify({characteristics:ids.map(id=>{const[aid,iid]=id.split('.').map(Number);const v=data.accessories.find(a=>a.aid===aid).services.flatMap(s=>s.characteristics).find(c=>c.iid===iid);return {aid,iid,...(broken?{status:-70402}:{value:v.value})};})}));}
@@ -22,6 +22,30 @@ test('Homebridge adapters pin identity, read live characteristics and accept 204
  const bolt=new HomebridgeBolt({...f.connection('switch'),serviceType:'switch',lockedValue:false},'031-45-154',{readOnly:false});assert.equal((await bolt.read()).locked,false);await bolt.write(true);assert.equal(f.writes[1].characteristics[0].value,false);
  const motor=new HomebridgeMotorRelay({...f.connection('switch'),activeValue:true,inactiveWriteIdempotent:true},'031-45-154',{readOnly:false});assert.equal((await motor.read()).active,true);
  f.data.accessories[1].services[0].characteristics.find(c=>c.type==='30').value='replacement';await assert.rejects(door.write('close'),/identity_mismatch/);assert.equal(f.writes.length,2);
+});
+test('contact discovery pins identity and reads current contact, fault and active values without writes',async t=>{
+ const f=await fixture(t),connection=f.connection('contact');
+ assert.equal(connection.serviceId,'2.40');
+ const sensor=new HomebridgeContactSensor({connection,activeValue:0},'031-45-154',{readOnly:false});
+ const chars=f.data.accessories[1].services.at(-1).characteristics;
+ assert.deepEqual(await sensor.read(),{active:true});
+ chars[0].value=1;assert.deepEqual(await sensor.read(),{active:false});
+ const inverted=new HomebridgeContactSensor({connection,activeValue:1},'031-45-154');
+ assert.deepEqual(await inverted.read(),{active:true});
+ await assert.rejects(sensor.writeCharacteristic('contact','6A',0),/actuation_disabled/);
+ chars[0].value=2;await assert.rejects(sensor.read(),/door_sensor_invalid/);chars[0].value=0;
+ chars[1].value=1;await assert.rejects(sensor.read(),/homebridge_state_unavailable/);chars[1].value=0;
+ chars[2].value=false;await assert.rejects(sensor.read(),/homebridge_state_unavailable/);
+ chars.splice(1);assert.deepEqual(await sensor.read(),{active:true},'optional health characteristics need not be present');
+ f.broken();await assert.rejects(sensor.read(),/homebridge_state_unavailable/);assert.deepEqual(f.writes,[]);
+});
+test('stopped native Homebridge position permits selected external endpoint feedback only',async t=>{
+ const f=await fixture(t);f.data.accessories[1].services[1].characteristics[0].value=4;
+ const driver=feedback=>new HomebridgeDoor(f.connection('garage'),'031-45-154',{feedback});
+ await assert.rejects(driver({opening:'sensor',closing:'sensor'}).read(),/door_position_requires_review/);
+ assert.equal((await driver({opening:'sensor',closing:'sensor',openSensor:'external'}).read()).door,'not-closed');
+ await assert.rejects(driver({opening:'timed',closing:'sensor',openSensor:'external'}).read(),/door_position_requires_review/);
+ assert.deepEqual(f.writes,[]);
 });
 test('Homebridge errors and read-only mode do not write; button discovery is not an event',async t=>{
  const f=await fixture(t);const input=new HomebridgeInput({...f.connection('button'),kind:'button'},'031-45-154');assert.equal((await input.inspect()).value,null);assert.equal(f.writes.length,0);

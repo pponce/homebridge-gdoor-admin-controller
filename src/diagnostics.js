@@ -1,6 +1,8 @@
 import { TailwindDoor, DeconzBolt } from './drivers.js';
 import { RatgdoDoor } from './ratgdo.js';
-import { HomebridgeDoor, HomebridgeBolt, HomebridgeMotorRelay, HomebridgeInput } from './homebridge-devices.js';
+import { HomebridgeDoor, HomebridgeBolt, HomebridgeMotorRelay, HomebridgeInput, HomebridgeContactSensor } from './homebridge-devices.js';
+import { withPositionFeedback } from './position-feedback.js';
+import { selectedSensor, OPENER_OPEN } from '../homebridge-ui/public/position-sensors.js';
 import { DeconzMotorRelay, PulseMotor } from './pulse-motor.js';
 import { DeconzInput } from './deconz-input.js';
 import { Fault, requireValue } from './fault.js';
@@ -9,6 +11,9 @@ export const PROBE_ERRORS = Object.freeze([
   'credentials_unavailable', 'credential_reference_missing', 'backend_not_implemented',
   'tailwind_credential_invalid', 'door_read_failed', 'door_response_invalid',
   'door_open_sensor_invalid', 'door_sensor_conflict',
+  'door_sensor_invalid', 'homebridge_read_failed', 'homebridge_state_unavailable', 'homebridge_service_unavailable',
+  'homebridge_service_identity_mismatch', 'homebridge_bridge_identity_mismatch', 'homebridge_characteristic_unavailable',
+  'homebridge_response_invalid', 'homebridge_credential_invalid',
   'ratgdo_credential_invalid', 'ratgdo_auth_unsupported',
   'bolt_credential_invalid', 'bolt_identity_configuration_required', 'bolt_read_failed',
   'bolt_gateway_identity_mismatch', 'bolt_resource_identity_mismatch', 'bolt_unreachable', 'bolt_response_invalid',
@@ -81,7 +86,12 @@ export class Diagnostics {
           requireValue(configuration.type === 'ratgdo-homekit' && !configuration.credentialRef || typeof secret === 'string', 'credential_reference_missing');
           const driver = kind === 'door' && configuration.type === 'ratgdo-homekit' ? new RatgdoDoor(configuration, secret, { request: this.ratgdoRequest }) : kind === 'door' ? new (configuration.type === 'tailwind' ? TailwindDoor : HomebridgeDoor)(configuration, secret, { request: this.request, feedback: controller.feedback }) :
             new (configuration.type === 'deconz' ? DeconzBolt : HomebridgeBolt)(configuration, secret, { request: this.request, feedback: controller.feedback.bolt });
-          const value = await driver.read();
+          const positioned = kind === 'door' ? withPositionFeedback(controller, driver, sensor => {
+            const pin = credentials[sensor.connection.credentialRef];
+            requireValue(typeof pin === 'string', 'credential_reference_missing');
+            return new HomebridgeContactSensor(sensor, pin, { request: this.request });
+          }) : driver;
+          const value = await positioned.read();
           return kind === 'door' ? { state: value.door, feedback: value.evidence, blocked: value.blocked, error: null } :
             { state: value.locked ? 'locked' : 'unlocked', feedback: value.evidence, error: null };
         } catch (error) {
@@ -92,7 +102,7 @@ export class Diagnostics {
       const [door, bolt] = await Promise.all([run(controller.door, 'door'), run(controller.bolt, 'bolt')]);
       const limitations = [];
       if (controller.door.type === 'tailwind' && controller.feedback.opening !== 'timed' &&
-        controller.door.openSensorDoorIndex === undefined) limitations.push('tailwind_open_requires_estimate');
+        selectedSensor(controller, 'open') === OPENER_OPEN && controller.door.openSensorDoorIndex === undefined) limitations.push('tailwind_open_requires_estimate');
       if (controller.door.type === 'tailwind' && controller.feedback.closing !== 'sensor') limitations.push('tailwind_closed_sensor_available');
       if (controller.bolt.type === 'deconz' && controller.feedback.bolt !== 'relay') limitations.push('deconz_relay_is_not_position');
       if (door.blocked) limitations.push('door_blocked');

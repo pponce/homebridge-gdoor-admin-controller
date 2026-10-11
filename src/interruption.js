@@ -92,7 +92,8 @@ async function followSensorTravel(e, direction, checked) {
         requireValue(now - retractPending < e.timing.boltTimeoutMs, 'bolt_retract_timeout');
       } else retractPending = null;
     } else requireValue(!s.locked, 'bolt_extended_during_open');
-    requireValue(['closed', 'open', 'not-closed'].includes(s.door), 'external_movement');
+    requireValue(['closed', 'open', 'not-closed', direction].includes(s.door),
+      direction === 'opening' ? 'open_reversed' : 'close_reversed');
     const start = direction === 'opening' ? 'closed' : 'open';
     const endpoint = direction === 'opening' ? 'open' : 'closed';
     if (s.door === endpoint) {
@@ -104,12 +105,13 @@ async function followSensorTravel(e, direction, checked) {
       }
     } else {
       requireValue(!(departed && s.door === start), direction === 'opening' ? 'open_reversed' : 'close_reversed');
-      if (s.door === 'not-closed') departed = true;
-      if (s.door === 'not-closed' && retractPending === null && e.takeInterruption()) {
+      const between = s.door === 'not-closed' || s.door === direction;
+      if (between) departed = true;
+      if (between && retractPending === null && e.takeInterruption()) {
         e.admitInterruption(false);
         await e.motor.interrupt({ beforeWrite: async () => {
           const fresh = await e.read();
-          requireValue(fresh.door === 'not-closed' && !fresh.locked, 'interruption_precondition_lost');
+          requireValue(['not-closed', direction].includes(fresh.door) && !fresh.locked, 'interruption_precondition_lost');
         } });
         if (direction === 'opening') {
           e.partialOwner = e.operationOwner;
@@ -119,7 +121,7 @@ async function followSensorTravel(e, direction, checked) {
         direction = 'opening'; departed = true;
         e.update({ phase: 'opening', target: 'open' });
       }
-      e.admitInterruption(s.door === 'not-closed' && retractPending === null);
+      e.admitInterruption(between && retractPending === null);
     }
     requireValue(e.clock.now() < deadline, 'interrupted_travel_timeout');
     await e.clock.sleep(Math.min(e.timing.pollMs, deadline - e.clock.now()));

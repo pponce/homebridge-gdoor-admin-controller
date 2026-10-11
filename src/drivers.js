@@ -6,14 +6,18 @@ const flag = v => typeof v === 'boolean' || v === 0 || v === 1;
 const gatewayId = v => typeof v === 'string' ? v.replaceAll(':', '').toUpperCase() : '';
 
 export class TailwindDoor {
-  constructor(configuration, token, { request = requestJson, readOnly = true } = {}) {
+  constructor(configuration, token, { request = requestJson, readOnly = true, feedback } = {}) {
     requireValue(typeof token === 'string' && /^[0-9]{6}$/.test(token), 'tailwind_credential_invalid');
     this.config = structuredClone(configuration); this.token = token;
     this.request = request; this.readOnly = readOnly;
     const index = configuration.openSensorDoorIndex;
     requireValue(index === undefined || Number.isInteger(index) && index >= 0 && index <= 2 && index !== configuration.doorIndex,
       'door_open_sensor_invalid');
-    this.capabilities = Object.freeze({ directional: true, ...(index !== undefined ? { openSensor: true } : {}) });
+    this.senseOpen = index !== undefined && (!feedback || feedback.opening === 'sensor' &&
+      (feedback.openSensor === undefined || feedback.openSensor === 'opener-open'));
+    this.senseClosed = !feedback || feedback.closing === 'sensor' &&
+      (feedback.closedSensor === undefined || feedback.closedSensor === 'opener-closed');
+    this.capabilities = Object.freeze({ directional: true, ...(this.senseOpen ? { openSensor: true } : {}) });
   }
 
   async call(data, write = false) {
@@ -40,7 +44,7 @@ export class TailwindDoor {
         ['open', 'close'].includes(extra.status) && flag(extra.lockup) && flag(extra.disabled), 'door_open_sensor_invalid');
       // "close" means magnet engaged, here at the physical fully-open endpoint.
       // Control may be disabled on this sensor-only input; its flags never gate the motor.
-      requireValue(!(door === 'closed' && extra.status === 'close'), 'door_sensor_conflict');
+      requireValue(!(this.senseClosed && door === 'closed' && extra.status === 'close'), 'door_sensor_conflict');
       if (extra.status === 'close') { door = 'open'; evidence = 'open-sensor'; }
       else if (door !== 'closed') evidence = 'position-sensors';
     }

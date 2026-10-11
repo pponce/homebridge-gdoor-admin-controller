@@ -81,7 +81,7 @@
                   "type": "integer",
                   "minimum": 0,
                   "maximum": 2,
-                  "description": "Use a different input from doorIndex. Magnet engaged means fully open. Requires opening and closing feedback set to sensor. Door control may be disabled on this extra input."
+                  "description": "Use a different input from doorIndex. Magnet engaged means fully open. Door control may remain disabled. Behavior independently chooses this sensor, another configured sensor, or timed opening."
                 },
                 "macAddress": {
                   "title": "ratgdo MAC address",
@@ -194,7 +194,7 @@
                     "timed"
                   ],
                   "default": "sensor",
-                  "description": "Tailwind has a closed sensor. A command-only Homebridge value needs an explicit timed policy."
+                  "description": "Use the opener closed sensor or a contact sensor added under Devices. Command-only feedback requires an explicit timed policy."
                 },
                 "opening": {
                   "title": "Does open mean physically fully open?",
@@ -204,7 +204,7 @@
                     "timed"
                   ],
                   "default": "timed",
-                  "description": "Tailwind uses timed opening unless an extra fully-open sensor input is configured. With that input, choose sensor. Elapsed travel time is never proof of fully open."
+                  "description": "Choose estimated travel or a selected sensor. Adding a Tailwind open sensor selects it by default in the guided UI; another configured sensor or timed opening can be selected instead."
                 },
                 "bolt": {
                   "title": "What proves the bolt state?",
@@ -249,6 +249,16 @@
                   "type": "boolean",
                   "default": false,
                   "description": "Explicit policy for command-only closing feedback; elapsed time cannot prove the door is closed."
+                },
+                "closedSensor": {
+                  "title": "Closed confirmation sensor ID (optional)",
+                  "type": "string",
+                  "description": "Defaults to opener-closed. Use a configured sensors entry ID to override the opener feedback."
+                },
+                "openSensor": {
+                  "title": "Open confirmation sensor ID (optional)",
+                  "type": "string",
+                  "description": "Defaults to opener-open. Use a configured sensors entry ID for an external fully-open contact. Ignored during timed opening."
                 }
               },
               "required": [
@@ -429,6 +439,82 @@
               "title": "Show Restart Tailwind switch",
               "type": "boolean",
               "default": false
+            },
+            "sensors": {
+              "title": "Position sensors",
+              "type": "array",
+              "maxItems": 16,
+              "description": "Read-only HomeKit contacts exposed through Homebridge. Add multiple devices and select closed/open sources in Behavior. Native Apple Home-only pairing is not supported. Tailwind and ratgdo entries are derived automatically from the opener.",
+              "items": {
+                "type": "object",
+                "required": [
+                  "id",
+                  "name",
+                  "connection",
+                  "activeValue"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "title": "Sensor ID"
+                  },
+                  "name": {
+                    "type": "string",
+                    "title": "Sensor name"
+                  },
+                  "activeValue": {
+                    "type": "integer",
+                    "enum": [
+                      0,
+                      1
+                    ],
+                    "default": 0,
+                    "title": "Endpoint active contact value",
+                    "description": "0 = contact detected, 1 = contact not detected. The chosen value confirms the selected endpoint."
+                  },
+                  "connection": {
+                    "type": "object",
+                    "required": [
+                      "type",
+                      "baseUrl",
+                      "bridgeId",
+                      "serviceId",
+                      "accessoryIdentity",
+                      "credentialRef"
+                    ],
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "homebridge"
+                        ]
+                      },
+                      "baseUrl": {
+                        "type": "string",
+                        "title": "Homebridge accessory origin"
+                      },
+                      "bridgeId": {
+                        "type": "string",
+                        "title": "Bridge identity"
+                      },
+                      "serviceId": {
+                        "type": "string",
+                        "title": "Accessory / service ID",
+                        "description": "Pinned aid.iid, for example 2.15."
+                      },
+                      "accessoryIdentity": {
+                        "type": "string",
+                        "title": "Accessory identity fingerprint",
+                        "pattern": "^[a-f0-9]{64}$"
+                      },
+                      "credentialRef": {
+                        "type": "string",
+                        "title": "Private PIN reference"
+                      }
+                    }
+                  }
+                }
+              }
             }
           }
         }

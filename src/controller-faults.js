@@ -5,6 +5,7 @@ const codes = new Set([
   'journal_invalid', 'journal_write_failed', 'unexpected_adapter_error',
   'door_read_failed', 'door_response_invalid', 'door_blocked', 'obstruction',
   'door_open_sensor_invalid', 'door_sensor_conflict',
+  'door_sensor_invalid',
   'door_write_ambiguous', 'door_write_unconfirmed', 'door_position_requires_review',
   'door_open_timeout', 'door_close_timeout', 'opening_requires_known_start',
   'bolt_read_failed', 'bolt_unreachable', 'bolt_response_invalid', 'bolt_feedback_mismatch',
@@ -66,7 +67,8 @@ export function controllerHealth(status) {
       door_close_timeout: 'Close failed: closed position was not confirmed. Monitoring continues.',
       door_open_timeout: 'Open failed: opening was not confirmed. Monitoring continues.',
       door_open_sensor_invalid: 'The configured Tailwind open sensor input did not return valid position data.',
-      door_sensor_conflict: 'Both Tailwind endpoint sensors report engaged. Check the input mapping and sensor placement.',
+      door_sensor_conflict: 'Both selected endpoint sensors report active. Check the sensor selection, mapping and placement.',
+      door_sensor_invalid: 'A selected contact sensor did not return a valid contact state.',
       obstruction: 'The door reports an obstruction.',
     };
     return { title: 'Fault', detail: (explanations[code] ?? (code ? 'Controller fault: ' + code.replaceAll('_', ' ') + '.' : 'The controller is unavailable.')) +

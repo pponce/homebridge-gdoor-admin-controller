@@ -20,6 +20,7 @@ export function endpoints(configuration){
     {controller,connection:controller.door,kind:'opener'},
     {controller,connection:controller.bolt,kind:'bolt'},
     ...(controller.motorPaths??[]).map(path=>({controller,connection:path.connection,kind:'motor'})),
+    ...(controller.sensors??[]).map(sensor=>({controller,connection:sensor.connection,kind:'sensor'})),
     ...(controller.inputs??[]).map(input=>({controller,connection:input.source,kind:'input'})),
     ...(controller.keypad?[{controller,connection:controller.keypad,kind:'virtual-keypad'}]:[])
   ]).filter(row=>row.connection);

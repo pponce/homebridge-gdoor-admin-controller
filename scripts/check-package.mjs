@@ -35,6 +35,8 @@ for (const file of ['package.json', 'README.md', 'CHANGELOG.md', 'config.schema.
   assert.ok(packed.has(file), 'Required package file missing: ' + file);
 }
 assert.ok(packed.has('src/web-admin-homebridge-sources.json'), 'Reviewed Homebridge source fingerprints missing');
+for (const file of ['src/position-feedback.js', 'homebridge-ui/public/position-sensors.js'])
+  assert.ok(packed.has(file), 'Position sensor support missing: ' + file);
 const directory = await realpath(path.dirname(manifestPath));
 const archivePath = path.join(directory, pack.filename);
 assert.equal(await realpath(archivePath), archivePath);

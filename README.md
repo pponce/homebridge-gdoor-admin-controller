@@ -105,9 +105,9 @@ Under **Controller**, select the **Garage Door**, edit controller defaults or de
 In **Homebridge → Plugins → Garage Door Admin Controller → Settings → Garage doors**, select your garage, then **01 Devices → Garage Door opener**:
 
 1. Keep **Tailwind door** set to the input connected to the actual opener and closed-position sensor.
-2. Check **Use an extra Tailwind sensor to confirm fully open**.
+2. Check **Configure an extra Tailwind open sensor**.
 3. Select the spare **Tailwind open sensor input**. It must differ from the primary input and cannot belong to another configured garage. If General lists a door count, include the spare input in that count.
-4. Under **03 Behavior**, **Open means…** now selects **A sensor confirms fully open**, with the Tailwind sensor input shown below. Review the mapping, check connections and approve the updated setup.
+4. Under **03 Behavior**, **Open means…** selects **A sensor confirms fully open**, and **Open confirmation sensor** defaults to **Tailwind open sensor**. The closed sensor remains the default for **Closed confirmation sensor**. Review the mapping, check connections and approve the updated setup.
 
 The spare input needs only its sensor. Its Tailwind **Door control** may stay disabled. Mount the sensor so the magnet engages at the fully-open endpoint. Tailwind reports that engagement as `close`; this plugin interprets it as fully open because of the input's assigned role. Commands still go only to the primary opener input.
 
@@ -118,9 +118,17 @@ The spare input needs only its sensor. Its Tailwind **Door control** may stay di
 | Disengaged | Disengaged | Between endpoints; direction is not proven by these sensors |
 | Engaged | Engaged | Conflicting readings; control held |
 
-The extra sensor replaces opening travel estimates, including per-control overrides and extra opening time after a relay reversal. **Movement timeout** remains a failure limit, never proof of arrival. Closed confirmation and its stability wait still govern bolting. Missing/invalid sensor data holds control rather than reverting to time estimates. Restart and idle observation read the current endpoints without sending commands.
+When selected in Behavior, the extra sensor replaces opening travel estimates, including per-control overrides and extra opening time after a relay reversal. **Movement timeout** remains a failure limit, never proof of arrival. Closed confirmation and its stability wait still govern bolting. Missing/invalid selected sensor data holds control rather than reverting to time estimates. Restart and idle observation read the current endpoints without sending commands.
 
-Uncheck the extra sensor under Devices to return to timed opening; the saved travel times are retained. Previously, the sensor-opening setting required a backend that already reported fully open. A single Tailwind sensor reports only closed/not-closed, so it could not satisfy that setting.
+You can leave the extra input configured and choose **Estimated full opening travel time** in Behavior, or select another configured contact sensor. The saved travel times are retained. Removing the extra input returns to timed opening only when that Tailwind sensor was the selected open source; an external sensor selection is preserved. A single Tailwind sensor reports only closed/not-closed.
+
+### Other position sensors
+
+Under **01 Devices → Add sensor**, name each contact sensor, choose the Homebridge bridge exposing it, click **Find Homebridge devices**, and select the contact service. **Endpoint active when** sets which reading confirms the endpoint: contact detected (magnet engaged), or contact not detected. The bridge must allow accessory control; sensors paired only to Apple Home cannot be read through this connection.
+
+Under **03 Behavior**, select sensor confirmation for closed or open, then choose the device in **Closed confirmation sensor** or **Open confirmation sensor**. You can add multiple sensors, but the same sensor cannot confirm both endpoints. Tailwind and ratgdo feedback appears automatically in Devices without creating another hardware connection. Those entries show which endpoint uses them; you can override the defaults or use timed opening.
+
+Only selected sensors are required for operation. Unused contacts and an unused Tailwind extra input are not queried for confirmation. Selected contacts are read through their pinned Homebridge identity and live characteristic endpoint, including fault/inactive flags when available; the plugin cannot independently establish the physical age of an upstream plugin's reading. Both endpoints reporting active holds control. Opener obstruction, disabled-control and lockout rules still apply. Changes to sensor hardware, polarity or selection require setup review.
 
 ## Interactive demo
 

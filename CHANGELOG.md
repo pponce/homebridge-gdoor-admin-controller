@@ -5,8 +5,10 @@ User-facing changes for `homebridge-gdoor-admin-controller`. GitHub releases use
 ## Unreleased
 
 - Add an optional Tailwind fully-open sensor on a different door input. Its Door control may remain disabled. The original input still controls the opener and confirms closed.
-- Connect the extra sensor to Behavior → “A sensor confirms fully open.” Normal opening, relay reversals, idle observation and restart recovery use physical endpoint readings; opening estimates and per-control opening times are unused in this mode.
-- Reject duplicate sensor/opener inputs, missing or invalid readings, and simultaneous closed/open sensor engagement. Keep existing single-sensor timed behavior unchanged.
+- Add named Homebridge contact sensors under Devices. Show Tailwind and ratgdo endpoint feedback automatically in the device list.
+- Select closed and open confirmation sources independently in Behavior. A configured Tailwind open sensor becomes the default; choose another configured contact sensor or timed opening instead, while keeping the extra input configured.
+- Normal opening, relay reversals, bolting, idle observation and restart recovery use the selected endpoint readings. Opening estimates and per-control opening times are unused during sensor confirmation.
+- Reject duplicate sensor/opener inputs, missing or invalid selected readings, and simultaneous selected endpoint engagement. Unused sensors are not required for movement. Keep existing single-sensor timed behavior unchanged.
 
 ## 0.4.44 — 2026-10-10
 

@@ -12,7 +12,7 @@ const root=path.resolve('homebridge-ui/public');
 const example=JSON.parse(await readFile('examples/input-routing-config.json','utf8'));
 const base=example.controllers[0];base.inputs=base.inputs.slice(0,2);base.keypad={baseUrl:base.bolt.baseUrl,gatewayId:base.bolt.gatewayId,credentialRef:base.bolt.credentialRef,alarmId:1};
 Object.assign(base.motorPaths[0].connection,{resourceType:'On/Off switch',modelId:'lumi.switch.acn047',manufacturer:'Aqara'});
-const server=http.createServer(async(req,res)=>{try{const file=path.basename(new URL(req.url,'http://test').pathname)||'index.html';if(!['index.html','app.js','editor.js','config-save.js','connections.js','connection-editor.js','debug.js','web-admin.js','style.css'].includes(file))throw Error();res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':'text/html');res.end(await readFile(path.join(root,file)));}catch{res.writeHead(404);res.end();}});
+const server=http.createServer(async(req,res)=>{try{const file=path.basename(new URL(req.url,'http://test').pathname)||'index.html';if(!['index.html','app.js','editor.js','config-save.js','connections.js','position-sensors.js','connection-editor.js','debug.js','web-admin.js','style.css'].includes(file))throw Error();res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':'text/html');res.end(await readFile(path.join(root,file)));}catch{res.writeHead(404);res.end();}});
 server.listen(0,'127.0.0.1');await once(server,'listening');
 
 // Model the native modal's documented APIs and footer. The parent enables its
@@ -47,7 +47,7 @@ async function fixture(browser,{mobile,dark,mode='managed'}){
       if(!savedKeys.includes('local-homebridge-test'))savedKeys.push('local-homebridge-test');
       return {saved:true,reference:'local-homebridge-test'};
     }
-    if(name==='/homebridge')return {services:['button','switch','garage','lock','light'].map((kind,index)=>({kind,name:'Fixture '+kind,bridgeId:'fixture-bridge',serviceId:'2.'+(10+index),accessoryIdentity:'a'.repeat(64)}))};
+    if(name==='/homebridge')return {services:['button','switch','garage','lock','light','contact','contact'].map((kind,index)=>({kind,name:'Fixture '+kind+' '+index,bridgeId:'fixture-bridge',serviceId:'2.'+(10+index),accessoryIdentity:'a'.repeat(64)}))};
     if(name==='/load')return{connected:mode!=='initial',settings:{revision,configuration},credentials:savedKeys,adminConnection:mode==='initial'?null:{baseUrl:'http://127.0.0.1:27773',identityFile:'/synthetic/homebridge/gdoorandbolt-coordinator/identity.json'},
       controllers:mode==='initial'?[]:configuration.controllers.map(profile=>{
         const status={bootId:'synthetic-boot',enabled,configurationValid:enabled,canRecover:mode.startsWith('restart-'),actuationEnabled:enabled&&!mode.startsWith('restart-'),held:enabled?null:'not-commissioned',state:{busy:mode==='moving',fault:mode==='fault'?'synthetic-fault':null}};
@@ -122,7 +122,7 @@ try{
   try{
    {
      const x=await fixture(browser,{mobile,dark,mode:'enabled'}),p=x.page;
-     const checkbox=p.getByLabel('Use an extra Tailwind sensor to confirm fully open',{exact:true});
+     const checkbox=p.getByLabel('Configure an extra Tailwind open sensor',{exact:true});
      assert.equal(await checkbox.isChecked(),false);
      await checkbox.check();
      const sensor=p.getByLabel('Tailwind open sensor input',{exact:true});
@@ -131,19 +131,64 @@ try{
      await sensor.selectOption('2');
      await p.getByRole('button',{name:'03 Behavior'}).click();
      assert.equal(await p.getByLabel('Open means…',{exact:true}).inputValue(),'sensor');
-     assert.equal(await p.getByLabel('Tailwind open sensor input',{exact:true}).inputValue(),'2');
+     assert.equal(await p.getByLabel('Open confirmation sensor',{exact:true}).inputValue(),'opener-open');
+     assert.equal(await p.getByLabel('Closed confirmation sensor',{exact:true}).inputValue(),'opener-closed');
      assert.equal(await p.getByLabel('Full opening travel (seconds)',{exact:true}).isDisabled(),true);
-     await p.getByLabel('Tailwind open sensor input',{exact:true}).selectOption('1');
+     await p.getByLabel('Open means…',{exact:true}).selectOption('timed');
+     assert.equal(await p.getByLabel('Full opening travel (seconds)',{exact:true}).isEnabled(),true);
      await review(p);await p.getByRole('button',{name:'Save configuration',exact:true}).click();await saved(p);
-     assert.equal(x.configuration().controllers[0].door.openSensorDoorIndex,1);
-     assert.equal(x.configuration().controllers[0].feedback.opening,'sensor');
-     await p.getByRole('button',{name:'01 Devices'}).click();await checkbox.uncheck();
+     assert.equal(x.configuration().controllers[0].door.openSensorDoorIndex,2);
+     assert.equal(x.configuration().controllers[0].feedback.opening,'timed');
+     await p.getByRole('button',{name:'01 Devices'}).click();
+     await p.getByRole('button',{name:'Configure device Tailwind open sensor',exact:true}).click();
+     assert.match(await p.locator('.device-block').last().textContent(),/Configured; not used for confirmation/);
+     assert.match(await p.locator('.device-block').last().textContent(),/Door 3/);
+     await p.getByRole('button',{name:'Configure device Garage Door opener',exact:true}).click();await checkbox.uncheck();
      await p.getByRole('button',{name:'03 Behavior'}).click();
      assert.equal(await p.getByLabel('Open means…',{exact:true}).inputValue(),'timed');
      assert.equal(await p.getByLabel('Open means…',{exact:true}).locator('option[value="sensor"]').evaluate(option=>option.disabled),true);
      assert.equal(await p.getByLabel('Full opening travel (seconds)',{exact:true}).isEnabled(),true);
      assert.equal(x.probes(),0);assert.equal(x.commissions(),0);assert.deepEqual(x.errors,[]);
      await p.close();
+   }
+   {
+     const x=await fixture(browser,{mobile,dark,mode:'enabled'}),p=x.page;
+     await p.getByLabel('Configure an extra Tailwind open sensor',{exact:true}).check();
+     const ids=[];
+     for(const [index,name]of ['Open position contact','Closed position contact'].entries()){
+       await p.getByRole('button',{name:'Add sensor',exact:true}).click();
+       await p.getByLabel('Sensor name',{exact:true}).fill(name);
+       await p.getByLabel('Homebridge bridge',{exact:true}).selectOption('local:local-bridge');
+       await p.getByRole('button',{name:'Find Homebridge devices',exact:true}).click();
+       const discovered=p.getByLabel('Discovered Homebridge contact',{exact:true});
+       assert.equal(await discovered.locator('option').count(),3,'only contact services appear');
+       await discovered.selectOption(String(index));
+       await p.getByLabel('Endpoint active when',{exact:true}).selectOption(String(index));
+       ids.push((await p.locator('.device-choice[aria-pressed="true"]').getAttribute('data-device-id')).slice(7));
+     }
+     await p.getByRole('button',{name:'03 Behavior'}).click();
+     await p.getByLabel('Open confirmation sensor',{exact:true}).selectOption(ids[0]);
+     assert.equal(await p.getByLabel('Closed confirmation sensor',{exact:true}).locator('option[value="'+ids[0]+'"]').evaluate(o=>o.disabled),true);
+     await p.getByLabel('Closed confirmation sensor',{exact:true}).selectOption(ids[1]);
+     await review(p);await p.getByRole('button',{name:'Save configuration',exact:true}).click();await saved(p);
+     const configured=x.configuration().controllers[0];
+     assert.equal(configured.sensors.length,2);assert.equal(configured.feedback.openSensor,ids[0]);
+     assert.equal(configured.feedback.closedSensor,ids[1]);assert.equal(configured.sensors[1].activeValue,1);
+     assert.equal(configured.door.openSensorDoorIndex,1);
+     await p.getByRole('button',{name:'01 Devices'}).click();
+     await p.getByRole('button',{name:'Configure device Tailwind closed sensor',exact:true}).click();
+     assert.match(await p.locator('.device-block').last().textContent(),/Configured; not used for confirmation/);
+     await p.getByRole('button',{name:'Configure device Garage Door opener',exact:true}).click();
+     await p.getByLabel('Configure an extra Tailwind open sensor',{exact:true}).uncheck();
+     await p.getByRole('button',{name:'03 Behavior'}).click();
+     assert.equal(await p.getByLabel('Open means…',{exact:true}).inputValue(),'sensor','removing unused Tailwind input preserves selected external sensor');
+     assert.equal(await p.getByLabel('Open confirmation sensor',{exact:true}).inputValue(),ids[0]);
+     await p.getByLabel('Open means…',{exact:true}).selectOption('timed');
+     await review(p);await p.getByRole('button',{name:'Save configuration',exact:true}).click();await saved(p);
+     assert.equal(x.configuration().controllers[0].feedback.opening,'timed');
+     assert.equal(x.configuration().controllers[0].feedback.openSensor,ids[0]);
+     assert.equal(x.configuration().controllers[0].sensors.length,2);
+     assert.equal(x.probes(),0);assert.equal(x.commissions(),0);assert.deepEqual(x.errors,[]);await p.close();
    }
    for(const mode of ['restart-wait','restart-fault']){
      const x=await fixture(browser,{mobile,dark,mode}),p=x.page;
@@ -692,12 +737,12 @@ try{
    }
    {
      const x=await fixture(browser,{mobile,dark}),p=x.page;
-     assert.equal(await p.locator('.device-choice').count(),3);
+     assert.equal(await p.locator('.device-choice').count(),4);
      await p.getByRole('button',{name:'Configure device Bolt / Lock',exact:true}).click();
      assert.equal(await p.getByLabel('Relay ON means bolt extended',{exact:true}).count(),1);
      assert.equal(await p.getByLabel('Tailwind door',{exact:true}).count(),0);
      await p.getByRole('button',{name:'Add opener device',exact:true}).click();
-     assert.equal(await p.locator('.device-choice').count(),4);
+     assert.equal(await p.locator('.device-choice').count(),5);
      await p.getByLabel('Device name',{exact:true}).fill('Second opener');
      assert.equal(await p.getByRole('button',{name:'Configure device Second opener',exact:true}).getAttribute('aria-pressed'),'true');
      await p.getByRole('button',{name:'Configure device Garage Door opener',exact:true}).click();
@@ -705,7 +750,7 @@ try{
      await p.getByRole('button',{name:'Configure device Second opener',exact:true}).click();
      assert.equal(await p.getByLabel('Device name',{exact:true}).inputValue(),'Second opener');
      await p.getByRole('button',{name:'Remove opener device',exact:true}).click();
-     assert.equal(await p.locator('.device-choice').count(),3);
+     assert.equal(await p.locator('.device-choice').count(),4);
      assert.equal(await p.getByRole('button',{name:'Configure device Garage Door opener',exact:true}).getAttribute('aria-pressed'),'true');
      assert.deepEqual(x.errors,[]);assert.equal(await p.locator('body').evaluate(b=>b.scrollWidth<=innerWidth+1),true);await p.close();
    }

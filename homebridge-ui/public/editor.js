@@ -1,4 +1,5 @@
 import { sameConnection, selectConnection, connectionTypes, withConnections } from './connections.js';
+import { builtinSensors, sensorChoices, selectedSensor, sensorField, feedbackMode, OPENER_OPEN } from './position-sensors.js';
 const el = (tag, text, cls) => { const n = document.createElement(tag); if (text !== undefined) n.textContent = text; if (cls) n.className = cls; return n; };
 const freshId = prefix => prefix + '-' + Array.from(crypto.getRandomValues(new Uint8Array(4)), byte=>byte.toString(16).padStart(2,'0')).join('');
 export function newGarage() {
@@ -102,11 +103,11 @@ export class ProfileEditor {
   }
   bridgeDevice(parent,connection,kind,{showConnection=true}={}){
     if(showConnection)this.sharedConnection(parent,connection);
-    parent.append(el('p','The pairing PIN for a local bridge is handled automatically. For another Homebridge instance, use its configured connection. The selected bridge must allow accessory control in insecure mode. Native HomeKit accessories are not supported.','help'));
+    parent.append(el('p','The pairing PIN for a local bridge is handled automatically. For another Homebridge instance, use its configured connection. The selected bridge must allow accessory control in insecure mode. Accessories paired only to Apple Home cannot be read here.','help'));
     const output=el('div',undefined,'discovery-results');parent.append(this.button('Find Homebridge devices',async()=>{
       if(!this.discoverHomebridge)return this.error('Discover Homebridge devices in the Homebridge plugin settings.');
       try {output.textContent='Finding devices…';const data=await this.discoverHomebridge({baseUrl:connection.baseUrl,credentialRef:connection.credentialRef});
-        const allowed=kind==='garage'?['garage']:kind==='bolt'?['lock','switch','light']:kind==='motor'?['switch','light']:['button','switch'];
+        const allowed=kind==='garage'?['garage']:kind==='bolt'?['lock','switch','light']:kind==='motor'?['switch','light']:kind==='contact'?['contact']:['button','switch'];
         const rows=data.services.filter(x=>allowed.includes(x.kind));const pick=el('select');pick.setAttribute('aria-label','Discovered Homebridge '+kind);pick.append(Object.assign(el('option','Choose a device'),{value:''}));
         rows.forEach((row,i)=>pick.append(Object.assign(el('option',row.name+' · '+row.kind),{value:String(i)})));
         pick.addEventListener('change',()=>{if(pick.value==='')return;const row=rows[Number(pick.value)];Object.assign(connection,{bridgeId:row.bridgeId,serviceId:row.serviceId,accessoryIdentity:row.accessoryIdentity});
@@ -176,11 +177,14 @@ export class ProfileEditor {
       this.input(grid,'Show Tailwind Lockout contact sensor',p,'exposeTailwindLockout',{type:'checkbox'});
       this.input(grid,'Show Restart Tailwind switch',p,'exposeTailwindRestart',{type:'checkbox'});
     }
-    const choices=[{id:'primary',name:'Garage Door opener'},{id:'bolt',name:'Bolt / Lock'},...p.motorPaths.map(path=>({id:path.id,name:path.name}))];
+    const choices=[{id:'primary',name:'Garage Door opener'},{id:'bolt',name:'Bolt / Lock'},...p.motorPaths.map(path=>({id:path.id,name:path.name})),
+      ...builtinSensors(p).map(sensor=>({id:'builtin:'+sensor.id,name:sensor.name,builtin:true})),
+      ...(p.sensors??[]).map(sensor=>({id:'sensor:'+sensor.id,name:sensor.name}))];
     if(!choices.some(item=>item.id===this.selectedDevices.get(p.id)))this.selectedDevices.set(p.id,'primary');
     const selected=this.selectedDevices.get(p.id),selector=el('div',undefined,'input-selector device-selector');selector.setAttribute('aria-label','Devices for '+p.name);
     for(const item of choices){const pick=this.button('',()=>{this.selectedDevices.set(p.id,item.id);this.render();},'secondary input-choice device-choice');pick.dataset.deviceId=item.id;pick.setAttribute('aria-label','Configure device '+item.name);pick.setAttribute('aria-pressed',String(selected===item.id));pick.append(el('strong',item.name));selector.append(pick);}
-    selector.append(this.button('Add opener device',()=>this.addOpenerDevice(p)));root.append(selector);
+    selector.append(this.button('Add opener device',()=>this.addOpenerDevice(p)));
+    selector.append(this.button('Add sensor',()=>this.addSensor(p)));root.append(selector);
     if(selected==='primary'){
     const opener=this.panel(root,'Garage Door opener','The default opener connection and source of door position feedback. HomeKit and the virtual keypad use this device; other controls can choose it or an opener relay.');
     this.connection(opener,p,'door','garage');
@@ -195,13 +199,16 @@ export class ProfileEditor {
       const door=this.input(dg,'Tailwind door',p.door,'doorIndex',{type:'number',options:Array.from({length:shared?.doorCount??3},(_,index)=>[index,'Door '+(index+1)]),help:shared?.doorCount?'Choose which door on this Tailwind controller to use.':'Set the number of doors in General to narrow this list. Door 1 uses API index 0.'});door.required=true;
       door.addEventListener('change',()=>{this.change();this.render();});
       const enabled=p.door.openSensorDoorIndex!==undefined;
-      const extra=this.input(dg,'Use an extra Tailwind sensor to confirm fully open',{enabled},'enabled',{type:'checkbox',help:'Uses a spare door input on this Tailwind. Its Door control may remain disabled. Movement commands still use the primary door above.'});
+      const extra=this.input(dg,'Configure an extra Tailwind open sensor',{enabled},'enabled',{type:'checkbox',help:'Adds a sensor from a spare Tailwind input. Its Door control may remain disabled. Choose the confirmation source under Behavior; movement still uses the primary door above.'});
       extra.disabled=!enabled&&shared?.doorCount===1;
       extra.addEventListener('change',()=>{
         if(extra.checked){
           p.door.openSensorDoorIndex=Array.from({length:shared?.doorCount??3},(_,i)=>i).find(i=>i!==p.door.doorIndex);
-          p.feedback.opening='sensor';p.feedback.closing='sensor';
-        }else{delete p.door.openSensorDoorIndex;p.feedback.opening='timed';}
+          if(selectedSensor(p,'open')===OPENER_OPEN)p.feedback.opening='sensor';
+        }else{
+          delete p.door.openSensorDoorIndex;
+          if(selectedSensor(p,'open')===OPENER_OPEN){delete p.feedback.openSensor;p.feedback.opening='timed';}
+        }
         this.change();this.render();
       });
       if(enabled)this.tailwindOpenSensor(dg,p,shared);
@@ -213,7 +220,9 @@ export class ProfileEditor {
     if(selected==='bolt'){
     const bolt=this.panel(root,'Bolt / Lock','This is the output that retracts and extends the bolt.');this.connection(bolt,p,'bolt','bolt');this.device(bolt,p.bolt,'bolt');if(p.bolt.serviceType!=='lock')this.input(this.grid(bolt),'Relay ON means bolt extended',p.bolt,'lockedValue',{type:'checkbox',help:'Choose the mapping that matches your wiring. A relay report does not prove physical bolt position.'});
     }
-    if(!['primary','bolt'].includes(selected))this.openerRelays(root,p);
+    if(selected.startsWith('builtin:'))this.builtinSensor(root,p,selected.slice(8));
+    else if(selected.startsWith('sensor:'))this.positionSensor(root,p,selected.slice(7));
+    else if(!['primary','bolt'].includes(selected))this.openerRelays(root,p);
     root.append(this.button('Remove this garage door',()=>{
       const index=this.configuration.controllers.findIndex(profile=>profile.id===p.id);if(index<0)return;
       this.configuration.controllers.splice(index,1);this.selected=Math.max(0,index-1);
@@ -244,6 +253,53 @@ export class ProfileEditor {
   }
   addOpenerDevice(p){
     p.motorPaths.push({id:freshId('motor'),name:'Opener relay',type:'pulse-relay',allowDuringOpenerLockout:false,connection:{type:'deconz',baseUrl:p.bolt.type==='deconz'?p.bolt.baseUrl:'',credentialRef:p.bolt.type==='deconz'?p.bolt.credentialRef:'garage-deconz',activeValue:true},openPulseSeconds:1,closePulseSeconds:1,interruption:'disabled'});delete p.motorPaths.at(-1).connection.lockedValue;p.motorPaths.at(-1).connection.resourceId='';p.motorPaths.at(-1).connection.uniqueId='';this.selectedDevices.set(p.id,p.motorPaths.at(-1).id);this.change();this.render();
+  }
+  sensorUsage(p,id){
+    const uses=['closed','open'].filter(endpoint=>p.feedback[feedbackMode(endpoint)]==='sensor'&&selectedSensor(p,endpoint)===id);
+    return uses.length?'Used for '+uses.map(endpoint=>'fully '+endpoint+' confirmation').join(' and '):'Configured; not used for confirmation';
+  }
+  builtinSensor(root,p,id){
+    const sensor=builtinSensors(p).find(row=>row.id===id);if(!sensor)return;
+    const card=this.panel(root,sensor.name,'Provided by the garage opener connection. This is a read-only view of its position feedback.');
+    card.append(el('p',this.sensorUsage(p,id),'route-note'));
+    if(sensor.input!==undefined)card.append(el('p','Tailwind input: Door '+(sensor.input+1)+'. Magnet engaged confirms fully '+sensor.endpoint+'.','help'));
+    else card.append(el('p','Uses the opener’s reported '+sensor.endpoint+' endpoint.','help'));
+    card.append(el('p','Choose whether to use this sensor under Behavior. Configure its input in Garage Door opener.','help'));
+  }
+  addSensor(p){
+    (p.sensors??=[]).push({id:freshId('sensor'),name:'Door position sensor',activeValue:0,
+      connection:{type:'homebridge',baseUrl:'',credentialRef:'garage-homebridge',bridgeId:'',serviceId:'',accessoryIdentity:''}});
+    this.selectedDevices.set(p.id,'sensor:'+p.sensors.at(-1).id);this.change();this.render();
+  }
+  positionSensor(root,p,id){
+    const sensor=p.sensors.find(row=>row.id===id);if(!sensor)return;
+    const card=this.panel(root,'Position sensor','A HomeKit contact sensor exposed through a Homebridge connection. Add it here, then select its role under Behavior.');
+    const g=this.grid(card);this.input(g,'Sensor name',sensor,'name').addEventListener('input',()=>{
+      const pick=this.root.querySelector('.device-choice[aria-pressed="true"]');
+      if(pick){pick.querySelector('strong').textContent=sensor.name;pick.setAttribute('aria-label','Configure device '+sensor.name);}
+    });
+    card.append(el('p',this.sensorUsage(p,id),'route-note'));
+    this.bridgeDevice(card,sensor.connection,'contact');
+    this.input(this.grid(card),'Endpoint active when',sensor,'activeValue',{type:'number',options:[[0,'Contact detected (magnet engaged)'],[1,'Contact not detected (magnet away)']],
+      help:'This active reading confirms whichever endpoint you select under Behavior.'});
+    card.append(this.button('Remove sensor',()=>{
+      for(const endpoint of ['closed','open'])if(selectedSensor(p,endpoint)===id){
+        delete p.feedback[sensorField(endpoint)];
+        if(!sensorChoices({...p,sensors:p.sensors.filter(row=>row.id!==id)},endpoint).length)p.feedback[feedbackMode(endpoint)]='timed';
+        else if(!sensorChoices(p,endpoint).some(row=>row.id===(endpoint==='closed'?'opener-closed':'opener-open')))p.feedback[feedbackMode(endpoint)]='timed';
+      }
+      p.sensors=p.sensors.filter(row=>row.id!==id);if(!p.sensors.length)delete p.sensors;
+      this.selectedDevices.set(p.id,'primary');this.change();this.render();
+    },'danger'));
+  }
+  confirmationSensor(grid,p,endpoint){
+    const choices=sensorChoices(p,endpoint),key=sensorField(endpoint);
+    const other=endpoint==='closed'?'open':'closed';
+    const unavailable=p.feedback[feedbackMode(other)]==='sensor'?selectedSensor(p,other):null;
+    const field=this.input(grid,endpoint==='closed'?'Closed confirmation sensor':'Open confirmation sensor',p.feedback,key,{
+      options:[['','Choose a configured sensor',true],...choices.map(row=>[row.id,row.name,row.id===unavailable])],
+      help:'Select the opener feedback or a contact sensor added under Devices.',rerender:true});
+    field.value=selectedSensor(p,endpoint);field.required=true;
   }
 
   inputs(root,p){
@@ -324,11 +380,21 @@ export class ProfileEditor {
     if(p.door.openSensorDoorIndex===p.door.doorIndex)grid.append(el('p','Choose a different Tailwind input for the fully-open sensor.','help'));
   }
   behavior(root,p){
-    const extra=p.door.type==='tailwind'&&p.door.openSensorDoorIndex!==undefined;
     const feedback=this.panel(root,'What does your hardware actually report?','The coordinator uses this to decide when it may move or bolt the door.');const g=this.grid(feedback);
-    this.input(g,'Closed means…',p.feedback,'closing',{options:[['sensor','A door sensor confirms closed'],['timed','A command / estimate only',extra]],help:'Tailwind provides a closed sensor. Use that feedback for your installation.',rerender:true});
-    this.input(g,'Open means…',p.feedback,'opening',{options:[['timed','Not closed; estimate full travel',extra],['sensor','A sensor confirms fully open',p.door.type==='tailwind'&&!extra]],help:p.door.type==='tailwind'?(extra?'Using the Tailwind open sensor. Disable the extra sensor under Devices to return to estimated opening.':'Enable an extra Tailwind sensor under Devices to confirm fully open.'):'Choose sensor only when the connection reports a physical fully-open endpoint.',rerender:true});
-    if(extra)this.tailwindOpenSensor(g,p);
+    for(const endpoint of ['closed','open']){
+      const mode=feedbackMode(endpoint),choices=sensorChoices(p,endpoint);
+      const field=this.input(g,endpoint==='closed'?'Closed means…':'Open means…',p.feedback,mode,{
+        options:endpoint==='closed'?[['sensor','A door sensor confirms closed',!choices.length],['timed','A command / estimate only']]:
+          [['timed','Not closed; estimate full travel'],['sensor','A sensor confirms fully open',!choices.length]],
+        help:endpoint==='closed'?'Sensor confirmation and the stability wait determine when the bolt may extend.':
+          'A configured open sensor is optional. Use estimated travel, opener feedback or another sensor from Devices.'});
+      field.addEventListener('change',()=>{
+        if(p.feedback[mode]==='sensor'&&!choices.some(row=>row.id===selectedSensor(p,endpoint))&&choices.length)
+          p.feedback[sensorField(endpoint)]=choices[0].id;
+        this.change();this.render();
+      });
+      if(p.feedback[mode]==='sensor')this.confirmationSensor(g,p,endpoint);
+    }
     this.input(g,'Bolt feedback',p.feedback,'bolt',{options:[['relay','Relay ON / OFF state'],['position','Physical position sensor']],help:'The direct deCONZ relay uses relay state.'});
     if(p.feedback.closing==='timed')this.input(g,'Allow bolting after estimated closure',p.feedback,'allowEstimatedBolting',{type:'checkbox',help:'Elapsed time cannot prove the door closed. This policy requires explicit acceptance.'});else p.feedback.allowEstimatedBolting=false;
     const travel=this.panel(root,'Movement timing');const tg=this.grid(travel);

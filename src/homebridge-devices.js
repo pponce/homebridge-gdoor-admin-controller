@@ -6,7 +6,7 @@ import { requestJson } from './transport.js';
 import { Fault, requireValue } from './fault.js';
 
 const short = v => typeof v === 'string' ? v.toUpperCase().replace(/^0+/, '').replace(/-0000-1000-8000-0026BB765291$/, '') : '';
-const types = { garage:'41', lock:'45', switch:'49', light:'43', button:'89' };
+const types = { garage:'41', lock:'45', switch:'49', light:'43', button:'89', contact:'80' };
 const clockDefault = { now: () => performance.now(), wall: () => Date.now() };
 const characteristic = (s,type) => s.characteristics?.find(c => short(c.type) === type);
 function accessoryIdentity(a) {
@@ -56,14 +56,16 @@ export class HomebridgeService {
       (Array.isArray(kind)?kind.includes(rows[0].kind):rows[0].kind===kind),'homebridge_service_identity_mismatch');
     return rows[0];
   }
-  async readCharacteristics(kind, wanted) {
-    const row=await this.inspect(kind);const selected=wanted.map(type=>characteristic(row.service,type));
+  async readCharacteristics(kind, wanted, { optional = [] } = {}) {
+    const row=await this.inspect(kind), required=wanted.map(type=>characteristic(row.service,type));
+    const extra=optional.map(type=>characteristic(row.service,type));
+    const selected=[...required,...extra.filter(Boolean)];
     requireValue(selected.every(c=>c && c.perms?.includes('pr')),'homebridge_characteristic_unavailable');
     let data;
     try { data=await this.request({url:this.config.baseUrl+'/characteristics?id='+selected.map(c=>row.aid+'.'+c.iid).join(','),headers:{Authorization:this.pin}}); }
     catch {throw new Fault('homebridge_read_failed');}
     requireValue(Array.isArray(data?.characteristics) && data.characteristics.length===selected.length,'homebridge_response_invalid');
-    return selected.map(c=>{const found=data.characteristics.filter(v=>v.aid===row.aid && v.iid===c.iid);requireValue(found.length===1 && (found[0].status===undefined||found[0].status===0) && Object.hasOwn(found[0],'value'),'homebridge_state_unavailable');return found[0].value;});
+    return [...required,...extra].map(c=>{if(!c)return undefined;const found=data.characteristics.filter(v=>v.aid===row.aid && v.iid===c.iid);requireValue(found.length===1 && (found[0].status===undefined||found[0].status===0) && Object.hasOwn(found[0],'value'),'homebridge_state_unavailable');return found[0].value;});
   }
   async writeCharacteristic(kind,type,value,{beforeWrite}={}) {
     requireValue(!this.readOnly,'actuation_disabled');const row=await this.inspect(kind);const c=characteristic(row.service,type);
@@ -79,10 +81,22 @@ export class HomebridgeDoor extends HomebridgeService {
   constructor(config,pin,options={}){super(config,pin,options);this.feedback=options.feedback;}
   async read(){const [current,obstruction]=await this.readCharacteristics('garage',['E','24']);
     requireValue(Number.isInteger(current)&&current>=0&&current<=4&&typeof obstruction==='boolean','homebridge_response_invalid');
-    requireValue(current!==4,'door_position_requires_review');
-    return {door:current===0?(this.feedback.opening==='sensor'?'open':'not-closed'):current===1?'closed':current===2?'opening':'closing',
+    requireValue(current!==4 || this.feedback.closing==='sensor' && this.feedback.closedSensor && this.feedback.closedSensor!=='opener-closed' ||
+      this.feedback.opening==='sensor' && this.feedback.openSensor && this.feedback.openSensor!=='opener-open','door_position_requires_review');
+    return {door:current===0?(this.feedback.opening==='sensor'?'open':'not-closed'):current===1?'closed':current===2?'opening':current===3?'closing':'not-closed',
       evidence:this.feedback.closing==='sensor'?'closed-sensor':'command',obstruction,blocked:false};}
   async write(command,options){requireValue(['open','close'].includes(command),'door_command_invalid');await this.read();return this.writeCharacteristic('garage','32',command==='open'?0:1,options);}
+}
+export class HomebridgeContactSensor extends HomebridgeService {
+  constructor(sensor, pin, options = {}) {
+    super(sensor.connection, pin, { ...options, readOnly: true }); this.activeValue = sensor.activeValue;
+  }
+  async read() {
+    const [value, fault, active] = await this.readCharacteristics('contact', ['6A'], { optional: ['77', '75'] });
+    requireValue((fault === undefined || fault === 0) && (active === undefined || active === true), 'homebridge_state_unavailable');
+    requireValue(value === 0 || value === 1, 'door_sensor_invalid');
+    return { active: value === this.activeValue };
+  }
 }
 export class HomebridgeBolt extends HomebridgeService {
   constructor(config,pin,options={}){super(config,pin,options);this.feedback=options.feedback??'relay';}

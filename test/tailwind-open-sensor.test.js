@@ -86,7 +86,7 @@ test('configuration validates distinct sensor inputs, range, feedback and exclus
     assert.throws(() => validateConfiguration(config), /invalid_open_sensor_door_index/);
   }
   p.door.openSensorDoorIndex = 1; p.feedback.opening = 'timed';
-  assert.throws(() => validateConfiguration(config), /tailwind_two_sensors_require_sensor_feedback/);
+  assert.equal(validateConfiguration(config).controllers[0].feedback.opening, 'timed');
   p.feedback.opening = 'sensor';
   const second = structuredClone(p); second.id = 'second'; second.door.doorIndex = 1; delete second.door.openSensorDoorIndex;
   second.bolt.resourceId = '2'; second.bolt.uniqueId = 'another-bolt';

@@ -1,4 +1,41 @@
-## 2026-10-11 — Optional Tailwind fully-open sensor (development)
+## 2026-10-11 — Selectable position sensor devices (development)
+
+Extended draft PR #6 with per-garage sensors devices and independent closed/open
+confirmation choices. Devices automatically derives Tailwind closed feedback and
+the configured extra open input, plus ratgdo endpoint feedback. Named external
+Homebridge ContactSensor services can be added, with endpoint-active polarity.
+This uses the existing bridge connection and supported HAP reads; accessories
+paired only to Apple Home are not accessible. ContactSensorState (6A), StatusFault
+(77) and StatusActive (75) formats were checked against upstream HAP-NodeJS
+CharacteristicDefinitions.ts. No native pairing or additional hardware owner is
+created for the derived entries.
+
+Behavior selects opener feedback or a configured contact independently for each
+endpoint. Adding a Tailwind extra input defaults open confirmation to that input;
+the user may select another contact or timed opening while retaining it. An
+external selection survives removal of an unused Tailwind extra input. Only
+selected contacts are instantiated/read and require credentials; unused extra
+Tailwind readings are ignored. Native opener obstruction/disabled/lockout rules
+remain. Selected invalid/unavailable readings hold control; conflicting endpoints
+fault. Runtime and commissioning probes share the same compositor. Stable closed
+confirmation governs bolting, and open sensor arrival governs all motor routes,
+relay reversal, restart and observation without timer fallback. Contact reads
+cannot independently establish upstream physical reading age.
+
+Old profile shapes/hashes are preserved. Sensor hardware, polarity, mode and
+selection changes require setup review; sensor names alone retain valid approval.
+Config schema, README, changelog and additive v1 configuration/error descriptions
+are updated. Local full suite: 443 checks passed. Focused production runtime and
+selection checks: 26 passed. Demo freshness, release-note generation, JavaScript
+syntax and whitespace checks passed. Cross-repository legacy client checks:
+14 protocol/integration tests passed, two contract-copy tests failed as already
+documented below; the retired standalone app is not updated for these additive
+sensor settings. Desktop Chromium/mobile WebKit tests cover derived entries,
+default selections, timed override, contact discovery/polarity, source selection,
+duplicate endpoint exclusion and saved choices. Remote CI validation is pending.
+No npm release, installed Homebridge change or physical garage command was made.
+
+## 2026-10-11 — Initial optional Tailwind fully-open sensor (development)
 
 Final source validation: all five Coordinator checks jobs passed on
 2af5234a65c7dc52f8f80cfab12d854d41dab4f8 in

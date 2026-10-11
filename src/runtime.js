@@ -11,7 +11,8 @@ import { DeconzMotorRelay, PulseMotor } from './pulse-motor.js';
 import { MovementEngine } from './engine.js';
 import { InputRouter } from './input-routing.js';
 import { DeconzInput, DeconzInputListener } from './deconz-input.js';
-import { HomebridgeDoor, HomebridgeBolt, HomebridgeMotorRelay, HomebridgeInput, HomebridgeInputListener } from './homebridge-devices.js';
+import { HomebridgeDoor, HomebridgeBolt, HomebridgeMotorRelay, HomebridgeInput, HomebridgeInputListener, HomebridgeContactSensor } from './homebridge-devices.js';
+import { withPositionFeedback } from './position-feedback.js';
 import { requestJson } from './transport.js';
 import { Fault, requireValue } from './fault.js';
 import { controllerTimingValues, profileWithTimings } from './controller-timings.js';
@@ -60,9 +61,11 @@ export class CoordinatorRuntime {
     if (this.driverFactory) return this.driverFactory(profile, readOnly);
     const keys = await this.credentials();
     const key = ref => { requireValue(typeof keys[ref] === 'string', 'credential_reference_missing'); return keys[ref]; };
-    const door = profile.door.type === 'ratgdo-homekit'
+    const opener = profile.door.type === 'ratgdo-homekit'
       ? new RatgdoDoor(profile.door, profile.door.credentialRef ? key(profile.door.credentialRef) : undefined, { readOnly })
       : new (profile.door.type === 'tailwind' ? TailwindDoor : HomebridgeDoor)(profile.door, key(profile.door.credentialRef), { readOnly, feedback: profile.feedback });
+    const door = withPositionFeedback(profile, opener, sensor =>
+      new HomebridgeContactSensor(sensor, key(sensor.connection.credentialRef)));
     const bolt = new (profile.bolt.type === 'deconz' ? DeconzBolt : HomebridgeBolt)(profile.bolt, key(profile.bolt.credentialRef), { readOnly, feedback: profile.feedback.bolt });
     const motorPaths = {};
     for (const p of profile.motorPaths) {
@@ -211,7 +214,7 @@ export class CoordinatorRuntime {
       for (const key of ['exposeTailwindLockout', 'exposeTailwindRestart']) {
         if (Object.hasOwn(profile, key)) candidate[key] = profile[key]; else delete candidate[key];
       }
-      for (const group of ['inputs', 'motorPaths']) for (const item of candidate[group]) item.name = profile[group].find(p => p.id === item.id)?.name;
+      for (const group of ['inputs', 'motorPaths', 'sensors']) for (const item of candidate[group] ?? []) item.name = profile[group]?.find(p => p.id === item.id)?.name;
       // New optional fields can be appended here but inserted earlier by
       // configuration normalization. Compare values, not object key order;
       // keep the persisted approval hash format unchanged.
