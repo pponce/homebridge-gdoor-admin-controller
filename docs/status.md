@@ -1,3 +1,28 @@
+## 2026-10-11 — 0.4.45 GitHub release and owner installer ready
+
+PR #6 is merged. Approved source b9300290965a3725c4e497dfa7c9ef9f437182bb
+passed all five main Coordinator checks jobs in
+https://github.com/pponce/homebridge-gdoor-admin-controller/actions/runs/38188398702:
+Node 22/24 unit/protocol/package checks, Homebridge 2.0/2.4 integration, custom UI
+IPC, desktop/mobile setup, production web-admin flows and the static demo.
+The four install confirmation regression cases are included in the Node suites.
+
+GitHub v0.4.45 was published from that exact source in
+https://github.com/pponce/homebridge-gdoor-admin-controller/actions/runs/38188557345,
+with the reviewed npm tarball, static demo and source receipt:
+https://github.com/pponce/homebridge-gdoor-admin-controller/releases/tag/v0.4.45.
+Release target and receipt SHA-256 agree with the pinned source. Tarball SHA-256:
+49f4d8da775ed97b336d708f5d82e1b2491be170a64fa2e387ecd7730bd5e006.
+
+The supplied single-block owner command fetches SSH main and checks out that
+exact revision before running update-owner-0.4.45.sh. Its shell syntax passed.
+The existing npm publisher verifies the saved artifact and registry download
+before stop -> confirmed add -> start. Current configuration and pairing are
+retained; second-sensor selection is configured after placement under Devices
+and Behavior, then approved through the existing setup review. npm publication,
+Mint installation and physical acceptance are not yet confirmed. This following
+documentation-only receipt does not change the pinned release package.
+
 ## 2026-10-11 — 0.4.45 release approval and install confirmation
 
 The owner explicitly approved merging PR #6 and releasing 0.4.45 after automatic
