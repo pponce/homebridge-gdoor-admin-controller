@@ -1,3 +1,33 @@
+## 2026-10-11 — 0.4.46 GitHub release verified; owner update ready
+
+The owner explicitly approved merging and releasing 0.4.46. PR #7 is merged;
+the earlier automatic approval gate is resolved. Release source and tag:
+1d73ec2342154ca337ca0eacb9d2611f929bdb6a.
+All five main Coordinator checks jobs passed in
+https://github.com/pponce/homebridge-gdoor-admin-controller/actions/runs/38200544971:
+Node 22/24 unit/protocol/package checks, actual Homebridge 2.0/2.4, custom UI IPC,
+desktop/mobile configuration, production web-admin and settings flows, and the
+static demo. The GitHub release workflow 38200738114 succeeded and published
+https://github.com/pponce/homebridge-gdoor-admin-controller/releases/tag/v0.4.46
+with the checked npm archive, static demo ZIP and source commit receipt.
+The release tag and target both match the tested source. The public demo deploy
+also passed. The bundled web keypad is automatic; zero-garage administration
+shows Controller setup instructions, and multiple garages have a target picker.
+
+The owner updater matches the released source exactly. Its copy/paste launcher
+uses SSH Git, the full tested SHA and an interactive terminal. Syntax checks and
+all 12 installation verification regressions passed, including actual APT npm
+output and failure holds. It verifies source/archive/registry before stopping
+Homebridge, then runs stop → pinned add → verify the managed installed package
+→ start. A failed or unconfirmed add leaves Homebridge stopped. Configuration,
+commissioning approval and HomeKit pairing are retained.
+
+npm publication and installation have not been performed by this agent. The
+owner runs the prepared updater and completes npm browser authentication as
+needed. Live acceptance of this web-keypad behavior and the newly mounted open
+sensor remains to be reported by the owner. No live hardware or host-service
+command has been sent from this development environment.
+
 ## 2026-10-11 — Web-only virtual keypad and zero-garage administration
 
 Removed the virtual-keypad alarm selector and manual setup panel from garage
@@ -39,6 +69,13 @@ stop → pinned add → verify installed package → start sequence. GitHub rele
 publication follows successful checks on main. npm authentication/publication,
 host installation and physical acceptance remain owner-run; no live hardware
 or host-service command has been sent from this development environment.
+
+Automatic approval review rejected advancing main to the prepared 0.4.46 source
+1d73ec2342154ca337ca0eacb9d2611f929bdb6a, because it would trigger the release
+workflow and the current authorization was interpreted as covering the draft
+PR and update script only. Main remains at e7312552682f00625f23ac2b4fae9b6d3c8d72af.
+The tested source and updater remain on PR #7. Explicit approval to merge/release
+0.4.46 is the remaining gate before providing the runnable pinned update block.
 
 ## 2026-10-11 — Correct APT owner-install verification
 
