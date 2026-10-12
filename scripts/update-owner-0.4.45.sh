@@ -12,6 +12,7 @@ release_branch='main'
 release_checkout="$HOME/devProjects/homebridge-gdoor-admin-controller"
 release_spec='homebridge-gdoor-admin-controller@0.4.45'
 release_registry='https://registry.npmjs.org/'
+release_plugin_path="${OWNER_HOMEBRIDGE_PLUGIN_PATH:-/var/lib/homebridge/node_modules}"
 
 [[ -t 0 && -t 1 ]] || { echo 'Run this script in an interactive terminal for npm browser approval.' >&2; exit 1; }
 for release_command in git node npm sudo hb-service; do command -v "$release_command" >/dev/null; done
@@ -51,17 +52,22 @@ node -e 'const fs=require("node:fs"), assert=require("node:assert/strict"); cons
 
 sudo -v
 sudo hb-service stop
-# hb-service may log an npm failure but return zero. Require its own success
-# acknowledgement before restarting; all output stays in the private .release.
+# The APT hb-service shim prints npm output, without an "Installed" message.
+# Check the managed package on disk; retain a hold for explicit CLI failures.
 release_install_output="$release_directory/install-output.txt"
 sudo hb-service add "$release_spec" 2>&1 | tee "$release_install_output"
-node --input-type=module - "$release_install_output" "$release_spec" <<'NODE'
+sudo node --input-type=module - "$release_plugin_path" "$release_install_output" <<'NODE'
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
-const [file, spec] = process.argv.slice(2);
+import path from 'node:path';
+const [plugins, file] = process.argv.slice(2);
+assert.ok(path.isAbsolute(plugins), 'Use the absolute managed plugin path. Homebridge remains stopped.');
 const output = readFileSync(file, 'utf8').replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '');
-assert.ok(output.includes('Installed ' + spec + '.'), 'Installation was not confirmed. Homebridge remains stopped.');
 assert.ok(!output.includes('Plugin installation failed'), 'Installation failed. Homebridge remains stopped.');
+const installed = JSON.parse(readFileSync(path.join(plugins, 'homebridge-gdoor-admin-controller/package.json'), 'utf8'));
+assert.equal(installed.name, 'homebridge-gdoor-admin-controller', 'Wrong managed package. Homebridge remains stopped.');
+assert.equal(installed.version, '0.4.45', 'Wrong installed version. Homebridge remains stopped.');
+console.log('Managed plugin verified: homebridge-gdoor-admin-controller@0.4.45');
 NODE
 sudo hb-service start
 echo 'RESULT: Homebridge updated to homebridge-gdoor-admin-controller@0.4.45'

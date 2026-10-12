@@ -1,3 +1,29 @@
+## 2026-10-11 — Correct APT owner-install verification
+
+The owner confirmed npm publication of 0.4.45, registry archive verification and
+download/source integrity agreement. Their APT hb-service add printed changed
+1 package, then the new console-message assertion left Homebridge stopped.
+The owner subsequently started Homebridge manually. Running plugin state and
+physical sensor acceptance are not yet independently checked.
+
+The check incorrectly assumed the config-ui-x TypeScript helper's Installed
+message. The actual APT hb-service shim executes npm with --prefix
+/var/lib/homebridge and prints normal npm output instead:
+https://github.com/homebridge/homebridge-apt-pkg/blob/4202618525a24585ac38e1ce17657618aca16ad0/deb/opt/homebridge/hb-service-shim.
+
+Correct the updater to read the managed package.json name/version under
+/var/lib/homebridge/node_modules, with an explicit OWNER_HOMEBRIDGE_PLUGIN_PATH
+override for another managed plugin location. It no longer requires success
+wording. Nonzero add exits, an explicit helper installation failure, missing
+metadata or a wrong installed version still prevent restart. Six focused shell
+regressions pass, including the exact APT output, colored helper output, stale
+version despite a success message, missing package and both failure forms.
+No privileged or hardware command runs in these fixtures. Syntax and whitespace
+checks pass. This is source maintenance for installer scripts/tests; no npm
+version or runtime change is needed. The original single-block command pins
+the original release source and should not be rerun to apply this script fix.
+No further install or restart is needed merely to replace that false check.
+
 ## 2026-10-11 — 0.4.45 GitHub release and owner installer ready
 
 PR #6 is merged. Approved source b9300290965a3725c4e497dfa7c9ef9f437182bb
