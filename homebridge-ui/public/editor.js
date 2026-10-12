@@ -15,7 +15,7 @@ export class ProfileEditor {
   constructor(root, { configuration, credentials = [], discover, discoverHomebridge, changed = () => {}, error = () => {}, renderCheckEnable, viewChanged = () => {}, getStatus, cardAction, manageConnections, saveConfiguration, localBridges, useLocalBridge }) {
     this.root=root; this.configuration=withConnections(configuration); this.credentials=credentials; this.discover=discover; this.discoverHomebridge=discoverHomebridge; this.changed=changed; this.error=error;
     this.renderCheckEnable=renderCheckEnable;this.viewChanged=viewChanged;this.getStatus=getStatus;this.cardAction=cardAction;
-    this.localBridges=localBridges;this.useLocalBridge=useLocalBridge;this.saveConfiguration=saveConfiguration;this.manageConnections=manageConnections;this.manualKeypad=new Set();this.expandedGarage=null;
+    this.localBridges=localBridges;this.useLocalBridge=useLocalBridge;this.saveConfiguration=saveConfiguration;this.manageConnections=manageConnections;this.expandedGarage=null;
     this.selectedDevices=new Map();this.selectedInputs=new Map();this.selected=0; this.step=0; this.render();
   }
   change() { this.changed(this.configuration); }
@@ -348,30 +348,6 @@ export class ProfileEditor {
     });
     if(p.inputs.length&&this.saveConfiguration){const actions=el('div',undefined,'actions');const saveButton=this.button('Save configuration',()=>this.saveConfiguration(),'primary');saveButton.dataset.controlSave='true';actions.append(saveButton);inputs.append(actions,el('p','Saves all pending configuration changes and keeps this page open.','help'));}
     inputs.append(this.button(p.inputs.length?'Add another control':'Add control',()=>{p.inputs.push({id:freshId('input'),name:'Indoor button',enabled:true,source:{type:'deconz',kind:'button',baseUrl:p.bolt.baseUrl,gatewayId:p.bolt.gatewayId,resourceId:'',uniqueId:'',resourceType:'ZHASwitch',modelId:'',manufacturer:'',credentialRef:p.bolt.credentialRef},trigger:1002,action:'toggle',motorPath:p.motorPaths[0]?.id??'primary',busyBehavior:p.motorPaths[0]?.interruption==='stop-opening-reverse-closing'?'interrupt':'drop',rearmSeconds:1.5,timing:{}});this.selectedInputs.set(p.id,p.inputs.at(-1).id);this.change();this.render();}));
-    this.virtualKeypad(root,p);
-  }
-  virtualKeypad(root,p){
-    const virtual=this.panel(root,'Web admin virtual keypad','Optional. Requires the separate web admin interface. Your physical keypad works without this.');virtual.dataset.section='virtual-keypad';
-    const keys=['baseUrl','gatewayId','credentialRef','alarmId'];
-    const physical=p.inputs.filter(input=>input.source.type==='deconz'&&input.source.kind==='keypad');
-    const matched=p.keypad&&physical.find(input=>keys.every(key=>input.source[key]===p.keypad[key]));
-    const choice={alarm:!p.keypad?'off':matched&&!this.manualKeypad.has(p.id)?'physical:'+matched.id:'manual'};
-    const select=this.input(this.grid(virtual),'Virtual keypad alarm',choice,'alarm',{options:[['off','Not used'],
-      ...physical.map(input=>['physical:'+input.id,'Use alarm from '+input.name]),['manual','Enter alarm details manually']],
-      help:'Choose the deCONZ alarm used by the web admin keypad. This does not arm or disarm it.'});
-    select.addEventListener('change',()=>{
-      if(choice.alarm==='manual')this.manualKeypad.add(p.id);else this.manualKeypad.delete(p.id);
-      if(choice.alarm==='off')p.keypad=null;
-      else if(choice.alarm==='manual')p.keypad??={baseUrl:p.bolt.type==='deconz'?p.bolt.baseUrl:'',gatewayId:p.bolt.type==='deconz'?p.bolt.gatewayId:'',credentialRef:p.bolt.type==='deconz'?p.bolt.credentialRef:'garage-deconz',alarmId:1};
-      else{const source=physical.find(input=>'physical:'+input.id===choice.alarm)?.source;if(!source)return;p.keypad=Object.fromEntries(keys.map(key=>[key,source[key]]));}
-      this.change();this.render();
-    });
-    if(!p.keypad)return;
-    const note=el('p','Use the same gateway and alarm when linking this garage in the web admin interface. Opening and closing use '+(p.door.type==='tailwind'?'Tailwind':'the garage opener (Homebridge)')+'.','help');virtual.append(note);
-    // A physical selection copies the alarm scope. It is not a live binding to
-    // the physical input, and rendering must never rewrite an existing scope.
-    this.sharedConnection(virtual,p.keypad);const g=this.grid(virtual);this.input(g,'Gateway identity',p.keypad,'gatewayId');this.input(g,'Alarm number',p.keypad,'alarmId',{type:'number',min:1,max:255,step:1});
-    virtual.append(el('p','Selecting a physical keypad copies its alarm details. Later changes to that physical control do not change this saved connection.','help'));
   }
   tailwindOpenSensor(grid,p,shared=this.configuration.connections.find(row=>sameConnection(row,p.door))){
     this.input(grid,'Tailwind open sensor input',p.door,'openSensorDoorIndex',{type:'number',

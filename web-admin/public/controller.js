@@ -129,6 +129,7 @@ window.ConfiguratorController = ({ root, api, readOnly }) => {
   }
   function scheduleRefresh() {
     clearTimeout(refreshTimer);
+    if(!data?.controllers.length)return;
     refreshTimer = setTimeout(async () => {
       const turn = generation;
       try {
@@ -149,7 +150,11 @@ window.ConfiguratorController = ({ root, api, readOnly }) => {
     }, 3000);
   }
   function render() {
-    if (!data.controllers.length) { root.innerHTML = '<p class="gp-note">Add a garage in the Homebridge plugin settings first.</p>'; return; }
+    if (!data.controllers.length) {
+      root.innerHTML = '<section class="gp-panel gp-body"><h3>No garage door configured</h3><p class="gp-note">Garage controls become available after you add a garage door in Homebridge → Plugins → Garage Door Admin Controller → Settings → Garage doors.</p><p>Choose Add a garage door and configure its opener and bolt. Web admin’s user, PIN and alarm pages are available without a garage.</p><p data-controller-message role="status" aria-live="polite"></p><button type="button" class="gp-button" data-controller-reload>Reload garage doors</button></section>';
+      root.querySelector('[data-controller-reload]').onclick = async () => { try { await load(); } catch { message('Could not reload garage doors. Check the connection and try again.'); } };
+      return;
+    }
     const row = profile(), values = row.values, fields = data.fields;
     const state = row.status.state;
     root.innerHTML = `<label class="gp-field gp-controller-selector">Garage Door<select data-controller-select>${data.controllers.map(c => `<option value="${esc(c.id)}" ${c.id === selected ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>

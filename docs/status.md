@@ -1,3 +1,34 @@
+## 2026-10-11 — Web-only virtual keypad and zero-garage administration
+
+Removed the virtual-keypad alarm selector and manual setup panel from garage
+Controls. Enabled/configured web administration derives its registered deCONZ
+connection and selected alarm directly. A sole garage is selected automatically;
+multiple garages require a web-keypad target. The target is captured per request,
+and changing it clears pending digits/queued requests. With no garage the keypad
+can operate the deCONZ alarm without requesting garage movement. The Controller
+menu remains available and shows Homebridge garage setup instructions, no timing
+or action controls, and an explicit reload after setup.
+
+Web-only startup already accepts an explicitly configured platform with zero
+garages; new tests verify platform/runtime and web manager support. Legacy saved
+keypad mappings remain intact for the scoped v1 integration and are no longer
+required by the bundled web keypad. No profile migration resets commissioning.
+The receipt snapshots a saved connection reference, never PIN/key values. The
+existing outcome, disarmed-state verification, freshness, epoch, primary opener,
+single worker and no-retry rules remain. No startup/discovery/config actuation.
+
+Production loopback tests verify valid-PIN opening and rejected-PIN closing/
+bolting with profile.keypad null. Zero/one/multiple target, stale/missing target,
+malformed request, deduplication, authorization and disabled-mode tests pass.
+Full Node suite: 452 of 453 first passed; the remaining asset hash check passed
+after updating the changed asset manifest. Final focused checks: 22 passed.
+Demo regeneration/freshness, release notes, JavaScript syntax and whitespace
+checks pass. Legacy cross-repository integration: 14 passed; the two already
+stale contract-copy tests fail. Added desktop/mobile cases for Controls removal,
+web-only Controller instructions, default/explicit targets and cleared entry.
+Remote browser CI is pending. Runtime/package version remains 0.4.45; this feature
+is unreleased source. No npm publication, installation or physical command.
+
 ## 2026-10-11 — Correct APT owner-install verification
 
 The owner confirmed npm publication of 0.4.45, registry archive verification and

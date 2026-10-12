@@ -48,4 +48,13 @@ test('launch event starts the authenticated API and shutdown releases its socket
   assert.equal(platform.server.listening, false);
   assert.equal(messages.some(message => message.includes(identity.token)), false);
 });
+test('an explicitly configured platform starts web administration with zero garage accessories',async t=>{
+  const directory=await mkdtemp(path.join(os.tmpdir(),'web-only-platform-'));t.after(()=>rm(directory,{recursive:true,force:true}));
+  const api=new EventEmitter();api.user={storagePath:()=>directory};const log={info(){},warn(){},error(){}};
+  const platform=new CoordinatorPlatform(log,{platform:'GDoorAndBoltCoordinator',controllers:[]},api);
+  t.after(()=>platform.shutdown());platform.configuration.managementPort=0;
+  api.emit('didFinishLaunching');await platform.starting;
+  assert.deepEqual(platform.runtime.configuration.controllers,[]);assert.ok(platform.webAdmin);
+  assert.equal(platform.server.listening,true);assert.equal(platform.runtime.entries.size,0);
+});
 

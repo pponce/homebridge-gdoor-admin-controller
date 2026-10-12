@@ -34,7 +34,8 @@ export async function createWebAdminService({ storagePath, configPath, coordinat
   const backend = new WebAdminBackend({ registrations, accessMode: row.settings.accessMode, setup, history, transactions, backup, assertCurrent, integration,
     controller: new WebAdminController(runtime),
     hiddenUsers: gateway => integration.hiddenUsers(gateway),
-    keypadHook: (registration, alarm, started) => webCoordinatorKeypad(runtime, registration, alarm)(started),
+    keypadGarages: () => runtime.configuration.controllers.map(({ id, name }) => ({ id, name })),
+    keypadHook: (registration, alarm, started, controllerId) => webCoordinatorKeypad(runtime, registration, alarm, { controllerId })(started),
     requestDiscovery: gateway => collector.requestDiscovery(gateway) });
   collector = new WebAdminCollector({ backend, interval: () => application.values.discovery_seconds });
   const server = createWebAdminServer({ tls, origin: row.settings.origin, auth, backend,

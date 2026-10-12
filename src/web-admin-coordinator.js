@@ -3,7 +3,6 @@
 import { performance } from 'node:perf_hooks';
 import { requireWeb } from './web-admin-common.js';
 
-const identity = value => typeof value === 'string' ? value.replaceAll(':', '').toUpperCase() : '';
 export function webCoordinatorParticipant(runtime) {
   const released = tx => !runtime.state.maintenance && runtime.state.lastMaintenanceId === tx.id;
   const neverPaused = tx => !runtime.state.maintenance && !tx.write_attempted;
@@ -20,12 +19,18 @@ export function webCoordinatorParticipant(runtime) {
     recovery_ready: tx => runtime.state.maintenance?.id === tx.id || released(tx) || readyUnpaused(tx),
   };
 }
-export function webCoordinatorKeypad(runtime, registration, alarm, { clock = () => performance.now() / 1000 } = {}) {
+export function webCoordinatorKeypad(runtime, registration, alarm, { controllerId, clock = () => performance.now() / 1000 } = {}) {
   return started => {
-    const profiles = runtime.configuration.controllers.filter(profile => profile.keypad && identity(profile.keypad.gatewayId) === registration.identity && profile.keypad.alarmId === alarm);
-    requireWeb(profiles.length <= 1, 'keypad_scope_ambiguous');
-    if (!profiles.length) return null;
-    const profile = profiles[0], receipt = runtime.keypadBegin(profile.id, { gatewayId: profile.keypad.gatewayId, alarmId: alarm });
+    const profiles = runtime.configuration.controllers;
+    if (!profiles.length) { requireWeb(controllerId === undefined, 'controller_not_found'); return null; }
+    requireWeb(controllerId !== undefined || profiles.length === 1, 'keypad_scope_ambiguous');
+    const profile = controllerId === undefined ? profiles[0] : profiles.find(profile => profile.id === controllerId);
+    requireWeb(profile, 'controller_not_found');
+    const connections = (runtime.configuration.connections ?? []).filter(row => row.type === 'deconz' && row.baseUrl === registration.endpoint);
+    requireWeb(connections.length === 1, 'keypad_scope_mismatch');
+    const keypad = { baseUrl: connections[0].baseUrl, credentialRef: connections[0].credentialRef,
+      gatewayId: registration.identity, alarmId: alarm };
+    const receipt = runtime.keypadBegin(profile.id, { gatewayId: keypad.gatewayId, alarmId: alarm }, keypad);
     return {
       api_version: 1, note: null,
       async after(outcome, mode) {

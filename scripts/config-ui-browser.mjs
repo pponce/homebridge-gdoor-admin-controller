@@ -365,16 +365,9 @@ try{
    assert.equal(await page.locator('.input-choice').count(),2);
    await page.locator('.input-choice').first().click();
    if(process.env.PREVIEW_OUTPUT)await page.screenshot({path:path.join(process.env.PREVIEW_OUTPUT,mobile?'inputs-mobile.png':'inputs-desktop.png'),fullPage:true});
-   const virtual=page.locator('[data-section=virtual-keypad]');
-   assert.equal(await virtual.getByLabel('Virtual keypad alarm',{exact:true}).inputValue(),'physical:physical-keypad');
-   await virtual.getByLabel('Virtual keypad alarm',{exact:true}).selectOption('manual');
-   assert.equal(await virtual.getByLabel('Virtual keypad alarm',{exact:true}).inputValue(),'manual');
-   assert.equal(await virtual.getByLabel('Alarm number',{exact:true}).inputValue(),'1');
-   await virtual.getByLabel('Virtual keypad alarm',{exact:true}).selectOption('off');
-   assert.equal(await virtual.getByLabel('Alarm number',{exact:true}).count(),0);
-   assert.equal(await page.locator('.input-choice').count(),2,'Virtual keypad does not remove physical controls');
-   await virtual.getByLabel('Virtual keypad alarm',{exact:true}).selectOption('physical:physical-keypad');
-   assert.equal(await virtual.getByLabel('Alarm number',{exact:true}).inputValue(),'1');
+   assert.equal(await page.getByRole('heading',{name:'Web admin virtual keypad',exact:true}).count(),0);
+   assert.equal(await page.getByLabel('Virtual keypad alarm',{exact:true}).count(),0);
+   assert.equal(await page.locator('.input-choice').count(),2,'Only physical controls appear here');
    assert.equal(f.probes(),0);assert.equal(f.commissions(),0);
    await page.getByRole('button',{name:'01 Devices'}).click();
    await page.getByRole('button',{name:'Configure device '+base.motorPaths[0].name,exact:true}).click();
@@ -647,17 +640,13 @@ try{
        assert.deepEqual(x.probedIds,['second-garage']);
        await p.getByRole('button',{name:'02 Controls'}).click();
        assert.equal(await p.locator('.garage-card .card-checks').count(),1);
-       const select=p.getByLabel('Virtual keypad alarm',{exact:true});
-       assert.equal(await select.locator('option').count(),2,'No physical-keypad choice without a configured keypad');
+       assert.equal(await p.getByLabel('Virtual keypad alarm',{exact:true}).count(),0);
      }else if(mode==='no-keypad'){
        await p.getByRole('button',{name:'02 Controls'}).click();
-       const virtual=p.locator('[data-section=virtual-keypad]');
-       assert.equal(await virtual.getByLabel('Virtual keypad alarm',{exact:true}).inputValue(),'off');
-       assert.equal(await virtual.getByLabel('Alarm number',{exact:true}).count(),0);
-       await virtual.getByLabel('Virtual keypad alarm',{exact:true}).selectOption('manual');
-       await virtual.getByLabel('Alarm number',{exact:true}).fill('2');
+       assert.equal(await p.getByRole('heading',{name:'Web admin virtual keypad',exact:true}).count(),0);
+       await p.getByLabel('Control name',{exact:true}).fill('Renamed physical control');
        await review(p);await p.getByRole('button',{name:'Save configuration',exact:true}).click();await saved(p);
-       assert.equal(x.configuration().controllers[0].keypad.alarmId,2);
+       assert.equal(x.configuration().controllers[0].keypad,null,'Saving controls does not create a virtual-keypad mapping');
        assert.equal(x.configuration().controllers[0].inputs.length,2);
        assert.equal(x.probes(),0);assert.equal(x.commissions(),0);
      }else if(mode==='probe-unavailable'){
@@ -823,7 +812,7 @@ try{
    }
   }finally{await browser.close();}
  }
- console.log('Desktop Chromium/mobile WebKit passed guided editing, modeled native Save/check/toasts, setup and managed saves, delayed/failed native save, uncertain apply reload, metadata preservation, commissioning, General overview, inline garage checks, per-garage draft status, dialog-free draft removal, masked key creation/replacement/deletion, optional virtual keypad setup, draft-safe keys, theme switching and overflow.');
+ console.log('Desktop Chromium/mobile WebKit passed guided editing, modeled native Save/check/toasts, setup and managed saves, delayed/failed native save, uncertain apply reload, metadata preservation, commissioning, General overview, inline garage checks, per-garage draft status, dialog-free draft removal, masked key creation/replacement/deletion, web-only virtual keypad without a Controls setup option, draft-safe keys, theme switching and overflow.');
 }catch(e){if(process.env.GITHUB_OUTPUT)await appendFile(process.env.GITHUB_OUTPUT,'result='+String(e.stack||e).replaceAll('\n',' ').slice(0,2000)+'\n');throw e;}
 finally{server.closeAllConnections();await new Promise(r=>server.close(r));}
 

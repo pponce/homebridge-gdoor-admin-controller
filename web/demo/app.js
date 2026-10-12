@@ -521,7 +521,7 @@
   }
   $('#add').onclick=()=>{if(busy)return;if(phone.matches&&$('#editor').dataset.dirty==='true'&&!confirm('Discard unsaved edits to this user?'))return;openUserDetail();selected=null;attaching=null;adding=true;renderList();renderUser();renderHomebridge();
     $('#name').focus();};
-  let keypadAvailable=false,keypadGeneration=0,keypadQueue=[],keypadSending=false,keypadNumber=0;
+  let keypadAvailable=false,keypadReady=false,keypadGarage='',keypadGarages=[],keypadGeneration=0,keypadQueue=[],keypadSending=false,keypadNumber=0;
   const keypadEntry=new window.BrowserKeypad.Entry({submit:queueKeypad,change:entry=>{
     $('#keypad-light').classList.toggle('on',Boolean(entry.deadline));
     $('#keypad-light').setAttribute('aria-label',entry.deadline?'Entry light on':'Entry light off');
@@ -536,22 +536,42 @@
     const list=$('#keypad-results');list.append(li);while(list.children.length>80)list.firstChild.remove();list.scrollTop=list.scrollHeight;
   }
   function showKeypadSimulation(data){$('#keypad-simulation').textContent=data?.simulation?`Simulation: alarm ${data.simulation.alarm.replaceAll('_',' ')} · ${data.simulation.remaining_seconds?'locked for '+data.simulation.remaining_seconds+'s':'PIN entry available'}`:'';}
+  function updateKeypadGarage(){
+    const garage=keypadGarages.find(row=>row.id===keypadGarage);
+    keypadAvailable=keypadReady&&(keypadGarages.length<2||Boolean(garage));
+    $('#keypad-garage-field').hidden=demoMode||keypadGarages.length<2;
+    $('#keypad-garage').disabled=!keypadReady;
+    document.querySelectorAll('#keypad-device button').forEach(b=>b.disabled=!keypadAvailable);
+    $('#keypad-description').textContent=demoMode?'Demo · Code 2323. No real requests or movement.':
+      'Live · REST permissions apply; physical-keypad lockouts do not. '+
+      (garage?'Garage: '+garage.name+'. Alarm commands use the selected gateway and alarm.':
+        keypadGarages.length?'Choose which garage door this keypad will control.':
+          'No garage door configured. This keypad operates the alarm only. Add a garage door in Homebridge → Plugins → Garage Door Admin Controller → Settings → Garage doors.');
+  }
+  $('#keypad-garage').onchange=()=>{
+    cancelKeypad();keypadGarage=$('#keypad-garage').value;updateKeypadGarage();
+  };
   async function loadKeypad(){
     cancelKeypad();$('#keypad-results').replaceChildren();keypadNumber=0;
+    keypadReady=false;$('#keypad-garage').disabled=true;
     document.querySelectorAll('#keypad-device button').forEach(b=>b.disabled=true);
     $('#keypad-badge').textContent=demoMode?'DEMO':'LIVE';
     $('#keypad-description').textContent=demoMode?'Demo · Code 2323. No real requests or movement.':'Live · REST permissions apply; physical-keypad lockouts do not.';
     try{
-      const info=await api('keypad');keypadAvailable=info.available===true;
-      if(!demoMode)$('#keypad-description').textContent+=' '+(info.extension_notice||'Alarm commands use the selected gateway and alarm.');
+      const turn=keypadGeneration,info=await api('keypad');
+      if(turn!==keypadGeneration||page!=='keypad')return;
+      keypadReady=info.available===true;keypadGarages=info.garages??[];
+      if(keypadGarages.length===1)keypadGarage=keypadGarages[0].id;
+      else if(!keypadGarages.some(row=>row.id===keypadGarage))keypadGarage='';
+      $('#keypad-garage').innerHTML='<option value="">Choose a garage door</option>'+keypadGarages.map(row=>`<option value="${esc(row.id)}">${esc(row.name)}</option>`).join('');
+      $('#keypad-garage').value=keypadGarage;updateKeypadGarage();
       showKeypadSimulation(info);
-      document.querySelectorAll('#keypad-device button').forEach(b=>b.disabled=!keypadAvailable);
     }catch(e){keypadResult(e.message,'gp-state-disabled');throw e;}
   }
   function queueKeypad(code,mode){
     if(!keypadAvailable||page!=='keypad'||!csrf||document.hidden)return;
     if(keypadQueue.length>=16){cancelKeypad();keypadResult('Requests stopped: connection too slow. Reopen Keypad before continuing.','gp-state-disabled');return;}
-    keypadQueue.push({body:{code,mode,request_id:crypto.randomUUID().replaceAll('-','')},context:{gateway:selectedGateway,alarm:selectedAlarm},demo:demoMode,generation:keypadGeneration,created:Date.now(),number:++keypadNumber});
+    keypadQueue.push({body:{code,mode,request_id:crypto.randomUUID().replaceAll('-',''),...(!demoMode&&keypadGarage?{controllerId:keypadGarage}:{})},context:{gateway:selectedGateway,alarm:selectedAlarm},demo:demoMode,generation:keypadGeneration,created:Date.now(),number:++keypadNumber});
     void drainKeypad();
   }
   async function drainKeypad(){

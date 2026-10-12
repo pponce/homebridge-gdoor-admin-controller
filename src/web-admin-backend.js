@@ -19,10 +19,10 @@ function limitedTransaction(value) {
 }
 
 export class WebAdminBackend {
-  constructor({ registrations = [], accessMode = 'observe', setup, transactions, history, backup, integration, keypadHook, controller, assertCurrent = async () => {}, requestDiscovery = () => {}, connected = new Map(), hiddenUsers = async () => [], gatewayFactory = (row, options) => new WebAdminGateway(row, options) }) {
+  constructor({ registrations = [], accessMode = 'observe', setup, transactions, history, backup, integration, keypadHook, keypadGarages = () => [], controller, assertCurrent = async () => {}, requestDiscovery = () => {}, connected = new Map(), hiddenUsers = async () => [], gatewayFactory = (row, options) => new WebAdminGateway(row, options) }) {
     this.registrations = new Map(validateWebGateways(registrations).map(row => [row.id, row]));
     requireWeb(['observe', 'manage'].includes(accessMode), 'candidate_read_only_required');
-    Object.assign(this, { accessMode, setup, transactions, history, backup, integration, keypadHook, controller, assertCurrent, requestDiscovery, hiddenUsers, gatewayFactory });
+    Object.assign(this, { accessMode, setup, transactions, history, backup, integration, keypadHook, keypadGarages, controller, assertCurrent, requestDiscovery, hiddenUsers, gatewayFactory });
     // Only the activity collector may set connection state. A successful REST
     // read does not establish that the live event stream is connected.
     this.connected = connected; this.catalog = new Map(); this.pending = Promise.resolve();
@@ -117,7 +117,8 @@ export class WebAdminBackend {
         if (typeof this.keypadHook !== 'function' || typeof this.transactions?.execute !== 'function' || typeof this.history?.reserveRequest !== 'function') return this.unavailable();
         const registration = this.registrations.get(gateway), client = this.gatewayFactory(registration, { writable: action === 'keypad_send' });
         const keypad = new WebAdminKeypad({ gateway, identity: registration.identity, alarm, client, accessMode: this.accessMode,
-          transactions: this.transactions, history: this.history, begin: started => this.keypadHook(registration, alarm, started) });
+          transactions: this.transactions, history: this.history, garages: this.keypadGarages,
+          begin: (started, controllerId) => this.keypadHook(registration, alarm, started, controllerId) });
         return action === 'keypad_status' ? keypad.status(payload) : keypad.send(payload);
       }
       const edit = webWriteOperations.has(action), recovery = webRecoveryOperations.has(action);

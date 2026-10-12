@@ -437,13 +437,15 @@ export class CoordinatorRuntime {
     }
     throw new Fault('maintenance_request_invalid');
   }
-  keypadBegin(id, scope) {
-    const e = this.entry(id); const k = e.profile.keypad;
+  keypadBegin(id, scope, webConnection) {
+    const e = this.entry(id); const k = webConnection ?? e.profile.keypad;
+    if (webConnection) requireValue(this.configuration.connections.some(row => row.type === 'deconz' &&
+      row.baseUrl === k.baseUrl && row.credentialRef === k.credentialRef), 'keypad_scope_mismatch');
     requireValue(k && scope.gatewayId === k.gatewayId && scope.alarmId === k.alarmId, 'keypad_scope_mismatch');
     this.guard();
     for (const [token,t] of this.tickets) if (performance.now() - t.at > 2000) this.tickets.delete(token);
     requireValue(this.tickets.size < 128, 'keypad_busy'); const token = randomBytes(24).toString('hex');
-    this.tickets.set(token, { id, at: performance.now(), epoch: e.router?.epoch, eligible: this.status(id).actuationEnabled &&
+    this.tickets.set(token, { id, keypad: structuredClone(k), at: performance.now(), epoch: e.router?.epoch, eligible: this.status(id).actuationEnabled &&
       !e.job && e.engine?.initialized && !e.engine?.busy && !e.engine?.state.fault && ['open','closed'].includes(e.engine?.state.phase) });
     return { token };
   }
@@ -455,7 +457,7 @@ export class CoordinatorRuntime {
     const command = outcome === 'rejected' ? 'close' : outcome === 'accepted' && mode === 'disarm' ? 'open' : null;
     if (!command) return { note: 'No controller request' };
     if (command === 'open') {
-      const k = e.profile.keypad; const keys = await this.credentials();
+      const k = t.keypad; const keys = await this.credentials();
       requireValue(typeof keys[k.credentialRef] === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(keys[k.credentialRef]), 'keypad_credential_invalid');
       const config = await requestJson({ url: k.baseUrl + '/api/' + keys[k.credentialRef] + '/config' });
       requireValue(config?.bridgeid?.replaceAll(':','').toLowerCase() === k.gatewayId.replaceAll(':','').toLowerCase(), 'keypad_gateway_mismatch');

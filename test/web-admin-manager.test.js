@@ -38,9 +38,10 @@ test('default OFF does not touch gateways, certificates, databases or a server',
   assert.deepEqual(f.calls, []); assert.deepEqual(await readdir(path.join(f.storagePath, 'gdoorandbolt-coordinator')), []);
   assert.deepEqual(Object.keys(status.connections[0]).sort(), ['id', 'name']);
 });
-test('explicit setup starts once; disable works offline and retains account and gateway identity', async t => {
+test('web administration starts with zero garages; disabling works offline and retains its account and gateway identity', async t => {
   const f = await fixture(t);
   const first = await f.manager.configure({ expectedRevision: 0, settings: f.settings, admin: f.admin });
+  assert.deepEqual(f.runtime.configuration.controllers,[]);
   assert.equal(first.running, true); assert.equal(first.accountConfigured, true); assert.equal(first.revision, 1);
   assert.equal(f.calls.filter(value => value === 'collect').length, 1);
   assert.equal(JSON.stringify(first).includes('synthetic'), false);

@@ -46,16 +46,33 @@ test('only the exact redacted deCONZ validation failure is a rejected code', () 
   body[0].error.description = 'invalid value, 1234, for parameter, code0';
   assert.throws(() => classifyWebKeypad(400, body, 1, 'disarm'), /keypad_result_unknown_no_retry/);
 });
-test('coordinator bridge uses the existing scoped begin/after API, rejects ambiguous scope and sends no startup command', async () => {
-  const calls = [], profile = { id: 'garage', keypad: { gatewayId: '00:11:22:33:44:55:66:77', alarmId: 1 } };
-  const runtime = { configuration: { controllers: [profile] }, keypadBegin: (...args) => { calls.push(['begin', ...args]); return { token: 'synthetic' }; },
+test('web setup supplies the keypad scope automatically; multiple garages require an explicit target', async () => {
+  const calls = [], profile = { id: 'garage', keypad: null }, connection = {type:'deconz',baseUrl:'http://gateway.example.test',credentialRef:'test'};
+  const registration = {identity:'0011223344556677',endpoint:connection.baseUrl};
+  const runtime = { configuration: { controllers: [profile], connections:[connection] }, keypadBegin: (...args) => { calls.push(['begin', ...args]); return { token: 'synthetic' }; },
     keypadAfter: async (...args) => { calls.push(['after', ...args]); return { note: 'Open requested; completion not confirmed' }; } };
-  const begin = webCoordinatorKeypad(runtime, { identity: '0011223344556677' }, 1, { clock: () => 12 }); assert.deepEqual(calls, []);
+  const begin = webCoordinatorKeypad(runtime, registration, 1, { clock: () => 12 }); assert.deepEqual(calls, []);
   const hook = begin(11); await hook.after('accepted', 'disarm');
-  assert.deepEqual(calls, [['begin', 'garage', { gatewayId: profile.keypad.gatewayId, alarmId: 1 }], ['after', 'synthetic', 'accepted', 'disarm', 1]]);
+  assert.deepEqual(calls, [['begin', 'garage', { gatewayId: registration.identity, alarmId: 1 },
+    {baseUrl:connection.baseUrl,credentialRef:connection.credentialRef,gatewayId:registration.identity,alarmId:1}],
+    ['after', 'synthetic', 'accepted', 'disarm', 1]]);
   assert.match(hook.note, /completion not confirmed/);
-  assert.equal(webCoordinatorKeypad(runtime, { identity: '0011223344556677' }, 2)(11), null);
+  assert.equal(profile.keypad,null,'No per-garage virtual-keypad configuration is created');
   runtime.configuration.controllers.push({ ...profile, id: 'second' }); assert.throws(() => begin(11), /keypad_scope_ambiguous/);
+  webCoordinatorKeypad(runtime,registration,1,{controllerId:'second'})(11);
+  assert.equal(calls.at(-1)[1],'second');
+  assert.throws(()=>webCoordinatorKeypad(runtime,registration,1,{controllerId:'missing'})(11),/controller_not_found/);
+  runtime.configuration.controllers=[];assert.equal(begin(11),null);
+  assert.throws(()=>webCoordinatorKeypad(runtime,registration,1,{controllerId:'second'})(11),/controller_not_found/);
+});
+test('keypad status lists garage names without device details and passes only the target to its hook',async()=>{
+  const f=fixture(),targets=[];f.keypad.garages=()=>[{id:'garage',name:'Garage'}];
+  f.keypad.begin=async(started,id)=>{targets.push(id);return f.hook;};
+  assert.deepEqual((await f.keypad.status({})).garages,[{id:'garage',name:'Garage'}]);
+  await f.keypad.send({...f.body(),controllerId:'garage'});assert.deepEqual(targets,['garage']);
+  await assert.rejects(f.keypad.send({...f.body(),controllerId:null}),/invalid_keypad_request/);
+  await assert.rejects(f.keypad.send({...f.body(),controllerId:'INVALID'}),/invalid_keypad_request/);
+  assert.equal(f.calls(),1);
 });
 test('maintenance bridge keeps command authorization separate and is idempotent after completion or an unsent failed pause', async () => {
   const calls = [], runtime = { configuration: { controllers: [{}] }, state: { maintenance: null }, guard() {}, assertIdle() {},

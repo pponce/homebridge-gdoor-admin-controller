@@ -13,7 +13,7 @@ export async function webBrowserFixture() {
   const storagePath = await mkdtemp(join(tmpdir(), 'web-admin-acceptance-'));
   await mkdir(join(storagePath, 'gdoorandbolt-coordinator'), { mode: 0o700 });
   const data = JSON.parse(await readFile(new URL('../test/fixtures/web-admin-read-parity.json', import.meta.url)));
-  const writes = [], errors = [], maintenance = [], state = { loseNextAlarmReply: false, homebridgeAvailable: false, bridgeStopped: false };
+  const writes = [], errors = [], maintenance = [], garageRequests = [], state = { loseNextAlarmReply: false, homebridgeAvailable: false, bridgeStopped: false };
   const gateway = http.createServer(async (request, response) => {
     try {
       assert.ok(request.url.startsWith('/api/synthetic_key/'));
@@ -27,6 +27,10 @@ export async function webBrowserFixture() {
       }
       let raw = ''; for await (const chunk of request) raw += chunk;
       const body = JSON.parse(raw); writes.push([request.method, route]);
+      if(request.method==='PUT'&&route==='/alarmsystems/1/disarm') {
+        assert.equal(body.code0,'2323');
+        return send([{success:{'/alarmsystems/1/config/armmode':'disarmed'}}]);
+      }
       if (request.method === 'PUT' && route === '/alarmsystems/1/config') {
         Object.assign(data.responses['/alarmsystems/1'].config, body);
         if (state.loseNextAlarmReply) { state.loseNextAlarmReply = false; response.destroy(); return; }
@@ -69,7 +73,10 @@ export async function webBrowserFixture() {
   await new Promise(resolve => gateway.listen(0, '127.0.0.1', resolve));
   const runtime = { configuration: { managementPort: 27773, controllers: [], connections: [
     { id: 'deconz', name: 'Synthetic gateway', type: 'deconz', baseUrl: 'http://127.0.0.1:' + gateway.address().port, credentialRef: 'synthetic' },
-  ] }, guard() {}, state: { maintenance: null } };
+  ] }, guard() {}, state: { maintenance: null },
+    keypadBegin(id) {garageRequests.push(id);return{token:id};},
+    async keypadAfter() {return{note:'Synthetic garage request; no motor or bolt command'};},
+  };
   const homebridgeHost = {
     async readiness() { return { configured: state.homebridgeAvailable, error: state.homebridgeAvailable ? null : 'homebridge_child_identity_invalid' }; },
     async available() { return state.homebridgeAvailable; },
@@ -97,7 +104,7 @@ export async function webBrowserFixture() {
   const port = reserve.address().port; await new Promise(resolve => reserve.close(resolve));
   const origin = 'https://127.0.0.1:' + port, password = 'synthetic-browser-password';
   const settings = { ...defaultWebSettings(), enabled: true, port, origin, publicUrl: origin, connectionIds: ['deconz'] };
-  return { manager, settings, origin, password, data, writes, errors, state, maintenance,
+  return { manager, settings, origin, password, data, writes, errors, state, maintenance, runtime, garageRequests,
     async enable() { const value = await manager.configure({ expectedRevision: 0, settings, admin: { username: 'Owner', password } }); assert.equal(value.error, null); },
     async close() { await manager.close(); await new Promise(resolve => { gateway.close(resolve); gateway.closeAllConnections(); }); await rm(storagePath, { recursive: true, force: true }); },
   };

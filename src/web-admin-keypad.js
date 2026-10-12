@@ -13,22 +13,24 @@ export function classifyWebKeypad(status, value, alarm, mode) {
   requireWeb(false, 'keypad_result_unknown_no_retry');
 }
 export class WebAdminKeypad {
-  constructor({ gateway, identity, alarm, client, transactions, history, begin, accessMode, clock = () => performance.now() / 1000 }) {
-    Object.assign(this, { gateway, identity, alarm, client, transactions, history, begin, accessMode, clock });
+  constructor({ gateway, identity, alarm, client, transactions, history, begin, garages = () => [], accessMode, clock = () => performance.now() / 1000 }) {
+    Object.assign(this, { gateway, identity, alarm, client, transactions, history, begin, garages, accessMode, clock });
   }
   ready() { return typeof this.transactions?.execute === 'function' && typeof this.history?.reserveRequest === 'function' && typeof this.history?.add === 'function' && typeof this.begin === 'function'; }
   async status(body) {
     requireWeb(exact(body, []), 'invalid_keypad_request');
     requireWeb((await this.client.verify(this.alarm)).managed === true, 'keypad_managed_alarm_required');
-    return { available: this.accessMode === 'manage' && this.ready(), physical_lockout: false };
+    return { available: this.accessMode === 'manage' && this.ready(), physical_lockout: false, garages: this.garages() };
   }
   async send(body) {
-    requireWeb(exact(body, ['code', 'mode', 'request_id']) && typeof body.code === 'string' && /^[0-9]{1,16}$/.test(body.code) && Object.hasOwn(modes, body.mode) && typeof body.request_id === 'string' && /^[a-f0-9]{32}$/.test(body.request_id), 'invalid_keypad_request');
+    requireWeb(exact(body, ['code', 'mode', 'request_id', ...(Object.hasOwn(body ?? {}, 'controllerId') ? ['controllerId'] : [])]) &&
+      (body.controllerId === undefined || typeof body.controllerId === 'string' && /^[a-z][a-z0-9-]{0,47}$/.test(body.controllerId)) &&
+      typeof body.code === 'string' && /^[0-9]{1,16}$/.test(body.code) && Object.hasOwn(modes, body.mode) && typeof body.request_id === 'string' && /^[a-f0-9]{32}$/.test(body.request_id), 'invalid_keypad_request');
     requireWeb(this.ready(), 'operation_not_implemented'); requireWeb(this.accessMode === 'manage', 'candidate_read_only_required');
     const { mode, request_id: id } = body; let code = body.code;
     try {
       await this.transactions.guard(this.gateway);
-      const hook = await this.begin(this.clock());
+      const hook = await this.begin(this.clock(), body.controllerId);
       requireWeb(hook === null || hook?.api_version === 1 && typeof hook.after === 'function' && typeof hook.failed === 'function', 'keypad_extension_api_incompatible');
       await this.status({}); requireWeb(integer(this.alarm, 1, 255), 'invalid_alarm');
       if (!await this.history.reserveRequest(this.gateway, this.alarm, id)) return { result: 'duplicate', extension: 'Duplicate request ignored; no retry', mode };
