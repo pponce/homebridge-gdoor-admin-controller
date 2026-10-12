@@ -1,3 +1,19 @@
+## 2026-10-11 — 0.4.45 release approval and install confirmation
+
+The owner explicitly approved merging PR #6 and releasing 0.4.45 after automatic
+review rejected the earlier main promotion. Prepare the approved main/release
+path without further confirmation. npm publication and installation remain
+owner-run through the pinned updater on the authenticated Mint host.
+
+Upstream hb-service npmPluginManagement can log installation failure and return
+zero. The 0.4.45 updater now captures its output privately and requires the exact
+Installed package@version acknowledgement before starting Homebridge. A failure
+with zero/nonzero exit or an unconfirmed result leaves Homebridge stopped.
+Four focused shell regression checks pass, including ANSI-colored success;
+no privileged or hardware command was used in those fixtures. Updater syntax
+and whitespace checks pass. Runtime and sensor configuration source is unchanged.
+The final approved source promotion, main CI and GitHub release are pending.
+
 ## 2026-10-11 — 0.4.45 owner update preparation
 
 Release source 98e733bd45844ac897d260c5e88ed8c21dc8a9c0 passed all five
