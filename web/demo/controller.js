@@ -41,8 +41,7 @@ window.ConfiguratorController = ({ root, api, readOnly }) => {
       else if (tile.kind === 'restart') fields.push(['Switch value', tile.target ? 'On' : 'Off']);
       return group(name, fields);
     }).join('');
-    return `<h3>Troubleshooting</h3>
-      <p role="status"><strong>${esc(status.health?.title || state.phase || 'Unknown')}</strong>${status.tailwind ? ' · Tailwind: '+esc(lockout) : ''}</p>
+    return `<p role="status"><strong>${esc(status.health?.title || state.phase || 'Unknown')}</strong>${status.tailwind ? ' · Tailwind: '+esc(lockout) : ''}</p>
       ${status.health?.detail ? `<p class="gp-note">${esc(status.health.detail)}</p>` : ''}
       <p class="gp-sub">Refreshes every 3 seconds while visible. Device values describe the last successful sample; unavailable or stale values are not current confirmation.</p>
       <div class="gp-two">
@@ -158,7 +157,6 @@ window.ConfiguratorController = ({ root, api, readOnly }) => {
     const row = profile(), values = row.values, fields = data.fields;
     const state = row.status.state;
     root.innerHTML = `<label class="gp-field gp-controller-selector">Garage Door<select data-controller-select>${data.controllers.map(c => `<option value="${esc(c.id)}" ${c.id === selected ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>
-      <section class="gp-panel gp-body" data-controller-troubleshooting>${troubleshooting(row)}</section>
       <p class="gp-sub">All times are in seconds. Changes apply to the next operation without restarting Homebridge. Save when controllers are idle.</p>
       <p class="gp-sub">Opening feedback: ${esc(row.feedback.opening)} · Closing feedback: ${esc(row.feedback.closing)} · Bolt feedback: ${esc(row.feedback.bolt)}. Travel times are estimates when timed feedback is selected.</p>
       ${row.feedback.opening === 'sensor' ? '<p class="gp-note">The fully-open sensor confirms opening, including after reversal. Opening travel time, per-device opening overrides and extra opening time after interruption are unused. Movement timeout still limits how long confirmation may take.</p>' : ''}
@@ -179,7 +177,8 @@ window.ConfiguratorController = ({ root, api, readOnly }) => {
       ${row.motorPaths.length ? '<h3>Motor relay pulses</h3>' + row.motorPaths.map((motor, index) => `<details class="gp-panel gp-body"><summary>${esc(motor.name)}</summary><div class="gp-two">${fields.motorPaths.map(field => input(field, values.motorPaths[index][field[0]], `data-motor-index="${index}" data-key="${field[0]}"`)).join('')}</div></details>`).join('') : ''}
       <button type="submit" class="gp-button primary">Review timing changes</button></fieldset></form>
       <div data-controller-review class="gp-panel gp-body" hidden></div>
-      <button type="button" class="gp-button" data-controller-reload>Reload saved timings</button>`;
+      <button type="button" class="gp-button" data-controller-reload>Reload saved timings</button>
+      <details class="gp-panel gp-body" data-controller-troubleshooting-section><summary>Troubleshooting</summary><div data-controller-troubleshooting>${troubleshooting(row)}</div></details>`;
     bindTroubleshooting();
     const form = root.querySelector('form'), review = root.querySelector('[data-controller-review]');
     root.querySelector('[data-controller-select]').onchange = event => {

@@ -89,8 +89,8 @@
   "additions": [
     {
       "path": "web-admin/public/controller.js",
-      "sha256": "e4217eb97c8f616df7e497a7d817110c9454ee66fb4a39bd47494c2cb55ce820",
-      "purpose": "Plugin-native controller timing editor, live troubleshooting and setup instructions when no garage exists."
+      "sha256": "a32dfe87addc2d37e3ea16df8fbeb0395d5b26015046d3fa8e29ffcffd6f2bc4",
+      "purpose": "Plugin-native controller timing editor, collapsed troubleshooting below its controls, and setup instructions when no garage exists."
     }
   ]
 }

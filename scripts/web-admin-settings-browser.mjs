@@ -84,16 +84,25 @@ try {
     });
     try {
       await editor.goto(origin + '/controller'); await editor.locator('[data-default-group="timing"]').first().waitFor();
+      const troubleshooting = editor.locator('[data-controller-troubleshooting-section]');
+      const openTroubleshooting = () => troubleshooting.locator('summary').click();
+      assert.equal(await troubleshooting.evaluate(el=>el.open),false,'Troubleshooting starts collapsed');
+      assert.equal(await editor.evaluate(()=>Boolean(document.querySelector('[data-controller-form]').compareDocumentPosition(document.querySelector('[data-controller-troubleshooting-section]'))&Node.DOCUMENT_POSITION_FOLLOWING)),true,'Troubleshooting follows the complete control settings');
+      await openTroubleshooting();assert.equal(await editor.getByRole('button',{name:'Check state now',exact:true}).isVisible(),true);
+      await openTroubleshooting();assert.equal(await editor.getByRole('button',{name:'Check state now',exact:true}).isVisible(),false);
+      assert.deepEqual(hardwareWrites,[],'Expanding and collapsing does not send a hardware command');
       const id=config.controllers[0].id;
       await runtime.commission(id,{revision:runtime.state.revision,previousControllerStopped:true,physicalSetupReviewed:true});
       for (const listener of runtime.entry(id).listeners) listener.stop();
       failReads=true; await runtime.entry(id).engine.observe(); await editor.evaluate(()=>panel.load());
+      await openTroubleshooting();
       assert.equal(runtime.status(id).enabled,true); assert.equal(runtime.status(id).health.title,'Fault');
       await editor.locator('[data-controller-troubleshooting] strong').filter({hasText:'Fault'}).waitFor();
       assert.equal(await editor.getByRole('button',{name:'Check again',exact:true}).count(),1);
       failReads=false; await editor.getByRole('button',{name:'Check again',exact:true}).click();
       await editor.getByText('Device states checked. No movement command was sent.',{exact:true}).waitFor();
       await editor.locator('[data-controller-troubleshooting] strong').filter({hasText:'Ready · Closed'}).waitFor();
+      assert.equal(await troubleshooting.evaluate(el=>el.open),true,'State refresh keeps Troubleshooting expanded');
       for (const listener of runtime.entry(id).listeners) listener.stop();
       assert.equal(runtime.status(id).enabled,true); assert.deepEqual(hardwareWrites,[]);
       const statusValue = label => editor.getByText(label, {exact:true}).locator('..').locator('dd');
@@ -101,6 +110,7 @@ try {
       assert.equal(await statusValue('Primary opener commands enabled').textContent(), 'Yes');
       assert.equal(await statusValue('Infrared beam signal').textContent(), 'Not available');
       lockout = true; await runtime.entry(id).engine.observe(); await editor.evaluate(()=>panel.load());
+      await openTroubleshooting();
       await editor.locator('[data-controller-troubleshooting] strong').filter({hasText:'Tailwind locked out'}).waitFor();
       assert.equal(await statusValue('Primary opener commands enabled').textContent(), 'No');
       assert.equal(await statusValue('Lockout flag').textContent(), 'Yes');

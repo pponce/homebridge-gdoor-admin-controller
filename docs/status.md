@@ -1,3 +1,21 @@
+## 2026-10-11 — Collapsed Controller troubleshooting for 0.4.47
+
+Move Troubleshooting below the complete Controller settings, including opener
+lockout, controller defaults, device timing overrides and motor relay pulses.
+A native details/summary disclosure starts collapsed, supports keyboard and
+pointer toggling, and retains its expanded state during live status refreshes.
+All diagnostic values/actions remain inside its body. Timing edits and the
+empty-garage setup message keep their existing behavior.
+
+The static demo and asset manifest are synchronized. Existing desktop/mobile
+browser checks now open the disclosure before diagnostic actions and verify
+its default state, placement, toggling without hardware commands, and retained
+expansion after refreshed feedback. Asset checks and all 18 owner-install
+regressions pass. Syntax, release notes and whitespace checks pass. Version
+0.4.47 and its pinned owner updater are prepared after the owner requested the
+update script. Browser CI and release readiness remain pending; no npm or host
+installation has been performed by this agent.
+
 ## 2026-10-11 — 0.4.46 GitHub release verified; owner update ready
 
 The owner explicitly approved merging and releasing 0.4.46. PR #7 is merged;

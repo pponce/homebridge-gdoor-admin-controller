@@ -2,6 +2,10 @@
 
 User-facing changes for `homebridge-gdoor-admin-controller`. GitHub releases use matching `vVERSION` tags. Development history and validation receipts are in [developer documentation](docs/developer/README.md).
 
+## 0.4.47 — 2026-10-11
+
+- Move Controller troubleshooting below the lockout settings, controller defaults, device timing overrides and motor relay pulses. It starts collapsed and can be expanded or collapsed; live status refreshes keep the chosen state.
+
 ## 0.4.46 — 2026-10-11
 
 - Make the virtual keypad part of enabled web administration; remove its separate garage Controls setup. One garage is selected automatically, and multiple garages can be selected on the web keypad.
