@@ -1,5 +1,21 @@
 ## 2026-10-11 — 0.4.45 owner update preparation
 
+Release source 98e733bd45844ac897d260c5e88ed8c21dc8a9c0 passed all five
+Coordinator checks jobs in
+https://github.com/pponce/homebridge-gdoor-admin-controller/actions/runs/38187336173,
+including both Node versions, both Homebridge versions and desktop/mobile UI.
+Local exact package validation passed for 119 tracked files; updater syntax and
+release notes passed. The following documentation-only receipt does not change
+the source pinned for publication/installation.
+
+Main promotion was rejected by automatic approval review: an install-script
+request did not authorize merging/releasing. Main remains at 0.4.44; no GitHub
+or npm 0.4.45 release, or installed-host change, was made. The prepared updater
+requires main to contain its reviewed commit, so it is not yet runnable through
+the normal release path. Upstream hb-service accepts registry plugin name/version
+arguments rather than local tarball paths. Explicit merge/release approval is
+needed to complete that path; no alternative promotion/publication was attempted.
+
 At the owner's request, prepared the installable 0.4.45 release from the validated
 sensor feature in draft PR #6. Only version metadata, dated changelog, installation
 references and an owner updater change; runtime source is unchanged. The updater
@@ -11,7 +27,7 @@ Homebridge stopped. It does not edit sensor selections or actuate the garage.
 Sensor placement and the existing setup review are completed after installation.
 
 Local updater syntax, demo freshness, release notes and whitespace checks pass.
-The release revision's full CI, main promotion and GitHub release are pending.
+The release revision's full CI passed; main promotion and GitHub release await approval.
 npm publication and installation will run on the owner's authenticated Mint host.
 
 ## 2026-10-11 — Selectable position sensor devices (development)
