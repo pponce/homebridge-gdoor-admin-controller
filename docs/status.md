@@ -1,3 +1,31 @@
+## 2026-10-11 — 0.4.47 GitHub release verified; owner update ready
+
+The owner explicitly approved merging and releasing 0.4.47. PR #8 is merged
+and the earlier automatic approval gate is resolved. Tested source and tag:
+b7eb73be3a76a47a7f47845560c4eeb1eb4c1548.
+All five main Coordinator checks jobs passed in
+https://github.com/pponce/homebridge-gdoor-admin-controller/actions/runs/38207213270:
+Node 22/24 unit/protocol/package checks, actual Homebridge 2.0/2.4, custom UI IPC,
+desktop/mobile configuration, administration and Controller diagnostic/timing
+flows, and the static demo. Checks confirm troubleshooting starts collapsed,
+sits below all control settings, toggles without hardware commands and stays
+expanded when status updates arrive.
+
+GitHub release workflow 38207410197 succeeded and published
+https://github.com/pponce/homebridge-gdoor-admin-controller/releases/tag/v0.4.47
+with the npm archive, static-demo ZIP and source commit receipt. The release
+target and tag both match the tested source. The public demo deployment passed.
+The updater matches that source exactly; its single-block interactive launcher
+is syntax checked and pinned to the full commit. It retains archive/registry
+checks and stop → pinned add → verify installed package → start. All 18 owner
+installation regressions passed, including APT output and failed-install holds.
+
+npm publication, host installation and live acceptance remain owner-run. The
+agent has not run npm publication or any live host-service/hardware command.
+The owner should refresh the Controller page after the update to see the new
+collapsed section below the settings. Configuration and HomeKit pairing remain
+unchanged by this layout adjustment.
+
 ## 2026-10-11 — Collapsed Controller troubleshooting for 0.4.47
 
 Move Troubleshooting below the complete Controller settings, including opener
@@ -13,7 +41,18 @@ its default state, placement, toggling without hardware commands, and retained
 expansion after refreshed feedback. Asset checks and all 18 owner-install
 regressions pass. Syntax, release notes and whitespace checks pass. Version
 0.4.47 and its pinned owner updater are prepared after the owner requested the
-update script. Browser CI and release readiness remain pending; no npm or host
+update script. All five Coordinator checks jobs passed on
+b7eb73be3a76a47a7f47845560c4eeb1eb4c1548 in
+https://github.com/pponce/homebridge-gdoor-admin-controller/actions/runs/38202790624:
+complete Node 22/24, actual Homebridge 2.0/2.4, and desktop/mobile configuration,
+web administration, Controller diagnostics/settings and demo checks. PR #8 is
+ready with the full implementation and updater.
+
+Automatic approval review rejected advancing main because this would trigger
+the 0.4.47 release workflow and the update-script request was not interpreted
+as explicit authorization to merge/publish this version. Main is unchanged at
+a6bb4a0b014aa737edc349d62fd931eb04e68863. Merge/release approval is the remaining
+gate before the runnable pinned update command is provided. No npm or host
 installation has been performed by this agent.
 
 ## 2026-10-11 — 0.4.46 GitHub release verified; owner update ready
