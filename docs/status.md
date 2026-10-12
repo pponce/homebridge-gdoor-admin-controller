@@ -26,8 +26,14 @@ Demo regeneration/freshness, release notes, JavaScript syntax and whitespace
 checks pass. Legacy cross-repository integration: 14 passed; the two already
 stale contract-copy tests fail. Added desktop/mobile cases for Controls removal,
 web-only Controller instructions, default/explicit targets and cleared entry.
-Remote browser CI is pending. Runtime/package version remains 0.4.45; this feature
-is unreleased source. No npm publication, installation or physical command.
+Draft PR #7 contains this change. Node 22/24 and Homebridge 2.0/2.4 passed on
+e4729a1a088c03a95f5ddcc0cb4e66a26b290ed7 in Coordinator checks 38199191869.
+The browser run identified an obsolete summary-count assertion for the removed
+virtual-keypad panel; the check now verifies the selected physical control’s
+connection summary. Version 0.4.46 and its pinned owner updater are prepared
+after the owner requested an update script. All 12 installation checks pass for
+0.4.45/0.4.46, including actual APT output and failure holds. Browser CI on the
+release candidate is pending. No npm publication, installation or physical command.
 
 ## 2026-10-11 — Correct APT owner-install verification
 

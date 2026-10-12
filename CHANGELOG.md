@@ -2,11 +2,12 @@
 
 User-facing changes for `homebridge-gdoor-admin-controller`. GitHub releases use matching `vVERSION` tags. Development history and validation receipts are in [developer documentation](docs/developer/README.md).
 
-## Unreleased
+## 0.4.46 — 2026-10-11
 
 - Make the virtual keypad part of enabled web administration; remove its separate garage Controls setup. One garage is selected automatically, and multiple garages can be selected on the web keypad.
 - Allow web administration without a garage. The Controller page shows where to add one in Homebridge, with no garage actions available until a garage is configured.
 - Preserve existing garage setup approval and the primary opener route, PIN verification, request freshness and duplicate suppression.
+- Verify the installed version from Homebridge’s managed package so the owner updater accepts normal APT installation output and restarts after a confirmed install.
 
 ## 0.4.45 — 2026-10-11
 

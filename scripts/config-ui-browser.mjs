@@ -617,7 +617,7 @@ try{
      await p.locator('#general-tab').click();await p.getByRole('button',{name:'Edit connection deCONZ 1',exact:true}).click();
      await p.locator('#shared-address').fill('192.0.2.56:8080');await p.getByRole('button',{name:'Update connection',exact:true}).click();
      await p.locator('#garages-tab').click();await p.getByRole('button',{name:'02 Controls'}).click();
-     const summaries=await p.locator('.connection-summary').allTextContents();assert.ok(summaries.length>=2);assert.ok(summaries.every(text=>text.includes('192.0.2.56:8080')));
+     const summaries=await p.locator('.input-profile .connection-summary').allTextContents();assert.equal(summaries.length,1,'The selected physical control retains its connection summary');assert.ok(summaries.every(text=>text.includes('192.0.2.56:8080')));
      await review(p);await p.getByRole('button',{name:'Save configuration',exact:true}).click();await saved(p);
      assert.equal(await p.locator('.garage-card').getAttribute('data-state'),'disabled');
      assert.equal(x.configuration().controllers[0].bolt.baseUrl,'http://192.0.2.56:8080');

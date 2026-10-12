@@ -5,24 +5,25 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-const script = await readFile(new URL('../scripts/update-owner-0.4.45.sh', import.meta.url), 'utf8');
+for (const version of ['0.4.45', '0.4.46']) {
+const script = await readFile(new URL('../scripts/update-owner-' + version + '.sh', import.meta.url), 'utf8');
 const installation = script.slice(script.lastIndexOf('\nsudo -v\n'));
 assert.ok(installation.startsWith('\nsudo -v\n'), 'Updater installation boundary changed');
 
 for (const outcome of ['apt-success', 'ui-success', 'failed-zero', 'failed-nonzero', 'wrong-version', 'missing-package']) {
-  test('owner updater restarts only after confirmed installation: ' + outcome, async t => {
+  test('owner updater ' + version + ' restarts only after confirmed installation: ' + outcome, async t => {
     const directory = await mkdtemp(path.join(tmpdir(), 'owner-updater-'));
     t.after(() => rm(directory, { recursive: true, force: true }));
     const plugins = path.join(directory, 'installed');
     if (outcome !== 'missing-package') {
       await mkdir(path.join(plugins, 'homebridge-gdoor-admin-controller'), {recursive:true});
       await writeFile(path.join(plugins, 'homebridge-gdoor-admin-controller/package.json'), JSON.stringify({
-        name:'homebridge-gdoor-admin-controller', version:outcome==='wrong-version'?'0.4.44':'0.4.45',
+        name:'homebridge-gdoor-admin-controller', version:outcome==='wrong-version'?'0.4.44':version,
       }));
     }
     const result = spawnSync('bash', ['-c', `
 set -euo pipefail
-release_spec='homebridge-gdoor-admin-controller@0.4.45'
+release_spec='homebridge-gdoor-admin-controller@${version}'
 release_directory="$UPDATER_TEST_DIRECTORY"
 release_plugin_path="$UPDATER_TEST_DIRECTORY/installed"
 sudo() {
@@ -41,11 +42,12 @@ sudo() {
 ${installation}
 `], { env: { ...process.env, UPDATER_TEST_DIRECTORY: directory, UPDATER_TEST_OUTCOME: outcome }, encoding: 'utf8' });
     const calls = (await readFile(path.join(directory, 'calls.txt'), 'utf8')).trim().split('\n');
-    assert.deepEqual(calls.slice(0, 3), ['-v', 'hb-service stop', 'hb-service add homebridge-gdoor-admin-controller@0.4.45']);
+    assert.deepEqual(calls.slice(0, 3), ['-v', 'hb-service stop', 'hb-service add homebridge-gdoor-admin-controller@' + version]);
     if (outcome.endsWith('success')) {
       assert.equal(result.status, 0, result.stderr); assert.equal(calls.at(-1), 'hb-service start');
     } else {
       assert.notEqual(result.status, 0); assert.ok(!calls.includes('hb-service start'), 'A failed or unconfirmed install must leave Homebridge stopped');
     }
   });
+}
 }
