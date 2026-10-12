@@ -66,7 +66,7 @@ On a host managed by `hb-service`, install the release from a terminal:
 (
   set -e
   sudo hb-service stop
-  sudo hb-service add homebridge-gdoor-admin-controller@0.4.28
+  sudo hb-service add homebridge-gdoor-admin-controller@0.4.45
   sudo hb-service start
 )
 ```

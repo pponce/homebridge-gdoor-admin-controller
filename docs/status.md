@@ -1,3 +1,19 @@
+## 2026-10-11 — 0.4.45 owner update preparation
+
+At the owner's request, prepared the installable 0.4.45 release from the validated
+sensor feature in draft PR #6. Only version metadata, dated changelog, installation
+references and an owner updater change; runtime source is unchanged. The updater
+retains SSH Git and a pinned reviewed source revision, preserves local changes,
+uses the existing npm browser authentication/publication flow, and verifies the
+downloaded artifact before stopping Homebridge. Installation remains explicit
+stop -> add homebridge-gdoor-admin-controller@0.4.45 -> start; an add failure leaves
+Homebridge stopped. It does not edit sensor selections or actuate the garage.
+Sensor placement and the existing setup review are completed after installation.
+
+Local updater syntax, demo freshness, release notes and whitespace checks pass.
+The release revision's full CI, main promotion and GitHub release are pending.
+npm publication and installation will run on the owner's authenticated Mint host.
+
 ## 2026-10-11 — Selectable position sensor devices (development)
 
 Final source validation: all five Coordinator checks jobs passed on

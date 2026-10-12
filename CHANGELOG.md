@@ -2,7 +2,7 @@
 
 User-facing changes for `homebridge-gdoor-admin-controller`. GitHub releases use matching `vVERSION` tags. Development history and validation receipts are in [developer documentation](docs/developer/README.md).
 
-## Unreleased
+## 0.4.45 — 2026-10-11
 
 - Add an optional Tailwind fully-open sensor on a different door input. Its Door control may remain disabled. The original input still controls the opener and confirms closed.
 - Add named Homebridge contact sensors under Devices. Show Tailwind and ratgdo endpoint feedback automatically in the device list.
