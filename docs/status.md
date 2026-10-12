@@ -20,23 +20,25 @@ single worker and no-retry rules remain. No startup/discovery/config actuation.
 Production loopback tests verify valid-PIN opening and rejected-PIN closing/
 bolting with profile.keypad null. Zero/one/multiple target, stale/missing target,
 malformed request, deduplication, authorization and disabled-mode tests pass.
-Full Node suite: 452 of 453 first passed; the remaining asset hash check passed
-after updating the changed asset manifest. Final focused checks: 22 passed.
+All five Coordinator checks jobs passed on
+cfdd79682aa84a3ba68594d8819d9444ba01bba7 in
+https://github.com/pponce/homebridge-gdoor-admin-controller/actions/runs/38199800287:
+complete Node 22/24 unit/protocol/package checks, actual Homebridge 2.0/2.4,
+custom UI IPC, desktop/mobile configuration, production web-admin flows,
+settings and the static demo. Browser cases verify Controls removal, the empty
+Controller instructions, automatic/explicit garage targets and cleared entry.
 Demo regeneration/freshness, release notes, JavaScript syntax and whitespace
 checks pass. Legacy cross-repository integration: 14 passed; the two already
-stale contract-copy tests fail. Added desktop/mobile cases for Controls removal,
-web-only Controller instructions, default/explicit targets and cleared entry.
-Draft PR #7 contains this change. Node 22/24 and Homebridge 2.0/2.4 passed on
-e4729a1a088c03a95f5ddcc0cb4e66a26b290ed7 in Coordinator checks 38199191869.
-The browser run identified an obsolete summary-count assertion for the removed
-virtual-keypad panel; the check now verifies the selected physical control’s
-connection summary. Version 0.4.46 and its pinned owner updater are prepared
-after the owner requested an update script. All 12 installation checks pass for
-0.4.45/0.4.46, including actual APT output and failure holds. Browser CI on the
-release candidate passed the new zero/one/multiple-garage browser scenarios;
-the following user-edit flow needed to reopen its detail view after returning
-from the keypad on mobile. That navigation step is corrected; complete browser
-CI is pending. No npm publication, installation or physical command.
+stale contract-copy tests fail.
+
+PR #7 contains this change. Version 0.4.46 and its pinned owner updater are
+prepared after the owner requested an update script. All 12 installation checks
+pass for 0.4.45/0.4.46, including actual APT output and failure holds. The updater
+retains source/archive/registry verification, one publication attempt, and the
+stop → pinned add → verify installed package → start sequence. GitHub release
+publication follows successful checks on main. npm authentication/publication,
+host installation and physical acceptance remain owner-run; no live hardware
+or host-service command has been sent from this development environment.
 
 ## 2026-10-11 — Correct APT owner-install verification
 
