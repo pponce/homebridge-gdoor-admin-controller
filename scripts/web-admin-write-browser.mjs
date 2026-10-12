@@ -75,6 +75,7 @@ try {
       await enterCode();await page.locator('#keypad-results').filter({hasText:'Accepted'}).waitFor();
       assert.deepEqual(f.garageRequests,['garage-one','garage-two']);
       f.runtime.configuration.controllers=[];await navigate('users');
+      await page.locator('#user-list [data-id]').first().click();await ready();
       await page.locator('#name').fill('Owner renamed');
       await page.locator('#editor button.primary').click(); await page.getByText('Saved. A private recovery snapshot was created before the change.', { exact: true }).waitFor();
       assert.equal(f.data.responses['/alarmsystems/users']['a'.repeat(32)].name, 'Owner renamed');

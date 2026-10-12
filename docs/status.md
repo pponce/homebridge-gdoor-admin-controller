@@ -33,7 +33,10 @@ virtual-keypad panel; the check now verifies the selected physical control’s
 connection summary. Version 0.4.46 and its pinned owner updater are prepared
 after the owner requested an update script. All 12 installation checks pass for
 0.4.45/0.4.46, including actual APT output and failure holds. Browser CI on the
-release candidate is pending. No npm publication, installation or physical command.
+release candidate passed the new zero/one/multiple-garage browser scenarios;
+the following user-edit flow needed to reopen its detail view after returning
+from the keypad on mobile. That navigation step is corrected; complete browser
+CI is pending. No npm publication, installation or physical command.
 
 ## 2026-10-11 — Correct APT owner-install verification
 
