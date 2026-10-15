@@ -26,8 +26,13 @@ All 508 local Node tests pass, including 22 new driver/configuration/engine/
 real-transport checks and 30 owner-updater installation outcomes. The legacy
 administrator contract copy is synchronized in the isolated compatibility
 fixture; all 16 cross-repository checks pass. The exact npm archive contains
-122 tracked, allowlisted files and passes integrity checks. Node 22/24, actual
-Homebridge 2.0/2.4 and desktop/mobile browser release CI are pending.
+122 tracked, allowlisted files and passes integrity checks. All five Coordinator
+checks passed on candidate 1a02d35ef4dc951bc94c7930a62c1fb4f9fb57a0 in run
+38681047701: Node 22/24, actual Homebridge 2.0/2.4 and desktop/mobile browser
+flows including required one-tile setup and both pulse directions. The final
+updater guidance now points to separate-relay setup instead of the preceding
+door-only feature; its 30 installation outcomes pass locally. The final source
+revision still requires those same five CI checks before release.
 No live device commands, npm publication or host installation have occurred.
 
 PR #9 is merged. Tested source and release tag v0.4.48 point to

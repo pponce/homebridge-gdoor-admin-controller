@@ -72,6 +72,8 @@ NODE
 sudo hb-service start
 echo 'RESULT: Homebridge updated to homebridge-gdoor-admin-controller@0.4.49'
 echo 'Current garage configuration and HomeKit pairing are retained.'
-echo 'For door-only operation: secure the physical bolt retracted, then turn off Bolt control enabled under Garage doors > Devices.'
+echo 'For separate bolt outputs: open Garage doors > Devices > Bolt / Lock and choose Separate lock and unlock relays.'
+echo 'Select both relays, choose momentary or maintained operation, and set the pulse length if momentary (default 0.2 seconds).'
+echo 'One required HomeKit bolt Lock tile controls both outputs. Momentary bolt position is estimated and unknown after restart.'
 echo 'Review and save, check connections, confirm the physical setup, and enable the garage.'
 echo 'END Garage Door Admin Controller update'
