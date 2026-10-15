@@ -110,7 +110,7 @@ async function fixture(browser,{mobile,dark,mode='managed'}){
   return{page,errors,probedIds,recoveries:()=>recoveries,keyDeletes:()=>keyDeletes,savedKeys:()=>[...savedKeys],localImports:()=>localImports,debugReads:()=>debugReads,debugWrites:()=>debugWrites,reviews:()=>reviews,disables:()=>disables,configuration:()=>configuration,blocks:()=>blocks,applies:()=>applies,nativeSaves:()=>nativeSaves,probes:()=>probes,commissions:()=>commissions,release:()=>releaseNative?.()};
 }
 async function review(page){
-  await page.getByRole('button',{name:'Review changes',exact:true}).click();
+  await page.locator('#review-button').click();
   await page.getByRole('button',{name:'Save configuration',exact:true}).waitFor();
 }
 async function saved(page){

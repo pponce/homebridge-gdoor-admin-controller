@@ -76,7 +76,8 @@ async function main() {
     assert.deepEqual(hardware.state.writes, []);
     const management = async (endpoint, body) => {
       const response = await fetch(origin + endpoint, { method: body ? 'POST' : 'GET', headers: { Authorization: 'Bearer '+identity.token, 'X-Coordinator-Status':'detailed', ...(body?{'Content-Type':'application/json'}:{}) }, ...(body?{body:JSON.stringify({instanceId:identity.instanceId,...body})}:{}), signal:AbortSignal.timeout(10000) });
-      assert.ok(response.ok); return response.json();
+      const value = await response.json();
+      assert.ok(response.ok, endpoint+' returned '+response.status+': '+JSON.stringify(value)); return value;
     };
     const id=platform.controllers[0].id;const endpoint='/v1/controllers/'+id;
     const enabled=await management(endpoint+'/commission',{revision:1,previousControllerStopped:true,physicalSetupReviewed:true,recover:false});assert.equal(enabled.status.actuationEnabled,true);
@@ -286,7 +287,7 @@ async function main() {
     const requestStart = hardware.state.requests.length;
     const offProbe = (await management(endpoint+'/probe', {})).probe;
     assert.equal(offProbe.compatible, true); assert.equal(offProbe.bolt.state, 'disabled');
-    await management(endpoint+'/commission', { revision: doorOnly.revision, previousControllerStopped: true, physicalSetupReviewed: true });
+    await management(endpoint+'/commission', { revision: doorOnly.revision, previousControllerStopped: true, physicalSetupReviewed: true, recover: true });
     const hapAccessories = async () => (await (await fetch(hapOrigin+'/accessories', { headers: { Authorization:'031-45-154' } })).json()).accessories;
     await until(async () => (await hapAccessories()).length === 4);
     assert.equal((await hapAccessories()).find(a=>a.services.some(s=>serviceType(s,'41'))).aid, garage.aid);
@@ -306,7 +307,7 @@ async function main() {
     hardware.state.reachable = true;
     const boltAgain = await changeBoltMode(true);
     assert.equal((await management(endpoint+'/state')).status.actuationEnabled, false);
-    await management(endpoint+'/commission', { revision: boltAgain.revision, previousControllerStopped: true, physicalSetupReviewed: true });
+    await management(endpoint+'/commission', { revision: boltAgain.revision, previousControllerStopped: true, physicalSetupReviewed: true, recover: true });
     await until(async () => (await hapAccessories()).length === 5);
     assert.equal((await hapAccessories()).find(a=>a.services.some(s=>serviceType(s,'41'))).aid, garage.aid);
     assert.equal((await hapAccessories()).find(a=>a.services.some(s=>serviceType(s,'45'))).aid, bolt.aid);
