@@ -1,4 +1,37 @@
 ## 2026-10-15 — 0.4.48 source and GitHub release verified
+## 2026-10-15 — 0.4.49 source and GitHub release verified
+
+PR #10 is merged. Tested source and tag v0.4.49 point to
+7a68fc8015ab11ef9fc07196119895b4bc4c1d1d. All five Coordinator checks passed
+on the final PR in run 38681387412 and on main in run 38681696854:
+https://github.com/pponce/homebridge-gdoor-admin-controller/actions/runs/38681696854
+
+Coverage includes 508 Node tests on Node 22/24, exact npm packaging, actual
+Homebridge 2.0/2.4, UI IPC, desktop Chromium/mobile WebKit configuration,
+production web-admin flows and static demo checks. New Homebridge checks verify
+one retained logical LockMechanism for both outputs, lock/unlock pulse sequences,
+garage cycles and clean restart with Unknown bolt position and no actuation.
+Browser checks verify selection of both endpoints, optional maintained operation,
+0.2-second pulse default, required checked Lock tile, save/reload and return to
+single-relay setup. Sixteen legacy cross-repository checks pass locally.
+
+Release workflow 38681997399 succeeded and published the checked npm archive,
+static-demo ZIP and source receipt:
+https://github.com/pponce/homebridge-gdoor-admin-controller/releases/tag/v0.4.49
+Demo deployment 38681696901 passed. The owner updater and single-block launcher
+are syntax checked and pinned to the tested source. Thirty updater installation
+outcomes pass. The updater prints npm browser-authentication URLs and verifies
+publication/download before stop → pinned add → verify → start, leaving
+Homebridge stopped on installation failure.
+
+npm publication, host installation and physical acceptance remain owner-run.
+No live hardware or host service command was sent. After installation, select
+separate outputs under Devices → Bolt / Lock, choose the actual lock/unlock
+endpoints and momentary mode, review/save and complete setup checks. The
+0.2-second default needs verification on the owner's actual mechanism. Pulse
+position remains an estimate; unobserved commands from other controls are not
+physical feedback and no estimate is restored after restart.
+
 ## 2026-10-15 — Separate bolt outputs, 0.4.49 candidate
 
 The owner requested a Devices → Bolt / Lock choice after the saved deCONZ
