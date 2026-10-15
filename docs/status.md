@@ -1,3 +1,37 @@
+## 2026-10-15 — 0.4.48 source and GitHub release verified
+
+PR #9 is merged. Tested source and release tag v0.4.48 point to
+b0d1911db1a428a0b1c1ce7b446a1026e3a749b0. All five Coordinator checks passed
+on the PR in run 38677154705 and on main in run 38677396497:
+https://github.com/pponce/homebridge-gdoor-admin-controller/actions/runs/38677396497
+
+Checks cover the complete Node 22/24 unit/protocol/package suites, actual
+Homebridge 2.0/2.4, custom configuration UI IPC, desktop/mobile configuration,
+web administration, live controller timings and the static demo. Door-only
+checks prove no disabled-bolt requests, successful HomeKit opening/closing,
+read-only commissioning, preserved garage AID, restart with the bolt offline,
+and explicit re-enablement without actuation. Homebridge recreates a removed
+bolt tile after restart; it retains its plugin serial identity but can receive
+a new numeric AID. The UI and README explain checking its room/automations.
+The browser checks preserve saved mappings/timings and require setup review
+on both mode changes. Initial new-test selector, request-field and bolt-AID
+expectations were corrected before the final complete pass.
+
+GitHub release workflow 38677648140 succeeded. Release:
+https://github.com/pponce/homebridge-gdoor-admin-controller/releases/tag/v0.4.48
+The archive, static-demo ZIP and source receipt are published; public demo
+deployment 38677396517 passed. The owner updater and single-block interactive
+launcher are syntax checked and pinned to the tested source. They use SSH Git,
+print npm browser-authentication URLs and verify publication/download integrity
+before stop → pinned add → verify installed package → start. The 24 installation
+regressions include successful APT/UI output and failed-install holds.
+
+npm publication, host installation and physical acceptance remain owner-run.
+The agent has sent no live device or host-service commands. Bolt control remains
+on until the owner secures the physical bolt retracted, saves the off setting,
+checks connections and confirms setup. Saved bolt configuration is retained for
+the replacement relay; its mapping/identity must be checked when re-enabling.
+
 ## 2026-10-15 — Optional bolt control and 0.4.48 owner updater
 
 The owner authorized a per-garage **Bolt control enabled** switch for temporary
