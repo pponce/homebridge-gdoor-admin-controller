@@ -1,3 +1,32 @@
+## 2026-10-15 — 0.4.50 source and GitHub release verified
+
+PR #11 is merged. Tested source and tag v0.4.50 point to
+03506925bd544027b49355d8c6829b9cb84234b6. All five Coordinator checks passed
+on the PR in run 38684273773 and on main in run 38684585990:
+https://github.com/pponce/homebridge-gdoor-admin-controller/actions/runs/38684585990
+
+Validation includes 518 Node tests on Node 22/24, exact npm packaging, actual
+Homebridge 2.0/2.4 and the existing desktop/mobile configuration and web-admin
+flows. New Homebridge checks retain enablement and garage/Lock AIDs across
+0.2 → 0.1 → 0.2 pulse edits and restarts, and successfully operate both pulse
+directions through HAP afterwards. Focused runtime checks verify actual chosen
+software duration, disabled/unapproved configurations, mapping changes and
+fault holds. Saving and restarting issue no hardware commands.
+
+Release workflow 38684796916 succeeded. The verified tag includes the npm
+archive, static-demo ZIP and source receipt:
+https://github.com/pponce/homebridge-gdoor-admin-controller/releases/tag/v0.4.50
+The owner launcher is syntax checked and pinned to that source. The updater
+prints npm browser-authentication URLs, verifies publication/download first,
+then stops Homebridge, adds the pinned plugin, verifies the installed version
+and starts Homebridge. All 36 updater installation outcomes pass locally.
+
+0.4.50 npm publication and host installation remain owner-run. No live hardware
+or host-service commands were sent. The owner's successful 0.2-second bolt test
+was on 0.4.49; no new physical acceptance is claimed. Existing approval carries
+forward; an approval already removed by an earlier save still needs the existing
+setup review once. Future pulse-only edits preserve that approval.
+
 ## 2026-10-15 — Pulse-length approval fix, 0.4.50 candidate
 
 The owner installed 0.4.49 and reports successful lock/unlock through the combined
