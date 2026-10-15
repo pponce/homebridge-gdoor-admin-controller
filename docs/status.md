@@ -1,3 +1,31 @@
+## 2026-10-15 — 0.4.51 source and GitHub release verified
+
+PR #12 is merged. The tested source and v0.4.51 tag both point to
+8a2e5ac05386d042b5b712d792f022e3461aab05. All five Coordinator checks passed
+on the PR in run 38755311163 and on main in run 38755886433:
+https://github.com/pponce/homebridge-gdoor-admin-controller/actions/runs/38755886433
+
+Validation covers Node 22/24, actual Homebridge 2.0/2.4, desktop/mobile
+configuration and web-admin flows, static demo freshness and exact npm packaging.
+The 42 owner-updater installation outcomes pass, including the six 0.4.51 cases.
+The 16 cross-repository API checks also passed locally. New timing checks cover
+independent pulse/settling deadlines, OFF ownership, direction changes, late
+release faults, shutdown, feedback waits and persisted shared/override timing.
+
+Release workflow 38756340208 succeeded; v0.4.51 includes the npm archive,
+static-demo ZIP and source receipt:
+https://github.com/pponce/homebridge-gdoor-admin-controller/releases/tag/v0.4.51
+Demo deployment 38755886424 also succeeded. The single-block owner launcher is
+syntax checked and pinned to the tested commit. It prints npm browser approval
+URLs, verifies the registry download, then stops Homebridge, installs the pinned
+version, checks the installed package and starts Homebridge.
+
+npm publication and host installation remain owner-run; no live hardware or
+host-service commands were sent here. The new overlap behavior has synthetic
+coverage, not physical acceptance. Existing numeric retraction waits remain
+explicit overrides: select Use shared settling before opening/closing to use
+the shared extension/retraction setting for both directions.
+
 ## 2026-10-15 — Shared bolt settling and overlapping pulse, 0.4.51 candidate
 
 The owner explicitly approved public publication on 2026-10-15 ("yes publish").
