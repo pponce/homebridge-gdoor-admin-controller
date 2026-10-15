@@ -85,7 +85,7 @@ For an existing installation, update through the Homebridge UI or use the same p
 
 The garage door tile, motor routes, buttons and keypads continue working. Bolt reads, writes, retraction delays and automatic bolting are skipped. The separate bolt Lock tile is removed while disabled; status shows **Bolt disabled**. Bolt mapping, timing and tile preferences remain saved. Door feedback, obstruction, lockout, restart and ambiguous-command protections still apply.
 
-When the bolt relay is ready, turn the option on, review its mapping under **Bolt / Lock**, save and repeat the connection/setup checks before enabling. Replacement hardware may need its new identity selected. Re-enabling does not move the bolt.
+When the bolt relay is ready, turn the option on, review its mapping under **Bolt / Lock**, save and repeat the connection/setup checks before enabling. Replacement hardware may need its new identity selected. Re-enabling does not move the bolt. The bolt tile may be recreated in Apple Home, so check its room and automations; the garage tile remains in place.
 
 ## First setup
 

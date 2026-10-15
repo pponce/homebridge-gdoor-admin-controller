@@ -310,7 +310,10 @@ async function main() {
     await management(endpoint+'/commission', { revision: boltAgain.revision, previousControllerStopped: true, physicalSetupReviewed: true, recover: true });
     await until(async () => (await hapAccessories()).length === 5);
     assert.equal((await hapAccessories()).find(a=>a.services.some(s=>serviceType(s,'41'))).aid, garage.aid);
-    assert.equal((await hapAccessories()).find(a=>a.services.some(s=>serviceType(s,'45'))).aid, bolt.aid);
+    const restoredBolt = (await hapAccessories()).find(a=>a.services.some(s=>serviceType(s,'45')));
+    // Homebridge may assign a new numeric AID after a removed tile and restart.
+    // The garage AID above must stay fixed; the bolt retains its plugin identity.
+    assert.equal(restoredBolt.services.find(s=>serviceType(s,'3E')).characteristics.find(c=>serviceType(c,'30')).value, id+'-bolt');
     assert.deepEqual(hardware.state.writes, writes, 'Re-enabling the bolt must not actuate it');
     const latest = await (await fetch(hapOrigin+'/accessories',{headers:{Authorization:'031-45-154'}})).json();
     const restartAccessory = latest.accessories.find(a=>a.services.some(s=>serviceType(s,'49')));

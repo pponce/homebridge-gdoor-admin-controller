@@ -181,7 +181,7 @@ export class ProfileEditor {
       this.change();this.render();
     });
     this.input(grid,'Show a separate bolt Lock tile',p,'exposeBoltLock',{type:'checkbox'}).disabled=!boltEnabled;
-    if(!boltEnabled)identity.append(el('p','Bolt disabled — door control remains available after setup checks. Bolt commands, checks and delays are skipped.','help'));
+    if(!boltEnabled)identity.append(el('p','Bolt disabled — door control remains available after setup checks. Bolt commands, checks and delays are skipped. The bolt Lock tile is removed; check its Apple Home automations when re-enabling it.','help'));
     if (p.door.type === 'tailwind') {
       this.input(grid,'Show Tailwind Lockout contact sensor',p,'exposeTailwindLockout',{type:'checkbox'});
       this.input(grid,'Show Restart Tailwind switch',p,'exposeTailwindRestart',{type:'checkbox'});
