@@ -2,6 +2,14 @@
 
 User-facing changes for `homebridge-gdoor-admin-controller`. GitHub releases use matching `vVERSION` tags. Development history and validation receipts are in [developer documentation](docs/developer/README.md).
 
+## 0.4.49 — 2026-10-15
+
+- Add **Bolt relay setup** after the deCONZ connection: keep the existing single relay, or select separate lock and unlock relays.
+- Separate outputs support maintained ON or **Momentary relay outputs**, with a configurable pulse length defaulting to **0.2 seconds**. Release the opposite output before changing direction; verify pulse release and never retry an uncertain ON.
+- Automatically check and require **Show a separate bolt Lock tile** for two-relay setups. One coordinated HomeKit Lock tile controls both outputs; the garage door keeps its own tile.
+- Label momentary bolt position as an estimate from the last completed pulse. Restart leaves it unknown; a fresh door operation requests retraction before the motor when needed. Interrupted or failed two-output operations require a read-only check after physical review.
+- Keep existing single-relay profiles and approval hashes unchanged. Both separate outputs remain reserved when bolt control is temporarily disabled. Changes to relay mode, mapping or pulse length require setup review.
+
 ## 0.4.48 — 2026-10-15
 
 - Add **Bolt control enabled** per garage, on by default. Turn it off for door-only operation while retaining the saved bolt mapping, timings and tile preference.

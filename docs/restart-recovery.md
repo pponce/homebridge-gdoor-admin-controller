@@ -6,6 +6,13 @@ Both the Homebridge settings and web Controller page show the saved setting alon
 
 ## Startup and current feedback
 
+Separate momentary bolt relays restart with Unknown bolt position; no pulse
+estimate is restored. Clean startup performs no movement, and the next fresh
+door command requests retraction before motor operation when needed. An
+interrupted or faulted separate-relay operation retains a hold until **Check
+again** after physical review, even with both outputs OFF. The read-only check
+does not replay the pulse. See [separate bolt relays](separate-bolt-relays.md).
+
 Startup begins with Checking devices. It reads current device identity, door and bolt feedback, obstruction/blocking flags and motor relay release. Unavailable startup dependencies retry every five seconds without an overall expiry; idle communication loss uses the configured idle poll interval. Commands wait for healthy readings. A previously recorded fault is archived before its journal is cleared. A resolved old fault, including a legacy boolean-only fault record, does not become a current fault just because Homebridge restarted.
 
 | Fresh feedback | Status and behavior |

@@ -315,6 +315,43 @@ async function main() {
     // The garage AID above must stay fixed; the bolt retains its plugin identity.
     assert.equal(restoredBolt.services.find(s=>serviceType(s,'3E')).characteristics.find(c=>serviceType(c,'30')).value, id+'-bolt');
     assert.deepEqual(hardware.state.writes, writes, 'Re-enabling the bolt must not actuate it');
+    // Separate bolt outputs stay behind exactly one existing LockMechanism.
+    const separate = JSON.parse(await readFile(path.join(root, 'examples/separate-bolt-config.json'), 'utf8')).controllers[0].bolt;
+    separate.baseUrl = hardware.config.bolt.baseUrl;
+    for (const direction of ['lock','unlock']) {
+      const row = separate[direction+'Relay']; hardware.boltOutputs.set(row.resourceId, {...row,direction,on:false});
+    }
+    const pairSettings = (await management('/v1/settings')).settings;
+    Object.assign(pairSettings.configuration.controllers[0], {bolt:separate,exposeBoltLock:true});
+    pairSettings.configuration.controllers[0].feedback.bolt='command';
+    const pairReview=(await management('/v1/settings/review',pairSettings)).review;
+    const pairSaved=(await management('/v1/settings/apply',{token:pairReview.token})).settings;
+    const pairProbe=(await management(endpoint+'/probe',{})).probe;
+    assert.equal(pairProbe.compatible,true);assert.equal(pairProbe.bolt.state,'unknown');
+    await management(endpoint+'/commission',{revision:pairSaved.revision,previousControllerStopped:true,physicalSetupReviewed:true,recover:true});
+    assert.deepEqual(hardware.state.writes,writes,'Separate-relay setup checks cannot pulse either output');
+    let pairAccessories=await hapAccessories();
+    assert.equal(pairAccessories.filter(a=>a.services.some(s=>serviceType(s,'45'))).length,1);
+    const pairTile=pairAccessories.find(a=>a.services.some(s=>serviceType(s,'45')));
+    assert.equal(pairTile.aid,restoredBolt.aid);
+    const pairTarget=pairTile.services.find(s=>serviceType(s,'45')).characteristics.find(c=>serviceType(c,'1E'));
+    for(const [value,boltState]of [[1,'locked'],[0,'unlocked']]){
+      const response=await fetch(hapOrigin+'/characteristics',{method:'PUT',headers:{Authorization:'031-45-154','Content-Type':'application/hap+json'},
+        body:JSON.stringify({characteristics:[{aid:pairTile.aid,iid:pairTarget.iid,value}]})});
+      assert.equal(response.status,204);
+      await until(async()=>{const s=(await management(endpoint+'/state')).status.state;return s.bolt===boltState&&!s.busy;});
+      assert.equal((await management(endpoint+'/state')).status.state.boltEstimated,true);
+    }
+    assert.deepEqual(hardware.state.writes.slice(writes.length),[['bolt-lock',true],['bolt-lock',false],['bolt-unlock',true],['bolt-unlock',false]]);
+    for(const [value,phase]of [[0,'open'],[1,'closed']]){
+      const response=await fetch(hapOrigin+'/characteristics',{method:'PUT',headers:{Authorization:'031-45-154','Content-Type':'application/hap+json'},
+        body:JSON.stringify({characteristics:[{aid:garage.aid,iid:target.iid,value}]})});assert.equal(response.status,204);
+      await until(async()=>{const s=(await management(endpoint+'/state')).status.state;return s.phase===phase&&!s.busy;});
+    }
+    writes=structuredClone(hardware.state.writes);state=await restart(false);
+    assert.equal(state.actuationEnabled,true);assert.equal(state.state.bolt,'unknown');assert.equal(state.state.boltEstimated,false);
+    assert.deepEqual(hardware.state.writes,writes,'Restart cannot restore a pulse estimate or move the bolt');
+    pairAccessories=await hapAccessories();assert.equal(pairAccessories.filter(a=>a.services.some(s=>serviceType(s,'45'))).length,1);
     const latest = await (await fetch(hapOrigin+'/accessories',{headers:{Authorization:'031-45-154'}})).json();
     const restartAccessory = latest.accessories.find(a=>a.services.some(s=>serviceType(s,'49')));
     const restartOn = restartAccessory.services.find(s=>serviceType(s,'49')).characteristics.find(c=>serviceType(c,'25'));

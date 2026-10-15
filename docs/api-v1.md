@@ -60,6 +60,22 @@ The compositor uses the selected sources for every position consumer. External c
 
 ## Settings, commissioning and commands
 
+From 0.4.49, a deCONZ bolt can use relayMode:"separate", shared baseUrl/gatewayId/credentialRef,
+lockRelay and unlockRelay identity objects (resourceId, uniqueId, resourceType,
+modelId, manufacturer), and required boolean momentary. Each output is exclusively
+reserved. This mode requires exposeBoltLock:true and creates one logical Lock tile.
+Momentary mode accepts pulseSeconds (default 0.2, range 0.1–2), requires
+feedback.bolt:"command", and reports state.boltEstimated in the detailed status
+projection. A read-only probe with both outputs OFF returns unknown/command
+without error. Maintained mode requires relay feedback and omits pulseSeconds;
+both OFF returns unknown/relay. An unknown bolt is never treated as retracted
+for motor admission. Single-output profiles retain their original normalized
+shape and approval hashes. Legacy standalone clients with fixed enums must not
+configure/control separate-relay profiles; the bundled UI supports them.
+Legacy status projection omits boltEstimated, while detailed/bundled views label
+command estimates explicitly. An estimate cannot satisfy maintenance operations
+requiring locked relay/position feedback.
+
 Homebridge config supplies the initial profiles. After first start, private profiles.json is authoritative for both configuration UIs; neither UI edits the other's files. Settings is {revision,configuration}. Review returns a random token, normalized configuration, revision and requiresCommissioning IDs, expiring after five minutes. Apply consumes the token and compares revisions; changing hardware or behavior removes commissioning for those garages. In 0.4.11+, a name-only change preserves a currently valid commissioning record and the stable controller/accessory identity. Renaming a disabled garage never enables it; other configuration changes retain the existing re-check policy. Cancel invalidates the review. Credential replacement resets commissioning before storing a private key. Credentials themselves are not in settings.
 
 In 0.4.13+, configuration also includes connections: a reusable catalog of up to 128 objects with id, name, type (deconz/tailwind/homebridge), baseUrl and credentialRef. Tailwind entries additionally carry doorCount (null when unknown, otherwise 1–3). These are saved credential names only, never secret values. Clients must preserve this optional field on read/review/apply; older coordinators may omit it. Existing flat controller profiles remain fully resolved and authoritative for device access. The editor matches uses by backend, normalized address and credential name, and expands a shared edit into every matching profile in the same reviewed transaction. Catalog metadata never overrides device settings at runtime. The validator imports uncatalogued valid endpoint connections deterministically, rejects duplicate catalog endpoints and a selected Tailwind door outside a confirmed count. Existing controller hashes are unchanged by importing/naming the catalog or confirming a valid door count; actual address/credential-reference edits require checks for affected garages. The administrative client must accept/preserve this additive field before editing a 0.4.13+ coordinator.

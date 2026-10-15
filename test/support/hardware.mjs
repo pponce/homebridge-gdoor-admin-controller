@@ -12,6 +12,9 @@ export async function hardwareFixture(configuration) {
   const sockets = new Set();
   const sensors = new Map((config.inputs??[]).filter(i=>i.source.type==='deconz').map(i=>[i.source.resourceId,{...i.source,value:i.source.kind==='keypad'?'disarmed':i.trigger,stamp:new Date(Date.now()-10000).toISOString()}]));
   const motors = new Map((config.motorPaths??[]).filter(m=>m.connection.type==='deconz' && m.connection.resourceId!==config.bolt.resourceId).map(m=>[m.connection.resourceId,{...m.connection,active:false}]));
+  const boltOutputs = new Map(config.bolt.relayMode === 'separate' ? ['lock', 'unlock'].map(direction => {
+    const row = config.bolt[direction + 'Relay']; return [row.resourceId, { ...row, direction, on: false }];
+  }) : []);
   const server = http.createServer(async (request, response) => {
     let raw = ''; for await (const chunk of request) raw += chunk;
     const body = raw ? JSON.parse(raw) : null;
@@ -38,8 +41,10 @@ export async function hardwareFixture(configuration) {
     }
     if (request.url === '/api/synthetic-deconz-key/config' && request.method === 'GET') return send({ bridgeid: state.gatewayId, websocketport: server.address().port });
     if (request.url === '/api/synthetic-deconz-key/lights' && request.method === 'GET') return send({
-      [config.bolt.resourceId]: { name: 'Synthetic bolt', uniqueid: state.uniqueId, type: state.resourceType,
-        modelid: state.modelId, manufacturername: state.manufacturer },
+      ...(config.bolt.relayMode !== 'separate' ? { [config.bolt.resourceId]: { name: 'Synthetic bolt', uniqueid: state.uniqueId, type: state.resourceType,
+        modelid: state.modelId, manufacturername: state.manufacturer } } : {}),
+      ...Object.fromEntries([...boltOutputs].map(([id, row]) => [id, { name: 'Synthetic bolt ' + row.direction,
+        uniqueid: row.uniqueId, type: row.resourceType, modelid: row.modelId, manufacturername: row.manufacturer }])),
       ...Object.fromEntries([...motors].map(([id, row]) => [id, { name: 'Synthetic opener relay', uniqueid: row.uniqueId,
         type: row.resourceType, modelid: row.modelId, manufacturername: row.manufacturer }])),
       '99': { name: 'Unsupported dimmer', type: 'Dimmable light' },
@@ -55,6 +60,16 @@ export async function hardwareFixture(configuration) {
     }
     if (/^\/api\/synthetic-deconz-key\/alarmsystems\/[0-9]+$/.test(request.url) && request.method==='GET') return send({config:{configured:state.alarmConfigured},state:{armstate:'disarmed'},devices:state.alarmMembership?Object.fromEntries([...sensors.values()].filter(s=>s.kind==='keypad').map(s=>[s.uniqueId,{}])):{}});
     const motor=/^\/api\/synthetic-deconz-key\/lights\/([0-9]+)(\/state)?$/.exec(request.url);
+    if (motor && boltOutputs.has(motor[1])) {
+      const row = boltOutputs.get(motor[1]);
+      if (request.method === 'GET') return send({ uniqueid: row.uniqueId, type: row.resourceType, modelid: row.modelId,
+        manufacturername: row.manufacturer, state: { reachable: state.reachable, on: row.on } });
+      if (request.method === 'PUT' && motor[2]) {
+        row.on = body.on; state.writes.push(['bolt-' + row.direction, row.on]);
+        if (row.on) state.locked = row.direction === 'lock';
+        return send([{ success: { ['/lights/' + motor[1] + '/state/on']: row.on } }]);
+      }
+    }
     if(motor && motors.has(motor[1])){const row=motors.get(motor[1]);
       if(request.method==='GET')return send({uniqueid:row.uniqueId,type:row.resourceType,modelid:row.modelId,manufacturername:row.manufacturer,state:{reachable:true,on:row.active?row.activeValue:!row.activeValue}});
       if(request.method==='PUT'&&motor[2]){row.active=body.on===row.activeValue;state.writes.push(['motor',row.active]);if(row.active)state.closed=!state.closed;return send([{success:{['/lights/'+motor[1]+'/state/on']:body.on}}]);}
@@ -78,7 +93,7 @@ export async function hardwareFixture(configuration) {
   config.door.baseUrl = config.bolt.baseUrl = 'http://127.0.0.1:' + port;
   for(const row of [...(config.inputs??[]).map(i=>i.source),...(config.motorPaths??[]).map(m=>m.connection)])if(row.type==='deconz')row.baseUrl=config.bolt.baseUrl;
   const credentials = { [config.door.credentialRef]: '123456', [config.bolt.credentialRef]: 'synthetic-deconz-key' };
-  return { config, state, credentials, server, motors, emit(id,value){const sensor=sensors.get(id);sensor.value=value;sensor.stamp=new Date().toISOString();
+  return { config, state, credentials, server, motors, boltOutputs, emit(id,value){const sensor=sensors.get(id);sensor.value=value;sensor.stamp=new Date().toISOString();
     const event={t:'event',e:'changed',r:'sensors',id,uniqueid:sensor.uniqueId,state:{lastupdated:sensor.stamp,...(sensor.kind==='keypad'?{action:value}:{buttonevent:value})}};
     const data=Buffer.from(JSON.stringify(event));const header=Buffer.alloc(4);header[0]=0x81;header[1]=126;header.writeUInt16BE(data.length,2);for(const socket of sockets)socket.write(Buffer.concat([header,data]));
   }, close: async () => {for(const s of sockets)s.destroy();await closeServer(server);} };

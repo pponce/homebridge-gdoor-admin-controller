@@ -1,4 +1,34 @@
 ## 2026-10-15 — 0.4.48 source and GitHub release verified
+## 2026-10-15 — Separate bolt outputs, 0.4.49 candidate
+
+The owner requested a Devices → Bolt / Lock choice after the saved deCONZ
+connection: single relay (existing behavior) or explicitly selected lock/unlock
+outputs, maintained or momentary, with a 0.2-second default pulse. A subsequent
+clarification requires Show a separate bolt Lock tile to be checked and
+mandatory in separate mode. The two outputs stay behind one logical HomeKit
+LockMechanism and one movement worker; the garage tile is unchanged.
+
+Implementation pins and reserves both output identities, checks opposite OFF
+before ON, releases momentary outputs even after an uncertain acknowledgement
+or graceful cancellation, and retries only idempotent OFF cleanup. Momentary
+feedback is a process-local command estimate, unknown after restart/read loss;
+the next fresh door operation retracts before motor admission when needed.
+Interrupted/faulted pair operations require explicit read-only recovery after
+physical review. Existing single-output normalization/approval hashes are
+unchanged. Setup/diagnostics remain read-only. Pulse-only estimates cannot
+satisfy legacy maintenance that explicitly requires locked feedback.
+
+The UI, schema, synthetic configuration, feedback/restart/parity/API docs,
+web Controller explanation, static demo and 0.4.49 owner updater are prepared.
+The updater retains SSH Git, manual npm browser URL authentication, artifact
+checks before stop → pinned add → verify → start, and no restart on failure.
+All 508 local Node tests pass, including 22 new driver/configuration/engine/
+real-transport checks and 30 owner-updater installation outcomes. The legacy
+administrator contract copy is synchronized in the isolated compatibility
+fixture; all 16 cross-repository checks pass. The exact npm archive contains
+122 tracked, allowlisted files and passes integrity checks. Node 22/24, actual
+Homebridge 2.0/2.4 and desktop/mobile browser release CI are pending.
+No live device commands, npm publication or host installation have occurred.
 
 PR #9 is merged. Tested source and release tag v0.4.48 point to
 b0d1911db1a428a0b1c1ce7b446a1026e3a749b0. All five Coordinator checks passed

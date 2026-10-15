@@ -68,7 +68,7 @@ On a host managed by `hb-service`, install the release from a terminal:
 (
   set -e
   sudo hb-service stop
-  sudo hb-service add homebridge-gdoor-admin-controller@0.4.48
+  sudo hb-service add homebridge-gdoor-admin-controller@0.4.49
   sudo hb-service start
 )
 ```
@@ -76,6 +76,21 @@ On a host managed by `hb-service`, install the release from a terminal:
 If installation fails, the block stops and leaves Homebridge stopped so you can resolve the error. Then open the Homebridge UI to configure the child bridges and plugin. This does not install deCONZ or `homebridge-deconz`.
 
 For an existing installation, update through the Homebridge UI or use the same pinned `hb-service` command. Keep your saved configuration and HomeKit pairing; there is no need to uninstall the plugin or remove its bridge from Apple Home. Check the [changelog](CHANGELOG.md) before upgrading or downgrading.
+
+## Choose the bolt relays
+
+Under **Garage doors → Devices → Bolt / Lock**, select your deCONZ connection,
+then choose **Single relay controls lock / unlock** or **Separate lock and unlock
+relays**. Single-relay setup uses the existing mapping. Separate-relay setup
+requires selecting both outputs and automatically enables one required HomeKit
+bolt Lock tile that controls them together.
+
+For separate outputs, **Momentary relay outputs** sends ON then OFF using a
+configurable pulse, default **0.2 seconds**. With it disabled, the selected
+output stays ON until the opposite command. Momentary bolt position is an
+estimate from the last completed pulse and is unknown after restart. Use the
+coordinated Lock tile; pulses from other apps can be missed. See
+[separate bolt relays](docs/separate-bolt-relays.md) for setup and feedback limits.
 
 ## Temporarily operate without the bolt
 

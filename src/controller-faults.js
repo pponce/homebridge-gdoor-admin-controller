@@ -11,6 +11,8 @@ const codes = new Set([
   'bolt_read_failed', 'bolt_unreachable', 'bolt_response_invalid', 'bolt_feedback_mismatch',
   'bolt_gateway_identity_mismatch', 'bolt_resource_identity_mismatch',
   'bolt_write_ambiguous', 'bolt_write_unconfirmed', 'bolt_retract_timeout', 'bolt_extend_timeout',
+  'bolt_relays_conflict', 'bolt_relay_active_requires_review', 'bolt_relay_release_unconfirmed',
+  'bolt_command_context_required', 'bolt_relay_busy', 'bolt_previous_command_requires_review',
   'bolt_extended_at_partial_stop', 'bolt_extended_before_motion', 'bolt_extended_during_open',
   'motor_read_failed', 'motor_unreachable', 'motor_response_invalid',
   'motor_gateway_identity_mismatch', 'motor_resource_identity_mismatch',
@@ -59,6 +61,10 @@ export function controllerHealth(status) {
   if (state.fault || status.held && status.held !== 'not-commissioned') {
     const explanations = {
       startup_bolt_state_requires_review: 'The bolt reports locked while the door is not closed.',
+      bolt_relays_conflict: 'Both bolt direction outputs report ON. Check the relay wiring and output states.',
+      bolt_relay_active_requires_review: 'A momentary bolt output reports ON. Release it and check the relay before continuing.',
+      bolt_relay_release_unconfirmed: 'A bolt output could not be confirmed OFF after its command.',
+      bolt_previous_command_requires_review: 'A separate-relay operation was interrupted. Check the physical bolt and relay states before continuing.',
       motor_relay_active_requires_review: 'A motor relay reports active.',
       operation_interrupted: 'An operation was interrupted before completion was confirmed.',
       journal_invalid: 'The saved operation record could not be verified.',
@@ -83,5 +89,6 @@ export function controllerHealth(status) {
   if (state.phase === 'position-unknown') return { title: 'Position unknown',
     detail: 'Neither fully closed nor fully open is confirmed. The previous travel estimate was not restored.', code: null };
   if (state.busy || ['opening', 'closing'].includes(state.door)) return { title: state.phase === 'opening' ? 'Opening' : state.phase === 'closing' ? 'Closing' : 'Operating', detail: '', code: null };
-  return { title: state.door === 'closed' ? 'Ready · Closed' : state.door === 'open' ? 'Ready · Open' : 'Ready', detail: '', code: null };
+  return { title: state.door === 'closed' ? 'Ready · Closed' : state.door === 'open' ? 'Ready · Open' : 'Ready',
+    detail: state.bolt === 'unknown' ? 'Bolt position is unknown. A new door command will request retraction before operating the opener.' : state.boltEstimated ? 'Bolt position is estimated from the last completed pulse.' : '', code: null };
 }

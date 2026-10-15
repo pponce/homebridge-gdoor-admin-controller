@@ -98,6 +98,7 @@ export class ProfileEditor {
         ...(['button','keypad','switch'].includes(kind)?{kind:current.type==='homebridge'&&kind==='keypad'?'button':kind}: {})};
       if (kind === 'garage' && current.type !== 'tailwind') { delete obj.exposeTailwindLockout; delete obj.exposeTailwindRestart; }
       if (kind === 'garage' && current.type === 'ratgdo-homekit') obj[key]={type:current.type,baseUrl:'',macAddress:''};
+      if (kind === 'bolt' && obj.feedback?.bolt === 'command') obj.feedback.bolt='relay';
       this.change();this.render();
     });
   }
@@ -119,17 +120,17 @@ export class ProfileEditor {
     if(connection.serviceId)parent.append(el('p','Selected service '+connection.serviceId+' · '+connection.bridgeId,'route-note'));
     const details=el('details');details.append(el('summary','Pinned device identity'));const g=this.grid(details);for(const [key,label]of [['bridgeId','Bridge identity'],['serviceId','Accessory / service ID'],['accessoryIdentity','Accessory identity fingerprint']])this.input(g,label,connection,key);parent.append(details);
   }
-  device(parent,connection,kind,{showConnection=true}={}){
+  device(parent,connection,kind,{showConnection=true,gatewayConnection=connection,selectionLabel=kind}={}){
     if(connection.type==='homebridge')return this.bridgeDevice(parent,connection,kind,{showConnection});
     if(showConnection)this.sharedConnection(parent,connection);
     const output=el('p','Choose a device to pin its identity.','help');
-    parent.append(this.button('Find devices',async()=>{
+    parent.append(this.button(selectionLabel===kind?'Find devices':'Find '+selectionLabel,async()=>{
       if(!this.discover)return this.error('Use Homebridge settings to discover and connect devices.');
       try{
-        output.textContent='Finding devices…';const data=await this.discover({baseUrl:connection.baseUrl,credentialRef:connection.credentialRef});
-        connection.gatewayId=data.gatewayId;
+        output.textContent='Finding devices…';const data=await this.discover({baseUrl:gatewayConnection.baseUrl,credentialRef:gatewayConnection.credentialRef});
+        gatewayConnection.gatewayId=data.gatewayId;
         const rows=kind==='bolt'||kind==='motor'?data.lights:data.sensors.filter(row=>kind==='keypad'?row.resourceType==='ZHAAncillaryControl':row.resourceType!=='ZHAAncillaryControl');
-        const pick=el('select');pick.setAttribute('aria-label','Discovered '+kind);pick.append(Object.assign(el('option','Choose a '+kind),{value:''}));
+        const pick=el('select');pick.setAttribute('aria-label','Discovered '+selectionLabel);pick.append(Object.assign(el('option','Choose a '+selectionLabel),{value:''}));
         rows.forEach((row,index)=>pick.append(Object.assign(el('option',row.name+' · '+row.modelId),{value:String(index)})));
         pick.addEventListener('change',()=>{if(pick.value==='')return;const {name,...identity}=rows[Number(pick.value)];Object.assign(connection,identity);this.change();this.render();});
         output.replaceChildren(pick);if(!rows.length)output.textContent='No compatible devices found on this gateway.';
@@ -137,7 +138,7 @@ export class ProfileEditor {
     }));parent.append(output);
     if(connection.resourceId)parent.append(el('p','Selected: '+(connection.modelId||'Device')+' · resource '+connection.resourceId,'route-note'));
     const detail=el('details');detail.append(el('summary','Device identity and manual connection'));const fields=this.grid(detail);
-    for(const [key,label] of [['gatewayId','Gateway identity'],['resourceId','Resource number'],['uniqueId','Endpoint identity'],['resourceType','Resource type'],['modelId','Model'],['manufacturer','Manufacturer']])this.input(fields,label,connection,key);
+    for(const [key,label] of [['gatewayId','Gateway identity'],['resourceId','Resource number'],['uniqueId','Endpoint identity'],['resourceType','Resource type'],['modelId','Model'],['manufacturer','Manufacturer']])this.input(fields,label,key==='gatewayId'?gatewayConnection:connection,key);
     parent.append(detail);
   }
   garageList(){
@@ -180,7 +181,8 @@ export class ProfileEditor {
       else {p.boltControlEnabled=false;if(!p.bolt?.baseUrl&&!p.bolt?.resourceId&&!p.bolt?.serviceId)p.bolt=null;}
       this.change();this.render();
     });
-    this.input(grid,'Show a separate bolt Lock tile',p,'exposeBoltLock',{type:'checkbox'}).disabled=!boltEnabled;
+    this.input(grid,'Show a separate bolt Lock tile',p,'exposeBoltLock',{type:'checkbox',
+      help:p.bolt?.relayMode==='separate'?'Required for separate relays. One bolt Lock tile controls both outputs.':undefined}).disabled=!boltEnabled||p.bolt?.relayMode==='separate';
     if(!boltEnabled)identity.append(el('p','Bolt disabled — door control remains available after setup checks. Bolt commands, checks and delays are skipped. The bolt Lock tile is removed; check its Apple Home automations when re-enabling it.','help'));
     if (p.door.type === 'tailwind') {
       this.input(grid,'Show Tailwind Lockout contact sensor',p,'exposeTailwindLockout',{type:'checkbox'});
@@ -228,7 +230,7 @@ export class ProfileEditor {
     }
     if(selected==='bolt'){
     const bolt=this.panel(root,'Bolt / Lock',boltEnabled?'This is the output that retracts and extends the bolt.':'Bolt control is disabled.');
-    if(boltEnabled){this.connection(bolt,p,'bolt','bolt');this.device(bolt,p.bolt,'bolt');if(p.bolt.serviceType!=='lock')this.input(this.grid(bolt),'Relay ON means bolt extended',p.bolt,'lockedValue',{type:'checkbox',help:'Choose the mapping that matches your wiring. A relay report does not prove physical bolt position.'});}
+    if(boltEnabled)this.boltDevice(bolt,p);
     else bolt.append(el('p',p.bolt?'Your saved bolt connection and timing settings are retained. Enable bolt control to configure the replacement relay, then save and check the devices.':'No bolt is configured. Enable bolt control above to add one.','help'));
     }
     if(selected.startsWith('builtin:'))this.builtinSensor(root,p,selected.slice(8));
@@ -241,6 +243,46 @@ export class ProfileEditor {
       this.change();this.render();
     },'danger'));
     root.append(el('p','Removes this garage door from your draft. Saved garage doors keep running until you review and save the removal. Discard changes restores saved garage doors.','help'));
+  }
+  boltDevice(root,p){
+    this.connection(root,p,'bolt','bolt');
+    if(p.bolt.type!=='deconz'){
+      this.device(root,p.bolt,'bolt');
+      if(p.bolt.serviceType!=='lock')this.input(this.grid(root),'Relay ON means bolt extended',p.bolt,'lockedValue',{type:'checkbox',help:'Choose the mapping that matches your wiring. A relay report does not prove physical bolt position.'});
+      return;
+    }
+    this.sharedConnection(root,p.bolt);
+    const mode=this.input(this.grid(root),'Bolt relay setup',{relayMode:p.bolt.relayMode??'single'},'relayMode',{
+      options:[['single','Single relay controls lock / unlock'],['separate','Separate lock and unlock relays']]});
+    mode.addEventListener('change',()=>{
+      const {type,baseUrl,gatewayId,credentialRef}=p.bolt;
+      p.bolt={type,baseUrl,gatewayId,credentialRef,...(mode.value==='separate'?
+        {relayMode:'separate',lockRelay:{},unlockRelay:{},momentary:true,pulseSeconds:.2}:
+        {resourceId:'',uniqueId:'',resourceType:'On/Off output',modelId:'',manufacturer:'',lockedValue:true})};
+      p.feedback.bolt=mode.value==='separate'?'command':'relay';
+      if(mode.value==='separate')p.exposeBoltLock=true;
+      this.change();this.render();
+    });
+    if(p.bolt.relayMode!=='separate'){
+      this.device(root,p.bolt,'bolt',{showConnection:false});
+      this.input(this.grid(root),'Relay ON means bolt extended',p.bolt,'lockedValue',{type:'checkbox',help:'Choose the mapping that matches your wiring. A relay report does not prove physical bolt position.'});
+      return;
+    }
+    const g=this.grid(root),momentary=this.input(g,'Momentary relay outputs',p.bolt,'momentary',{type:'checkbox',
+      help:'Turn ON the selected relay, then turn it OFF after the pulse. When disabled, the selected relay stays ON until the opposite command.'});
+    momentary.addEventListener('change',()=>{
+      if(p.bolt.momentary)p.bolt.pulseSeconds??=.2;else delete p.bolt.pulseSeconds;
+      p.feedback.bolt=p.bolt.momentary?'command':'relay';this.change();this.render();
+    });
+    if(p.bolt.momentary)this.input(g,'Pulse length (seconds)',p.bolt,'pulseSeconds',{type:'number',min:.1,max:2,step:.05,
+      help:'Default 0.2 seconds. Choose a duration suitable for your bolt; network delays can lengthen a software pulse.'});
+    for(const [key,title,label]of [['lockRelay','Lock relay','lock relay'],['unlockRelay','Unlock relay','unlock relay']]){
+      const card=this.panel(root,title,'ON requests '+(key==='lockRelay'?'locking':'unlocking')+'. Choose a different output for each direction.');
+      card.dataset.boltRelay=key;this.device(card,p.bolt[key],'bolt',{showConnection:false,gatewayConnection:p.bolt,selectionLabel:label});
+    }
+    root.append(el('p',p.bolt.momentary?
+      'Bolt position is estimated from the last completed pulse. It is unknown after restart. Use this controller for bolt commands: short pulses from other apps can be missed. The next door command retracts the bolt first when its position is unknown.':
+      'The opposite relay is turned OFF and checked before the selected relay turns ON. Relay state does not prove physical bolt position.','help'));
   }
   applyDeviceBehavior(p,path){
     const enabled=path.interruption==='stop-opening-reverse-closing';
@@ -384,7 +426,8 @@ export class ProfileEditor {
       });
       if(p.feedback[mode]==='sensor')this.confirmationSensor(g,p,endpoint);
     }
-    this.input(g,'Bolt feedback',p.feedback,'bolt',{options:[['relay','Relay ON / OFF state'],['position','Physical position sensor']],help:'The direct deCONZ relay uses relay state.'}).disabled=!boltEnabled;
+    const pulseBolt=p.bolt?.relayMode==='separate'&&p.bolt.momentary;
+    this.input(g,'Bolt feedback',p.feedback,'bolt',{options:pulseBolt?[['command','Last completed pulse (estimated)']]:[['relay','Relay ON / OFF state'],['position','Physical position sensor']],help:pulseBolt?'Both outputs turn OFF after a pulse. Physical position is not sensed.':'The direct deCONZ relay uses relay state.'}).disabled=!boltEnabled||p.bolt?.relayMode==='separate';
     if(p.feedback.closing==='timed')this.input(g,'Allow bolting after estimated closure',p.feedback,'allowEstimatedBolting',{type:'checkbox',help:'Elapsed time cannot prove the door closed. This policy requires explicit acceptance.'}).disabled=!boltEnabled;
     const travel=this.panel(root,'Movement timing');const tg=this.grid(travel);
     for(const [key,label,help] of [['openingSeconds','Full opening travel','Starts after the closed sensor departs.'],['closingSeconds','Full closing travel','Used when closure is estimated.'],['closedStableSeconds','Stable closed confirmation','How long the closed sensor must remain active before bolting.'],['boltSettleSeconds','Bolt extension settling','Time to allow the mechanism to finish extending.']]){

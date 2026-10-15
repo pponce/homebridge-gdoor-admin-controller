@@ -58,7 +58,7 @@ async function fixture(browser,{mobile,dark,mode='managed'}){
     if(name==='/review'){assert.equal(body.revision,revision);reviews++;reviewed=validateConfiguration(body.configuration,{allowEmpty:true});return{review:{token:'review-test',configuration:reviewed,requiresCommissioning:reviewed.controllers.filter(p=>!enabled||!configuration.controllers.some(old=>old.id===p.id&&JSON.stringify({...old,name:p.name})===JSON.stringify(p))).map(p=>p.id)}};}
     if(name==='/cancel'){reviewed=null;return{};}
     if(name==='/apply'){assert.equal(body.token,'review-test');if(enabled&&!reviewed.controllers.every(p=>configuration.controllers.some(old=>old.id===p.id&&JSON.stringify({...old,name:p.name})===JSON.stringify(p))))enabled=false;configuration=reviewed;revision++;applies++;if(mode==='uncertain')throw Error('response lost');return{settings:{revision,configuration}};}
-    if(name==='/probe'){probes++;probedIds.push(body.controller);if(mode==='probe-unavailable')throw Error('synthetic unavailable');const off=configuration.controllers.find(p=>p.id===body.controller)?.boltControlEnabled===false;return{probe:{compatible:probes>1,door:{state:'closed',feedback:'closed-sensor'},bolt:{state:off?'disabled':'locked',feedback:off?'disabled':'relay'},limitations:[],
+    if(name==='/probe'){probes++;probedIds.push(body.controller);if(mode==='probe-unavailable')throw Error('synthetic unavailable');const profile=configuration.controllers.find(p=>p.id===body.controller),off=profile?.boltControlEnabled===false,pulse=profile?.bolt.relayMode==='separate'&&profile.bolt.momentary;return{probe:{compatible:probes>1,door:{state:'closed',feedback:'closed-sensor'},bolt:{state:off?'disabled':pulse?'unknown':'locked',feedback:off?'disabled':pulse?'command':'relay'},limitations:[],
       controls:[{id:'physical-keypad',name:'Physical keypad',kind:'input',error:probes===1?'input_alarm_mapping_changed':null}]}};}
     if(name==='/commission'){assert.equal(body.previousControllerStopped,true);assert.equal(body.physicalSetupReviewed,true);enabled=true;commissions++;return{};}
     if(name==='/recover'){assert.equal(body.bootId,'synthetic-boot');assert.equal(enabled,true);recoveries++;mode='enabled';return{};}
@@ -66,7 +66,8 @@ async function fixture(browser,{mobile,dark,mode='managed'}){
     if(name==='/credentials'){assert.equal(body.secret,'private-browser-test-key');const exists=savedKeys.includes(body.reference);if(body.mode==='create'&&exists)return{saved:false,reason:'exists'};if(!exists)savedKeys.push(body.reference);else enabled=false;return{saved:true};}
     if(name==='/credentials/delete'){keyDeletes++;const used=v=>v&&typeof v==='object'&&(v.credentialRef===body.reference||Object.values(v).some(used));if(used(configuration)||used(blocks))return{deleted:false,reason:'in-use'};savedKeys.splice(savedKeys.indexOf(body.reference),1);return{deleted:true};}
     if(name==='/deconz'){const row=configuration.controllers[0].motorPaths[0].connection;return{gatewayId:row.gatewayId,
-      lights:[{name:'Synthetic Aqara opener',resourceId:row.resourceId,uniqueId:row.uniqueId,resourceType:row.resourceType,modelId:row.modelId,manufacturer:row.manufacturer}],sensors:[],alarms:[]};}
+      lights:[{name:'Synthetic Aqara opener',resourceId:row.resourceId,uniqueId:row.uniqueId,resourceType:row.resourceType,modelId:row.modelId,manufacturer:row.manufacturer},
+        ...['Lock','Unlock'].map((name,i)=>({name:'Bolt '+name,resourceId:String(i+10),uniqueId:'synthetic-bolt-'+name,resourceType:'On/Off output',modelId:'EXAMPLE-BOLT',manufacturer:'Example'}))],sensors:[],alarms:[]};}
     throw Error('unsupported_browser_request');
   });
   await page.exposeFunction('testGetConfig',()=>structuredClone(blocks));
@@ -120,6 +121,54 @@ try{
  for(const [browserType,mobile,dark]of [[chromium,false,false],[webkit,true,true]]){
   const browser=await browserType.launch({headless:true});
   try{
+   {
+     const x=await fixture(browser,{mobile,dark,mode:'enabled'}),p=x.page;
+     await p.getByLabel('Show a separate bolt Lock tile',{exact:true}).uncheck();
+     await p.getByRole('button',{name:'Configure device Bolt / Lock',exact:true}).click();
+     assert.equal(await p.getByLabel('Bolt relay setup',{exact:true}).inputValue(),'single');
+     await p.getByLabel('Bolt relay setup',{exact:true}).selectOption('separate');
+     const tile=p.getByLabel('Show a separate bolt Lock tile',{exact:true});
+     assert.equal(await tile.isChecked(),true);assert.equal(await tile.isDisabled(),true);
+     assert.equal(await p.getByLabel('Momentary relay outputs',{exact:true}).isChecked(),true);
+     assert.equal(await p.getByLabel('Pulse length (seconds)',{exact:true}).inputValue(),'0.2');
+     for(const [name,index]of [['lock','1'],['unlock','2']]){
+       await p.getByRole('button',{name:'Find '+name+' relay',exact:true}).click();
+       await p.getByLabel('Discovered '+name+' relay',{exact:true}).selectOption(index);
+     }
+     await p.getByLabel('Pulse length (seconds)',{exact:true}).fill('0.35');
+     await p.getByLabel('Momentary relay outputs',{exact:true}).uncheck();
+     assert.equal(await p.getByLabel('Pulse length (seconds)',{exact:true}).count(),0);
+     await review(p);await p.getByRole('button',{name:'Save configuration',exact:true}).click();await saved(p);
+     let profile=x.configuration().controllers[0];
+     assert.equal(profile.bolt.momentary,false);assert.equal(profile.bolt.pulseSeconds,undefined);
+     assert.equal(profile.bolt.lockRelay.resourceId,'10');assert.equal(profile.bolt.unlockRelay.resourceId,'11');
+     assert.equal(profile.exposeBoltLock,true);assert.equal(profile.feedback.bolt,'relay');
+     await p.getByRole('button',{name:'03 Behavior',exact:true}).click();
+     assert.equal(await p.getByLabel('Bolt feedback',{exact:true}).inputValue(),'relay');
+     assert.equal(await p.getByLabel('Bolt feedback',{exact:true}).isDisabled(),true);
+     await p.getByRole('button',{name:'01 Devices',exact:true}).click();
+     await p.getByRole('button',{name:'Configure device Bolt / Lock',exact:true}).click();
+     await p.getByLabel('Momentary relay outputs',{exact:true}).check();
+     await review(p);await p.getByRole('button',{name:'Save configuration',exact:true}).click();await saved(p);
+     profile=x.configuration().controllers[0];assert.equal(profile.feedback.bolt,'command');assert.equal(profile.bolt.pulseSeconds,.2);
+     await p.reload();await p.locator('#garages-tab').click();
+     await p.getByRole('button',{name:'Configure device Bolt / Lock',exact:true}).click();
+     assert.equal(await tile.isChecked(),true);assert.equal(await tile.isDisabled(),true);
+     assert.equal(await p.getByLabel('Bolt relay setup',{exact:true}).inputValue(),'separate');
+     await p.getByRole('button',{name:'03 Behavior',exact:true}).click();
+     assert.equal(await p.getByLabel('Bolt feedback',{exact:true}).inputValue(),'command');
+     await p.getByRole('button',{name:'01 Devices',exact:true}).click();
+     await p.getByRole('button',{name:'Configure device Bolt / Lock',exact:true}).click();
+     await p.getByLabel('Bolt relay setup',{exact:true}).selectOption('single');
+     assert.equal(await tile.isDisabled(),false);
+     assert.equal(await p.getByLabel('Momentary relay outputs',{exact:true}).count(),0);
+     await p.getByRole('button',{name:'Find devices',exact:true}).click();
+     await p.getByLabel('Discovered bolt',{exact:true}).selectOption('1');
+     await review(p);await p.getByRole('button',{name:'Save configuration',exact:true}).click();await saved(p);
+     profile=x.configuration().controllers[0];assert.equal(profile.feedback.bolt,'relay');assert.equal(profile.bolt.relayMode,undefined);
+     assert.equal(profile.bolt.resourceId,'10');assert.equal(profile.bolt.lockRelay,undefined);
+     assert.deepEqual(x.errors,[]);await p.close();
+   }
    {
      const x=await fixture(browser,{mobile,dark,mode:'enabled'}),p=x.page;
      const original=structuredClone(x.configuration().controllers[0]);

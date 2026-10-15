@@ -1,4 +1,5 @@
 import { TailwindDoor, DeconzBolt } from './drivers.js';
+import { DeconzSeparateBolt } from './separate-bolt.js';
 import { RatgdoDoor } from './ratgdo.js';
 import { HomebridgeDoor, HomebridgeBolt, HomebridgeMotorRelay, HomebridgeInput, HomebridgeContactSensor } from './homebridge-devices.js';
 import { withPositionFeedback } from './position-feedback.js';
@@ -17,6 +18,7 @@ export const PROBE_ERRORS = Object.freeze([
   'ratgdo_credential_invalid', 'ratgdo_auth_unsupported',
   'bolt_credential_invalid', 'bolt_identity_configuration_required', 'bolt_read_failed',
   'bolt_gateway_identity_mismatch', 'bolt_resource_identity_mismatch', 'bolt_unreachable', 'bolt_response_invalid',
+  'bolt_relays_conflict', 'bolt_relay_active_requires_review', 'bolt_relay_mapping_invalid', 'bolt_pulse_duration_invalid',
   'device_probe_failed',
 ]);
 
@@ -85,7 +87,7 @@ export class Diagnostics {
           const secret = credentials[configuration.credentialRef];
           requireValue(configuration.type === 'ratgdo-homekit' && !configuration.credentialRef || typeof secret === 'string', 'credential_reference_missing');
           const driver = kind === 'door' && configuration.type === 'ratgdo-homekit' ? new RatgdoDoor(configuration, secret, { request: this.ratgdoRequest }) : kind === 'door' ? new (configuration.type === 'tailwind' ? TailwindDoor : HomebridgeDoor)(configuration, secret, { request: this.request, feedback: controller.feedback }) :
-            new (configuration.type === 'deconz' ? DeconzBolt : HomebridgeBolt)(configuration, secret, { request: this.request, feedback: controller.feedback.bolt });
+            new (configuration.type === 'deconz' ? configuration.relayMode === 'separate' ? DeconzSeparateBolt : DeconzBolt : HomebridgeBolt)(configuration, secret, { request: this.request, feedback: controller.feedback.bolt });
           const positioned = kind === 'door' ? withPositionFeedback(controller, driver, sensor => {
             const pin = credentials[sensor.connection.credentialRef];
             requireValue(typeof pin === 'string', 'credential_reference_missing');
@@ -93,7 +95,7 @@ export class Diagnostics {
           }) : driver;
           const value = await positioned.read();
           return kind === 'door' ? { state: value.door, feedback: value.evidence, blocked: value.blocked, error: null } :
-            { state: value.locked ? 'locked' : 'unlocked', feedback: value.evidence, error: null };
+            { state: value.locked === null ? 'unknown' : value.locked ? 'locked' : 'unlocked', feedback: value.evidence, error: null };
         } catch (error) {
           const code = error instanceof Fault && PROBE_ERRORS.includes(error.message) ? error.message : 'device_probe_failed';
           return { state: 'unknown', feedback: 'unavailable', ...(kind === 'door' ? { blocked: null } : {}), error: code };
@@ -105,7 +107,8 @@ export class Diagnostics {
       if (controller.door.type === 'tailwind' && controller.feedback.opening !== 'timed' &&
         selectedSensor(controller, 'open') === OPENER_OPEN && controller.door.openSensorDoorIndex === undefined) limitations.push('tailwind_open_requires_estimate');
       if (controller.door.type === 'tailwind' && controller.feedback.closing !== 'sensor') limitations.push('tailwind_closed_sensor_available');
-      if (controller.boltControlEnabled !== false && controller.bolt.type === 'deconz' && controller.feedback.bolt !== 'relay') limitations.push('deconz_relay_is_not_position');
+      if (controller.boltControlEnabled !== false && controller.bolt.type === 'deconz' &&
+        controller.feedback.bolt !== (controller.bolt.relayMode === 'separate' && controller.bolt.momentary ? 'command' : 'relay')) limitations.push('deconz_relay_is_not_position');
       if (door.blocked) limitations.push('door_blocked');
       if (['not-closed','open','opening','closing'].includes(door.state) && bolt.state === 'locked') limitations.push('bolt_extended_with_door_not_closed');
       return { controllerId: id, checkedAt: new Date().toISOString(), door, bolt, limitations,

@@ -27,10 +27,10 @@ export async function followInterruptedTravel(engine, direction, departing = fal
     if (direction === 'closing') {
       if (s.locked) {
         e.admitInterruption(false);
-        if (retractPending === null) { retractPending = now; await e.bolt.write(false); }
+        if (retractPending === null) { retractPending = now; await e.bolt.write(false, { beforeWrite: () => e.checkRunning() }); }
         requireValue(now - retractPending < e.timing.boltTimeoutMs, 'bolt_retract_timeout');
-      } else retractPending = null;
-    } else requireValue(!s.locked, 'bolt_extended_during_open');
+      } else { requireValue(e.isRetracted(s), 'bolt_retract_confirmation_lost'); retractPending = null; }
+    } else requireValue(e.isRetracted(s), 'bolt_extended_during_open');
     requireValue(['closed', 'not-closed'].includes(s.door), 'external_movement');
     if (departing && s.door !== 'closed') { departing = false; e.travel.start('opening', now); }
     if (!departing) {
@@ -47,7 +47,7 @@ export async function followInterruptedTravel(engine, direction, departing = fal
           if (direction === 'opening') e.travel.stop(e.clock.now());
           await e.motor.interrupt({ beforeWrite: async () => {
             const fresh = await e.read();
-            requireValue(fresh.door === 'not-closed' && !fresh.locked, 'interruption_precondition_lost');
+            requireValue(fresh.door === 'not-closed' && e.isRetracted(fresh), 'interruption_precondition_lost');
           } });
           if (e.travel.direction === null) {
             e.partialOwner = e.operationOwner;
@@ -88,10 +88,10 @@ async function followSensorTravel(e, direction, checked) {
     if (direction === 'closing') {
       if (s.locked) {
         e.admitInterruption(false);
-        if (retractPending === null) { retractPending = now; await e.bolt.write(false); }
+        if (retractPending === null) { retractPending = now; await e.bolt.write(false, { beforeWrite: () => e.checkRunning() }); }
         requireValue(now - retractPending < e.timing.boltTimeoutMs, 'bolt_retract_timeout');
-      } else retractPending = null;
-    } else requireValue(!s.locked, 'bolt_extended_during_open');
+      } else { requireValue(e.isRetracted(s), 'bolt_retract_confirmation_lost'); retractPending = null; }
+    } else requireValue(e.isRetracted(s), 'bolt_extended_during_open');
     requireValue(['closed', 'open', 'not-closed', direction].includes(s.door),
       direction === 'opening' ? 'open_reversed' : 'close_reversed');
     const start = direction === 'opening' ? 'closed' : 'open';
@@ -111,7 +111,7 @@ async function followSensorTravel(e, direction, checked) {
         e.admitInterruption(false);
         await e.motor.interrupt({ beforeWrite: async () => {
           const fresh = await e.read();
-          requireValue(['not-closed', direction].includes(fresh.door) && !fresh.locked, 'interruption_precondition_lost');
+          requireValue(['not-closed', direction].includes(fresh.door) && e.isRetracted(fresh), 'interruption_precondition_lost');
         } });
         if (direction === 'opening') {
           e.partialOwner = e.operationOwner;

@@ -82,6 +82,7 @@ export function selectConnection(connection,shared){
   if(!sameConnection(connection,shared)&&connection.baseUrl&&connection.baseUrl!==shared.baseUrl){
     // Another gateway/bridge requires discovery of its own pinned identities.
     for(const key of ['gatewayId','resourceId','uniqueId','resourceType','modelId','manufacturer','bridgeId','serviceId','accessoryIdentity'])delete connection[key];
+    if(connection.relayMode==='separate'){connection.lockRelay={};connection.unlockRelay={};}
   }
   connection.baseUrl=shared.baseUrl;connection.credentialRef=shared.credentialRef;
 }

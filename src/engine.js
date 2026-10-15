@@ -28,13 +28,14 @@ export class MovementEngine {
     this.motor = door; this.interruptionAllowed = false; this.interruptionRequest = null;
     this.travel = null; this.partialOwner = null; this.autoClosePending = false;
     requireValue(['sensor', 'timed'].includes(feedback.opening) && ['sensor', 'timed'].includes(feedback.closing) &&
-      (!boltControlEnabled || ['position', 'relay'].includes(feedback.bolt)) && typeof feedback.allowEstimatedBolting === 'boolean', 'engine_feedback_invalid');
+      (!boltControlEnabled || ['position', 'relay'].includes(feedback.bolt) || feedback.bolt === 'command' && bolt?.capabilities?.commandBased === true) && typeof feedback.allowEstimatedBolting === 'boolean', 'engine_feedback_invalid');
     requireValue(Object.keys(timing).every(key => Object.hasOwn(defaults, key)) &&
       Object.values(this.timing).every(value => Number.isFinite(value) && value >= 0 && value <= 300000) &&
       ['pollMs', 'boltTimeoutMs', 'motionTimeoutMs', 'openingMs', 'closingMs'].every(key => this.timing[key] > 0), 'engine_timing_invalid');
     this.busy = false; this.observation = null; this.initialized = false; this.stopped = false; this.lastBolt = null;
     this.state = { phase: 'starting', door: 'unknown', bolt: boltControlEnabled ? 'unknown' : 'disabled', target: null,
-      openEstimated: false, closeEstimated: false, fault: null, externalUnlockOverride: false };
+      openEstimated: false, closeEstimated: false, fault: null, externalUnlockOverride: false,
+      ...(this.bolt?.capabilities?.commandBased ? { boltEstimated: false } : {}) };
   }
 
   snapshot() { return structuredClone({ ...this.state, busy: this.busy, restartCloseAvailable: this.restartCloseAvailable() }); }
@@ -53,7 +54,8 @@ export class MovementEngine {
   }
   update(changes) { Object.assign(this.state, changes); this.publish(this.snapshot()); }
   checkRunning() { requireValue(!this.stopped, 'operation_interrupted'); }
-  stop() { this.stopped = true; this.admitInterruption(false); for (const motor of this.motorPaths.values()) motor.stop?.(); }
+  stop() { this.stopped = true; this.admitInterruption(false); this.bolt?.stop?.(); for (const motor of this.motorPaths.values()) motor.stop?.(); }
+  isRetracted(sample) { return !this.boltControlEnabled || sample.locked === false; }
   admitInterruption(allowed) {
     this.interruptionAllowed = allowed && this.interruptionOperation && this.interruptionRequest === null;
     if (!allowed) this.interruptionRequest = null;
@@ -82,6 +84,10 @@ export class MovementEngine {
       this.restartObservation = previous.inProgress || previous.fault;
       const sample = await this.read({ allowLockout: true });
       requireValue(sample.door === 'closed' || !sample.locked, 'startup_bolt_state_requires_review');
+      // A two-output bolt cannot recover an interrupted/uncertain command from
+      // two OFF reports. An explicit check acknowledges the hold without replay.
+      if (this.bolt?.capabilities?.separateRelays && (previous.fault || previous.inProgress))
+        requireValue(acknowledge, faultCode(previous.reason) ?? 'bolt_previous_command_requires_review');
       // An old fault is history, not evidence of a current physical problem.
       // Storage-integrity failures still need an explicit check after repair.
       requireValue(acknowledge || !previous.fault || !['journal_invalid', 'journal_write_failed'].includes(previous.reason), previous.reason);
@@ -113,14 +119,16 @@ export class MovementEngine {
     this.checkRunning();
     requireValue(door && ['closed', 'open', 'not-closed', 'opening', 'closing'].includes(door.door) &&
       typeof door.blocked === 'boolean' && typeof door.obstruction === 'boolean' &&
-      (!this.boltControlEnabled || bolt && typeof bolt.locked === 'boolean'), 'unknown_state');
+      (!this.boltControlEnabled || bolt && (typeof bolt.locked === 'boolean' || bolt.locked === null && this.bolt.capabilities?.separateRelays)), 'unknown_state');
     if (this.boltControlEnabled) requireValue(bolt.evidence === this.feedback.bolt, 'bolt_feedback_mismatch');
     this.lastBolt = bolt?.locked ?? null;
     // The transport evidence and user's configured meaning must both agree.
     // Disabled is absence of bolt evidence, never a fabricated unlocked report.
     const sample = { ...door, locked: bolt?.locked ?? null, boltEvidence: bolt?.evidence ?? 'disabled' };
     this.sample = sample; this.sampledAt = sampledAt; this.observedAt = Date.now();
-    this.update({ door: sample.door, bolt: this.boltControlEnabled ? sample.locked ? 'locked' : 'unlocked' : 'disabled', obstruction: sample.obstruction, lockout: sample.lockout ?? null, disabled: sample.disabled ?? null, blocked: sample.blocked, ...(sample.door !== 'closed' ? { closedObservedDuringFault: false } : {}), unavailable: null });
+    this.update({ door: sample.door, bolt: this.boltControlEnabled ? sample.locked === null ? 'unknown' : sample.locked ? 'locked' : 'unlocked' : 'disabled',
+      ...(this.bolt?.capabilities?.commandBased ? { boltEstimated: sample.locked !== null } : {}),
+      obstruction: sample.obstruction, lockout: sample.lockout ?? null, disabled: sample.disabled ?? null, blocked: sample.blocked, ...(sample.door !== 'closed' ? { closedObservedDuringFault: false } : {}), unavailable: null });
     if (!observationOnly) {
       requireValue(!door.blocked || allowLockout && lockoutOnly(door), 'door_blocked');
       requireValue(!door.obstruction, 'obstruction');
@@ -129,6 +137,7 @@ export class MovementEngine {
   }
 
   async fail(reason) {
+    if (this.bolt?.capabilities?.commandBased) { this.bolt.invalidate?.(); this.update({ bolt: 'unknown', boltEstimated: false }); }
     this.admitInterruption(false); this.travel = null; this.partialOwner = null; this.autoClosePending = false;
     this.initialized = false; this.startupRetry = false; this.recoveryClosedSince = null;
     reason = faultCode(reason) ?? 'unexpected_adapter_error';
@@ -147,7 +156,7 @@ export class MovementEngine {
     const previousBolt = this.lastBolt;
     try {
       const sample = await this.read({ observationOnly: true });
-      if (previousBolt === true && !sample.locked) this.update({ externalUnlockOverride: true });
+      if (previousBolt === true && sample.locked === false) this.update({ externalUnlockOverride: true });
       const closed = sample.door === 'closed' && sample.evidence === 'closed-sensor';
       requireValue(closed || !sample.locked, 'startup_bolt_state_requires_review');
       if (!closed) this.recoveryClosedSince = null;
@@ -203,7 +212,7 @@ export class MovementEngine {
         return this.snapshot();
       }
       const changes = {};
-      if (previousBolt === true && !sample.locked) changes.externalUnlockOverride = true;
+      if (previousBolt === true && sample.locked === false) changes.externalUnlockOverride = true;
       // Outside an operation, observed endpoints/direction supersede the last
       // command's target (e.g. an OEM remote closed a door we opened). Otherwise
       // auto-bolting retains Open intent and HomeKit reports Opening again.
@@ -221,7 +230,7 @@ export class MovementEngine {
       else if (['opening', 'closing'].includes(sample.door)) Object.assign(changes, {
         phase: sample.door, target: sample.door === 'opening' ? 'open' : 'closed', openEstimated: false, closeEstimated: false });
       else if (this.partialOwner && sample.door === 'not-closed') {
-        requireValue(!sample.locked, 'bolt_extended_at_partial_stop'); changes.phase = 'stopped-estimated';
+        requireValue(this.isRetracted(sample), 'bolt_extended_at_partial_stop'); changes.phase = 'stopped-estimated';
       } else if (!this.state.openEstimated) Object.assign(changes, { phase: 'position-unknown', closeEstimated: false });
       changes.unavailable = null;
       this.update(changes);
@@ -263,16 +272,16 @@ export class MovementEngine {
     let retractionRequestedAt = null;
     // For zero-wait closing, acknowledge one OFF command when needed, then
     // monitor its outcome during travel. Never invent an OFF observation.
-    if (sample.locked) {
+    if (sample.locked !== false) {
       retractionRequestedAt = this.clock.now();
       await this.bolt.write(false, { beforeWrite: () => this.checkRunning() });
     }
-    if (!closing || settling > 0 && sample.locked) {
-      await this.wait(s => !s.locked, this.timing.boltTimeoutMs, 'bolt_retract_timeout');
+    if (!closing || settling > 0 && sample.locked !== false || this.bolt.capabilities?.separateRelays) {
+      await this.wait(s => this.isRetracted(s), this.timing.boltTimeoutMs, 'bolt_retract_timeout');
       retractionRequestedAt = null;
     }
     if (settling > 0 || !closing) await this.hold(settling,
-      s => !s.locked && !['opening', 'closing'].includes(s.door), 'bolt_retract_confirmation_lost');
+      s => this.isRetracted(s) && !['opening', 'closing'].includes(s.door), 'bolt_retract_confirmation_lost');
     return { sample: this.sample, at: this.sampledAt, retractionRequestedAt };
   }
 
@@ -316,8 +325,8 @@ export class MovementEngine {
       requireValue(!['opening', 'closing'].includes(sample.door), 'external_movement');
       if (command === 'unlock') {
         await this.bolt.write(false, { beforeWrite: () => this.checkRunning() });
-        await this.wait(s => !s.locked, this.timing.boltTimeoutMs, 'bolt_retract_timeout');
-        await this.hold(this.timing.openRetractSettleMs, s => !s.locked, 'bolt_retract_confirmation_lost');
+        await this.wait(s => this.isRetracted(s), this.timing.boltTimeoutMs, 'bolt_retract_timeout');
+        await this.hold(this.timing.openRetractSettleMs, s => this.isRetracted(s), 'bolt_retract_confirmation_lost');
       } else if (command === 'lock' || command === 'observed-close') {
         requireValue(sample.door === 'closed' && this.feedback.closing === 'sensor' && sample.evidence === 'closed-sensor', 'locking_requires_closed_sensor');
         await this.confirmClosed(this.clock.now() + this.timing.motionTimeoutMs);
@@ -354,13 +363,13 @@ export class MovementEngine {
       const fresh = command === 'close' && checked && age >= 0 && age <= commandSampleMaxAgeMs ? checked.sample : await this.read();
       const retracting = command === 'close' && this.timing.closeRetractSettleMs === 0 && checked?.retractionRequestedAt != null &&
         this.clock.now() - checked.retractionRequestedAt < this.timing.boltTimeoutMs;
-      requireValue((!fresh.locked || retracting) && (command === 'open' ? fresh.door === 'closed' : ['open', 'not-closed'].includes(fresh.door)), 'motor_precondition_lost');
+      requireValue((this.isRetracted(fresh) || retracting) && (command === 'open' ? fresh.door === 'closed' : ['open', 'not-closed'].includes(fresh.door)), 'motor_precondition_lost');
     } });
   }
 
   async open() {
     const sample = await this.read();
-    requireValue(!sample.locked, 'bolt_extended_before_motion');
+    requireValue(this.isRetracted(sample), 'bolt_extended_before_motion');
     if (sample.door === 'open' && this.feedback.opening === 'sensor') return this.update({ phase: 'open', openEstimated: false, closeEstimated: false });
     if (sample.door === 'not-closed' && this.feedback.opening === 'timed' && this.state.openEstimated) return this.update({ phase: 'open' });
     requireValue(sample.door === 'closed', 'opening_requires_known_start');
@@ -374,7 +383,7 @@ export class MovementEngine {
     let departed = null;
     for (;;) {
       const fresh = await this.read();
-      requireValue(!fresh.locked, 'bolt_extended_during_open');
+      requireValue(this.isRetracted(fresh), 'bolt_extended_during_open');
       requireValue(fresh.door !== 'closing' && !(departed !== null && fresh.door === 'closed'), 'open_reversed');
       if (fresh.door === 'open' && this.feedback.opening === 'sensor') return this.update({ phase: 'open' });
       if (fresh.door !== 'closed' && departed === null) departed = this.clock.now();
@@ -402,7 +411,7 @@ export class MovementEngine {
 
   async close(checked = null) {
     let sample = checked?.sample ?? await this.read();
-    requireValue(!sample.locked || this.timing.closeRetractSettleMs === 0 && checked?.retractionRequestedAt != null, 'bolt_extended_before_motion');
+    requireValue(this.isRetracted(sample) || this.timing.closeRetractSettleMs === 0 && checked?.retractionRequestedAt != null, 'bolt_extended_before_motion');
     requireValue(!['opening', 'closing'].includes(sample.door), 'external_movement');
     if (this.interruptionOperation) {
       if (sample.door !== 'closed') {
@@ -435,6 +444,7 @@ export class MovementEngine {
         }
         requireValue(this.clock.now() - retractPending < this.timing.boltTimeoutMs, 'bolt_retract_timeout');
       } else {
+        requireValue(this.isRetracted(sample), 'bolt_retract_confirmation_lost');
         retractPending = null;
         const physical = this.feedback.closing === 'sensor' && sample.door === 'closed' && sample.evidence === 'closed-sensor';
         const estimated = this.feedback.closing === 'timed' && this.clock.now() - started >= this.timing.closingMs;
@@ -456,8 +466,13 @@ export class MovementEngine {
     if (!this.boltControlEnabled) return;
     const closed = s => estimated ? !['opening', 'closing'].includes(s.door) : s.door === 'closed' && s.evidence === 'closed-sensor';
     const fresh = await this.read();
-    requireValue(!fresh.locked && closed(fresh), 'closed_confirmation_lost');
-    await this.bolt.write(true, { beforeWrite: () => this.checkRunning() });
+    requireValue((this.isRetracted(fresh) || fresh.locked === null && this.bolt.capabilities?.separateRelays) && closed(fresh), 'closed_confirmation_lost');
+    await this.bolt.write(true, { beforeWrite: async () => {
+      this.checkRunning();
+      // Releasing the opposite relay takes time. Check closure again immediately
+      // before the separate lock output can turn ON.
+      if (this.bolt.capabilities?.separateRelays) requireValue(closed(await this.read()), 'closed_confirmation_lost');
+    } });
     await this.wait(s => { requireValue(closed(s), 'closed_confirmation_lost'); return s.locked; }, this.timing.boltTimeoutMs, 'bolt_extend_timeout');
     await this.hold(this.timing.boltSettleMs, s => closed(s) && s.locked, 'close_or_bolt_confirmation_lost');
   }

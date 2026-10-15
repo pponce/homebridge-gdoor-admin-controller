@@ -77,6 +77,21 @@ function bolt(value) {
   if (!object(value)) fail('door_and_bolt_required');
   if (value.type === 'homebridge') return homebridge(value, true);
   if (value.type !== 'deconz') fail('unsupported_bolt_backend');
+  if (value.relayMode === 'separate') {
+    fields(value, ['type', 'baseUrl', 'gatewayId', 'credentialRef', 'relayMode', 'lockRelay', 'unlockRelay', 'momentary', 'pulseSeconds'], 'invalid_deconz_connection');
+    if (typeof value.momentary !== 'boolean') fail('invalid_bolt_momentary');
+    const shared = { type: 'deconz', baseUrl: baseUrl(value.baseUrl), gatewayId: string(value.gatewayId, 'invalid_gateway_id'),
+      credentialRef: secretRef(value.credentialRef) };
+    const relay = row => {
+      fields(row, ['resourceId', 'uniqueId', 'resourceType', 'modelId', 'manufacturer'], 'invalid_bolt_relay');
+      const checked = bolt({ ...shared, ...row, lockedValue: true });
+      if (!checked.resourceType || !checked.modelId || !checked.manufacturer) fail('bolt_identity_required');
+      return Object.fromEntries(['resourceId', 'uniqueId', 'resourceType', 'modelId', 'manufacturer'].map(key => [key, checked[key]]));
+    };
+    if (!value.momentary && value.pulseSeconds !== undefined) fail('invalid_bolt_pulse_duration');
+    return { ...shared, relayMode: 'separate', lockRelay: relay(value.lockRelay), unlockRelay: relay(value.unlockRelay),
+      momentary: value.momentary, ...(value.momentary ? { pulseSeconds: number(value.pulseSeconds ?? 0.2, 0.1, 2, 'invalid_bolt_pulse_duration') } : {}) };
+  }
   fields(value, ['type', 'baseUrl', 'gatewayId', 'resourceId', 'uniqueId', 'resourceType', 'modelId', 'manufacturer', 'credentialRef', 'lockedValue'], 'invalid_deconz_connection');
   if (typeof value.resourceId !== 'string' || !/^[1-9][0-9]{0,5}$/.test(value.resourceId)) fail('invalid_deconz_resource');
   if (typeof value.lockedValue !== 'boolean') fail('invalid_bolt_mapping');
@@ -99,7 +114,7 @@ function feedback(value) {
       if (!identifier(value[key])) fail('invalid_feedback_sensor');
       return [key, value[key]];
     })),
-    bolt: choice(value.bolt, ['position', 'relay', 'timed'], 'invalid_bolt_feedback'),
+    bolt: choice(value.bolt, ['position', 'relay', 'timed', 'command'], 'invalid_bolt_feedback'),
     openingSeconds: number(value.openingSeconds, 1, 300, 'invalid_opening_time'),
     closingSeconds: number(value.closingSeconds, 1, 300, 'invalid_closing_time'),
     closedStableSeconds: number(value.closedStableSeconds, 0, 60, 'invalid_closed_stability'),
@@ -123,6 +138,10 @@ function sensors(value) {
   });
 }
 function resourceKeys(value) {
+  if (value.type === 'deconz' && value.relayMode === 'separate') {
+    const { relayMode, lockRelay, unlockRelay, ...shared } = value;
+    return [lockRelay, unlockRelay].flatMap(relay => resourceKeys({ ...shared, ...relay }));
+  }
   if (value.type === 'homebridge') return [JSON.stringify(['homebridge', value.bridgeId.toLowerCase(), value.serviceId])];
   if (value.type === 'tailwind') return [value.doorIndex, value.openSensorDoorIndex].filter(index => index !== undefined)
     .map(index => JSON.stringify(['tailwind', value.baseUrl, index]));
@@ -247,6 +266,10 @@ export function validateConfiguration(input, { allowEmpty = false } = {}) {
     // Omission still means enabled. Keep the existing normalized shape and
     // commissioning hashes unchanged for all installations using a bolt.
     if (boltDisabled) result.boltControlEnabled = false;
+    if (result.bolt?.relayMode === 'separate' && !result.exposeBoltLock) fail('separate_bolt_lock_tile_required');
+    const commandBolt = result.bolt?.type === 'deconz' && result.bolt.relayMode === 'separate' && result.bolt.momentary;
+    if (commandBolt ? result.feedback.bolt !== 'command' : result.feedback.bolt === 'command') fail('invalid_bolt_feedback');
+    if (result.bolt?.relayMode === 'separate' && !commandBolt && result.feedback.bolt !== 'relay') fail('invalid_bolt_feedback');
     if (value.sensors !== undefined) result.sensors = sensors(value.sensors);
     for (const [endpoint, key] of [['closed', 'closedSensor'], ['open', 'openSensor']]) {
       if (result.feedback[key] !== undefined && !sensorChoices(result, endpoint).some(sensor => sensor.id === result.feedback[key]))

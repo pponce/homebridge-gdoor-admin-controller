@@ -52,6 +52,7 @@ window.ConfiguratorController = ({ root, api, readOnly }) => {
         ['Opener lockout reporting', detail.lockoutReporting === 'not-supported' ? 'Not supported by this adapter; not a confirmed clear flag' : lockout],
         ['Door feedback', state.door], ['Controller phase', state.phase], ['Requested target', state.target],
         ['Bolt control enabled', yes(row.boltControlEnabled !== false)], ['Bolt feedback', state.bolt], ['Bolt feedback source', row.feedback.bolt],
+        ...(row.feedback.bolt === 'command' ? [['Bolt position is estimated', yes(state.boltEstimated === true)]] : []),
         ['Opening feedback', row.feedback.opening], ['Closing feedback', row.feedback.closing],
         ['Open is estimated', yes(state.openEstimated === true)], ['Closed is estimated', yes(state.closeEstimated === true)],
         ['Closed confirmed during fault', yes(state.closedObservedDuringFault === true)],
@@ -162,6 +163,7 @@ window.ConfiguratorController = ({ root, api, readOnly }) => {
       <p class="gp-sub">All times are in seconds. Changes apply to the next operation without restarting Homebridge. Save when controllers are idle.</p>
       <p class="gp-sub">Opening feedback: ${esc(row.feedback.opening)} · Closing feedback: ${esc(row.feedback.closing)} · Bolt feedback: ${esc(row.feedback.bolt)}. Travel times are estimates when timed feedback is selected.</p>
       ${row.boltControlEnabled === false ? '<p class="gp-note" data-bolt-disabled>Bolt disabled — door-only operation. Bolt commands, checks and delays are skipped; saved bolt settings are retained. Change Bolt control enabled in Homebridge → Garage doors → Devices.</p>' : ''}
+      ${row.feedback.bolt === 'command' ? '<p class="gp-note" data-bolt-estimated>Bolt position is estimated from the last completed pulse, and is unknown after restart. Use the coordinated bolt Lock tile; pulses from other apps can be missed.</p>' : ''}
       ${row.feedback.opening === 'sensor' ? '<p class="gp-note">The fully-open sensor confirms opening, including after reversal. Opening travel time, per-device opening overrides and extra opening time after interruption are unused. Movement timeout still limits how long confirmation may take.</p>' : ''}
       <p data-controller-message role="status" aria-live="polite"></p>
       <form data-controller-form><fieldset ${readOnly() ? 'disabled' : ''}>

@@ -6,6 +6,7 @@ import { PrivateStore } from './private-store.js';
 import { StateJournal } from './journal.js';
 import { readCredentials } from './credentials.js';
 import { TailwindDoor, DeconzBolt } from './drivers.js';
+import { DeconzSeparateBolt } from './separate-bolt.js';
 import { RatgdoDoor } from './ratgdo.js';
 import { DeconzMotorRelay, PulseMotor } from './pulse-motor.js';
 import { MovementEngine } from './engine.js';
@@ -67,7 +68,7 @@ export class CoordinatorRuntime {
     const door = withPositionFeedback(profile, opener, sensor =>
       new HomebridgeContactSensor(sensor, key(sensor.connection.credentialRef)));
     const bolt = profile.boltControlEnabled === false ? null :
-      new (profile.bolt.type === 'deconz' ? DeconzBolt : HomebridgeBolt)(profile.bolt, key(profile.bolt.credentialRef), { readOnly, feedback: profile.feedback.bolt });
+      new (profile.bolt.type === 'deconz' ? profile.bolt.relayMode === 'separate' ? DeconzSeparateBolt : DeconzBolt : HomebridgeBolt)(profile.bolt, key(profile.bolt.credentialRef), { readOnly, feedback: profile.feedback.bolt, ...(this.clock ? { clock: this.clock } : {}) });
     const motorPaths = {};
     for (const p of profile.motorPaths) {
       motorPaths[p.id] = new PulseMotor({ relay: new (p.connection.type === 'deconz' ? DeconzMotorRelay : HomebridgeMotorRelay)(p.connection, key(p.connection.credentialRef), { readOnly }),
