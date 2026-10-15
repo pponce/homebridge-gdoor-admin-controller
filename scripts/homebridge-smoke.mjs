@@ -348,10 +348,35 @@ async function main() {
         body:JSON.stringify({characteristics:[{aid:garage.aid,iid:target.iid,value}]})});assert.equal(response.status,204);
       await until(async()=>{const s=(await management(endpoint+'/state')).status.state;return s.phase===phase&&!s.busy;});
     }
-    writes=structuredClone(hardware.state.writes);state=await restart(false);
-    assert.equal(state.actuationEnabled,true);assert.equal(state.state.bolt,'unknown');assert.equal(state.state.boltEstimated,false);
-    assert.deepEqual(hardware.state.writes,writes,'Restart cannot restore a pulse estimate or move the bolt');
-    pairAccessories=await hapAccessories();assert.equal(pairAccessories.filter(a=>a.services.some(s=>serviceType(s,'45'))).length,1);
+    // Tuning the pulse must not invalidate an approved setup or replace tiles.
+    for (const seconds of [.1, .2]) {
+      writes=structuredClone(hardware.state.writes);
+      const draft=(await management('/v1/settings')).settings;
+      draft.configuration.controllers[0].bolt.pulseSeconds=seconds;
+      const review=(await management('/v1/settings/review',draft)).review;
+      assert.deepEqual(review.requiresCommissioning,[],'Pulse-only edits retain setup approval');
+      await management('/v1/settings/apply',{token:review.token});
+      state=(await management(endpoint+'/state')).status;
+      for(const key of ['enabled','configurationValid','actuationEnabled'])assert.equal(state[key],true,key);
+      assert.deepEqual(hardware.state.writes,writes,'Saving a pulse length cannot move the bolt');
+      state=await restart(false);
+      for(const key of ['enabled','configurationValid','actuationEnabled'])assert.equal(state[key],true,key);
+      assert.equal(state.state.bolt,'unknown');assert.equal(state.state.boltEstimated,false);
+      assert.equal((await management('/v1/settings')).settings.configuration.controllers[0].bolt.pulseSeconds,seconds);
+      assert.deepEqual(hardware.state.writes,writes,'Restart cannot restore a pulse estimate or move the bolt');
+      pairAccessories=await hapAccessories();
+      assert.equal(pairAccessories.filter(a=>a.services.some(s=>serviceType(s,'45'))).length,1);
+      assert.equal(pairAccessories.find(a=>a.services.some(s=>serviceType(s,'45'))).aid,pairTile.aid);
+      assert.equal(pairAccessories.find(a=>a.services.some(s=>serviceType(s,'41'))).aid,garage.aid);
+      for(const [value,boltState]of [[0,'unlocked'],[1,'locked']]){
+        const response=await fetch(hapOrigin+'/characteristics',{method:'PUT',headers:{Authorization:'031-45-154','Content-Type':'application/hap+json'},
+          body:JSON.stringify({characteristics:[{aid:pairTile.aid,iid:pairTarget.iid,value}]})});
+        assert.equal(response.status,204);
+        await until(async()=>{const s=(await management(endpoint+'/state')).status.state;return s.bolt===boltState&&!s.busy;});
+      }
+      assert.deepEqual(hardware.state.writes.slice(writes.length),[['bolt-unlock',true],['bolt-unlock',false],['bolt-lock',true],['bolt-lock',false]]);
+    }
+    writes=structuredClone(hardware.state.writes);
     const latest = await (await fetch(hapOrigin+'/accessories',{headers:{Authorization:'031-45-154'}})).json();
     const restartAccessory = latest.accessories.find(a=>a.services.some(s=>serviceType(s,'49')));
     const restartOn = restartAccessory.services.find(s=>serviceType(s,'49')).characteristics.find(c=>serviceType(c,'25'));

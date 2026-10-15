@@ -1,3 +1,31 @@
+## 2026-10-15 — Pulse-length approval fix, 0.4.50 candidate
+
+The owner installed 0.4.49 and reports successful lock/unlock through the combined
+HomeKit tile at 0.2 seconds. Changing to 0.1 seconds invalidated setup approval;
+returning to 0.2 did not restore it. The owner completed setup again and requests
+that pulse tuning preserve approval, while relay selection and relay-mode
+changes still require review. This reports only the owner's stated bolt test,
+not acceptance of complete garage sequencing or any other pulse duration.
+
+The full settings save compared the new pulseSeconds field as an actuation-policy
+change. The narrowly scoped comparison now allows its validated value to change
+only within an already approved separate, momentary bolt profile. All other
+mapping/mode checks and the persisted approval hash format are unchanged.
+Disabled choices, missing approvals and failed-operation holds are preserved.
+The next saved profile uses the new duration; no check/save/startup operation
+pulses hardware. Existing HomeKit tile identifiers are unchanged.
+
+Two regression tests failed on the original code, confirming approval loss for
+both enabled and deliberately disabled approved controllers. The fix passes
+those cases and mapping/policy guards. All 518 local Node tests pass, including
+36 owner-updater outcomes, new-duration execution, persisted enablement, disabled
+choices, unapproved mappings and outstanding-fault holds. Actual Homebridge CI
+now also checks the unchanged garage/Lock AIDs and successful HomeKit commands
+after both pulse changes and restarts; its results are pending. The 0.4.50 owner updater retains SSH Git, printed npm browser
+authentication URLs, verified publication/download before stopping, and
+stop → pinned add → verify installed version → start. No live commands, npm
+publication or owner installation of this candidate have occurred.
+
 ## 2026-10-15 — 0.4.48 source and GitHub release verified
 ## 2026-10-15 — 0.4.49 source and GitHub release verified
 

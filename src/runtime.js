@@ -207,11 +207,15 @@ export class CoordinatorRuntime {
   }
   retainsCommissioning(profile) {
     const current = this.configuration.controllers.find(p => p.id === profile.id);
-    // Names and the same validated timing fields editable on the web page do
-    // not change the approved device mapping or feedback/actuation policy.
+    // Names, validated web timing fields and the separate bolt's pulse length
+    // do not change the approved device mapping or feedback/actuation policy.
     if (!current || this.state.commissioned[profile.id] !== hash(current)) return false;
     try {
       const candidate = profileWithTimings(current, controllerTimingValues(profile));
+      if (candidate.bolt?.type === 'deconz' && candidate.bolt.relayMode === 'separate' && candidate.bolt.momentary === true &&
+          profile.bolt?.type === 'deconz' && profile.bolt.relayMode === 'separate' && profile.bolt.momentary === true) {
+        candidate.bolt.pulseSeconds = profile.bolt.pulseSeconds;
+      }
       candidate.name = profile.name;
       for (const key of ['exposeTailwindLockout', 'exposeTailwindRestart']) {
         if (Object.hasOwn(profile, key)) candidate[key] = profile[key]; else delete candidate[key];

@@ -60,6 +60,11 @@ updates retain their existing paths.
 **Single relay controls lock / unlock** retains the existing one-output mapping,
 polarity, feedback and optional Lock tile. Existing saved profiles and approval
 hashes do not change. Selecting another relay setup requires selecting its
-outputs, saving, and completing setup checks. Pulse duration changes also
-require setup review. See the synthetic
+outputs, saving, and completing setup checks. Changing only the pulse duration
+retains an already approved setup, its enabled/disabled choice and both HomeKit
+tiles. Save while idle; no Homebridge restart or setup recheck is needed. A
+restart still clears the command estimate to Unknown. Changes to either relay,
+the connection, single/separate setup, momentary/maintained operation or bolt
+control enablement still require setup review. Pulse edits cannot restore a
+missing approval or clear an outstanding fault. See the synthetic
 [configuration example](../examples/separate-bolt-config.json).

@@ -232,7 +232,7 @@ test('failed bolt pulse blocks motor movement and remains held through observati
   }
 });
 
-test('production runtime commissions with OFF outputs, preserves one Lock tile preference and does not restore pulse estimates', async t => {
+async function runtimeFixture(t) {
   const hw = await hardwareFixture(example.controllers[0]);
   const storagePath = await mkdtemp(join(tmpdir(), 'separate-bolt-runtime-')); await loadIdentity(storagePath);
   const runtimes = []; t.after(async () => { for (const r of runtimes) await r.stop(); await hw.close(); await rm(storagePath, { recursive: true, force: true }); });
@@ -241,7 +241,13 @@ test('production runtime commissions with OFF outputs, preserves one Lock tile p
   let now = 0; const clock = { now: () => now, sleep: async ms => { now += ms; } };
   const start = async () => { const r = new CoordinatorRuntime({ storagePath, configuration: { controllers: [hw.config] }, credentials: async () => hw.credentials, clock }); runtimes.push(r); await r.start(); return r; };
   const runtime = await start(), id = hw.config.id;
-  await runtime.commission(id, { revision: 1, previousControllerStopped: true, physicalSetupReviewed: true });
+  const commission = () => runtime.commission(id, { revision: runtime.state.revision, previousControllerStopped: true, physicalSetupReviewed: true });
+  return { hw, runtime, id, start, commission, clock };
+}
+
+test('production runtime commissions with OFF outputs, preserves one Lock tile preference and does not restore pulse estimates', async t => {
+  const { hw, runtime, id, start, commission } = await runtimeFixture(t);
+  await commission();
   assert.equal(runtime.status(id).actuationEnabled, true); assert.equal(runtime.status(id).state.bolt, 'unknown');
   assert.deepEqual(hw.state.writes, []);
   await runtime.entry(id).engine.execute('open'); assert.equal(runtime.status(id).state.bolt, 'unlocked');
@@ -251,4 +257,94 @@ test('production runtime commissions with OFF outputs, preserves one Lock tile p
   assert.equal(restarted.status(id).state.bolt, 'unknown'); assert.deepEqual(hw.state.writes, writes);
   assert.equal(restarted.configuration.controllers[0].exposeBoltLock, true);
   await assert.rejects(restarted.stationary(), /physical_stationary_confirmation_required/, 'An estimate must not pass a maintenance check that requires locked feedback');
+});
+
+test('pulse-only edits retain setup and enablement through save and restart, and use the new duration', async t => {
+  const f = await runtimeFixture(t); await f.commission(); let runtime = f.runtime;
+  for (const seconds of [.1, .2]) {
+    const draft = runtime.settings(); draft.configuration.controllers[0].bolt.pulseSeconds = seconds;
+    const writes = structuredClone(f.hw.state.writes);
+    const review = await runtime.review(draft.configuration, draft.revision);
+    assert.deepEqual(review.requiresCommissioning, []);
+    await runtime.apply(review.token);
+    for (const key of ['enabled', 'configurationValid', 'actuationEnabled']) assert.equal(runtime.status(f.id)[key], true, key);
+    assert.deepEqual(f.hw.state.writes, writes, 'Saving a pulse length cannot operate the bolt');
+    await runtime.stop(); runtime = await f.start();
+    for (const key of ['enabled', 'configurationValid', 'actuationEnabled']) assert.equal(runtime.status(f.id)[key], true, key);
+    assert.equal(runtime.status(f.id).state.bolt, 'unknown');
+    assert.equal(runtime.configuration.controllers[0].exposeBoltLock, true);
+    assert.equal(runtime.configuration.controllers[0].bolt.pulseSeconds, seconds);
+    assert.deepEqual(f.hw.state.writes, writes, 'Restart cannot operate the bolt');
+    for (const [command, state] of [['unlock', 'unlocked'], ['lock', 'locked']]) {
+      const before = f.clock.now(); await runtime.entry(f.id).engine.execute(command);
+      assert.equal(runtime.status(f.id).state.bolt, state);
+      assert.equal(runtime.status(f.id).state.fault, null);
+      assert.equal(f.clock.now() - before, seconds * 1000, 'The next pulse uses the saved duration');
+    }
+    assert.deepEqual(f.hw.state.writes.slice(writes.length), [['bolt-unlock', true], ['bolt-unlock', false], ['bolt-lock', true], ['bolt-lock', false]]);
+  }
+});
+
+test('pulse edits preserve disabled choices and never approve a new or already unapproved mapping', async t => {
+  const f = await runtimeFixture(t), { runtime, id } = f;
+  let draft = runtime.settings(); draft.configuration.controllers[0].bolt.pulseSeconds = .1;
+  let review = await runtime.review(draft.configuration, draft.revision);
+  assert.deepEqual(review.requiresCommissioning, [id]); await runtime.apply(review.token);
+  assert.equal(runtime.status(id).configurationValid, false); assert.equal(runtime.status(id).enabled, false);
+  await f.commission(); await runtime.disable(id, { revision: runtime.state.revision, bootId: runtime.bootId });
+  draft = runtime.settings(); draft.configuration.controllers[0].bolt.pulseSeconds = .2;
+  review = await runtime.review(draft.configuration, draft.revision);
+  assert.deepEqual(review.requiresCommissioning, []); await runtime.apply(review.token);
+  assert.equal(runtime.status(id).configurationValid, true); assert.equal(runtime.status(id).enabled, false);
+  assert.equal(runtime.status(id).actuationEnabled, false);
+  await runtime.stop(); const restarted = await f.start();
+  assert.equal(restarted.status(id).configurationValid, true); assert.equal(restarted.status(id).enabled, false);
+  draft = restarted.settings(); draft.configuration.controllers[0].bolt.lockRelay.resourceId = '7';
+  review = await restarted.review(draft.configuration, draft.revision); await restarted.apply(review.token);
+  draft = restarted.settings(); draft.configuration.controllers[0].bolt.pulseSeconds = .1;
+  review = await restarted.review(draft.configuration, draft.revision);
+  assert.deepEqual(review.requiresCommissioning, [id]); await restarted.apply(review.token);
+  assert.equal(restarted.status(id).configurationValid, false); assert.equal(restarted.status(id).actuationEnabled, false);
+  assert.deepEqual(f.hw.state.writes, []);
+});
+
+test('pulse tuning cannot mask changed relay selection, wiring mode, connection or control policy', async t => {
+  const f = await runtimeFixture(t); await f.commission();
+  const changes = [
+    ['lock relay', p => p.bolt.lockRelay.resourceId = '7'],
+    ['unlock relay', p => p.bolt.unlockRelay.resourceId = '8'],
+    ['swapped directions', p => [p.bolt.lockRelay, p.bolt.unlockRelay] = [p.bolt.unlockRelay, p.bolt.lockRelay]],
+    ['endpoint identity', p => p.bolt.lockRelay.uniqueId = 'replacement-output'],
+    ['relay model', p => p.bolt.unlockRelay.modelId = 'REPLACEMENT'],
+    ['gateway identity', p => p.bolt.gatewayId = '8899aabbccddeeff'],
+    ['gateway address', p => p.bolt.baseUrl = 'http://replacement.example.invalid'],
+    ['credential reference', p => p.bolt.credentialRef = 'replacement-key'],
+    ['maintained outputs', p => { p.bolt.momentary = false; delete p.bolt.pulseSeconds; p.feedback.bolt = 'relay'; }],
+    ['single relay', p => { const b = p.bolt; p.bolt = { type: b.type, baseUrl: b.baseUrl, gatewayId: b.gatewayId,
+      credentialRef: b.credentialRef, ...b.lockRelay, lockedValue: true }; p.feedback.bolt = 'relay'; }],
+    ['bolt control disabled', p => p.boltControlEnabled = false],
+    ['automatic bolting', p => p.autoBolt = !p.autoBolt],
+  ];
+  for (const [name, change] of changes) {
+    const draft = f.runtime.settings(), profile = draft.configuration.controllers[0];
+    profile.bolt.pulseSeconds = .1; change(profile);
+    const review = await f.runtime.review(draft.configuration, draft.revision);
+    assert.deepEqual(review.requiresCommissioning, [f.id], name);
+  }
+  assert.deepEqual(f.hw.state.writes, []);
+});
+
+test('pulse tuning retains approval without clearing a failed-operation hold', async t => {
+  const f = await runtimeFixture(t); await f.commission();
+  await f.runtime.entry(f.id).engine.fail('bolt_write_ambiguous');
+  const draft = f.runtime.settings(); draft.configuration.controllers[0].bolt.pulseSeconds = .1;
+  const review = await f.runtime.review(draft.configuration, draft.revision);
+  assert.deepEqual(review.requiresCommissioning, []); await f.runtime.apply(review.token);
+  for (const key of ['enabled', 'configurationValid']) assert.equal(f.runtime.status(f.id)[key], true);
+  assert.equal(f.runtime.status(f.id).actuationEnabled, false);
+  assert.equal(f.runtime.status(f.id).lastFault.reason, 'bolt_write_ambiguous');
+  await f.runtime.stop(); const restarted = await f.start();
+  assert.equal(restarted.status(f.id).configurationValid, true);
+  assert.equal(restarted.status(f.id).actuationEnabled, false);
+  assert.deepEqual(f.hw.state.writes, []);
 });

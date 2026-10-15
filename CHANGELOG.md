@@ -2,6 +2,12 @@
 
 User-facing changes for `homebridge-gdoor-admin-controller`. GitHub releases use matching `vVERSION` tags. Development history and validation receipts are in [developer documentation](docs/developer/README.md).
 
+## 0.4.50 — 2026-10-15
+
+- Keep an approved controller enabled and its HomeKit tiles available when changing only the separate bolt's pulse length, including 0.2 → 0.1 → 0.2 seconds. Save while idle; no setup recheck or Homebridge restart is needed.
+- Continue requiring setup review for changed relay selections, connections, single/two-relay setup, momentary/maintained operation or bolt-control mode. Preserve disabled controllers, missing approvals and fault holds.
+- Keep the stored approval format unchanged. If an earlier save already removed approval, complete the existing setup review once; pulse tuning then preserves it. Restart still leaves momentary bolt position Unknown until the next completed command.
+
 ## 0.4.49 — 2026-10-15
 
 - Add **Bolt relay setup** after the deCONZ connection: keep the existing single relay, or select separate lock and unlock relays.
