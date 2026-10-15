@@ -16,7 +16,7 @@ export class CoordinatorAccessories {
     this.stop(); this.stopped = false;
     const { Service: S, Characteristic: C } = this.api.hap; const retained = new Set();
     for (const p of this.runtime.configuration.controllers) {
-      for (const kind of ['garage', ...(p.exposeBoltLock ? ['bolt'] : []), ...(p.door?.type === 'tailwind' && p.exposeTailwindLockout ? ['lockout'] : []), ...(p.door?.type === 'tailwind' && p.exposeTailwindRestart ? ['restart'] : [])]) {
+      for (const kind of ['garage', ...(p.boltControlEnabled !== false && p.exposeBoltLock ? ['bolt'] : []), ...(p.door?.type === 'tailwind' && p.exposeTailwindLockout ? ['lockout'] : []), ...(p.door?.type === 'tailwind' && p.exposeTailwindRestart ? ['restart'] : [])]) {
         const uuid = this.api.hap.uuid.generate('gdoorandbolt:' + this.identity.instanceId + ':' + p.id + ':' + kind); retained.add(uuid);
         const name = p.name + ({ garage: '', bolt: ' Bolt', lockout: ' Tailwind Lockout', restart: ' Restart Tailwind' }[kind]);
         let a = this.active.get(uuid)?.accessory ?? this.cached.get(uuid);

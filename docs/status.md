@@ -1,3 +1,35 @@
+## 2026-10-15 — Optional bolt control and 0.4.48 owner updater
+
+The owner authorized a per-garage **Bolt control enabled** switch for temporary
+door-only operation while replacing a failed relay. It defaults on; existing
+normalized profiles and approval hashes remain unchanged. Off preserves valid
+bolt mapping/preferences and their exclusive resource ownership, permits no
+bolt mapping for a new door-only garage, and does not construct/read/write the
+bolt driver or require its key. Opening/closing, input routes, interruptions,
+door feedback and all non-bolt protections remain active. Disabled status is
+explicit, never fabricated unlocked feedback. Automatic bolting and bolt
+commands/delays are unavailable. The Lock tile is removed while disabled;
+the garage tile identity is unchanged. Switching either way requires setup
+review. Re-enable checks the actual relay identity without moving it.
+
+Configuration and web Controller interfaces explain the mode and retain inactive
+bolt timings, including per-control overrides. The schema, scope/parity/API
+documentation, changelog, asset manifest and static demo are synchronized.
+Version 0.4.48 includes the owner's SSH/browser-authenticated npm updater with
+registry integrity verification before stop → pinned add → verify → start.
+Installation failure leaves Homebridge stopped. The updater does not change the
+mode automatically: the owner must secure the physical bolt retracted, save the
+option, check connections and confirm the physical setup.
+
+Local validation: all 480 Node tests pass, including unavailable/missing bolt
+hardware and credentials, mode transitions, retained mapping, read-only setup,
+maintenance, restart/recovery, virtual-keypad routing, interruption behavior,
+and 24 owner-updater installation outcomes. The legacy administrator contract
+copy is synchronized in the isolated compatibility fixture; all 16 cross-repo
+checks pass. Full Node 22/24, real Homebridge 2.0/2.4 and desktop/mobile browser
+CI are the remaining source-release gates. No live device operation, npm
+publication or host installation has been performed by the agent.
+
 ## 2026-10-11 — 0.4.47 GitHub release verified; owner update ready
 
 The owner explicitly approved merging and releasing 0.4.47. PR #8 is merged

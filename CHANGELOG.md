@@ -2,6 +2,13 @@
 
 User-facing changes for `homebridge-gdoor-admin-controller`. GitHub releases use matching `vVERSION` tags. Development history and validation receipts are in [developer documentation](docs/developer/README.md).
 
+## 0.4.48 — 2026-10-15
+
+- Add **Bolt control enabled** per garage, on by default. Turn it off for door-only operation while retaining the saved bolt mapping, timings and tile preference.
+- Skip all disabled-bolt reads, writes, retraction/extension delays and automatic bolting. Keep door feedback, obstruction checks, motor routing, button/keypad behavior and restart protections active.
+- Show **Bolt disabled** and hide the separate Lock tile without changing the garage tile’s identity. Disable unused bolt timing fields in both settings interfaces while preserving their values.
+- Require setup review after switching modes. Secure the physical bolt retracted before enabling door-only operation; check the relay mapping and identity when turning bolt control back on.
+
 ## 0.4.47 — 2026-10-11
 
 - Move Controller troubleshooting below the lockout settings, controller defaults, device timing overrides and motor relay pulses. It starts collapsed and can be expanded or collapsed; live status refreshes keep the chosen state.

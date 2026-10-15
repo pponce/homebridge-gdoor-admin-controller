@@ -53,12 +53,12 @@ async function fixture(browser,{mobile,dark,mode='managed'}){
         const status={bootId:'synthetic-boot',enabled,configurationValid:enabled,canRecover:mode.startsWith('restart-'),actuationEnabled:enabled&&!mode.startsWith('restart-'),held:enabled?null:'not-commissioned',state:{busy:mode==='moving',fault:mode==='fault'?'synthetic-fault':null}};
         if(mode==='restart-wait'){status.held='waiting-for-devices';status.state.unavailable='bolt_unreachable';status.health=controllerHealth(status);}
         if(mode==='restart-fault'){status.held='controller_requires_review';status.state.fault='bolt_write_ambiguous';status.health=controllerHealth(status);}
-        return{id:profile.id,name:profile.name,status};})};
+        return{id:profile.id,name:profile.name,boltControlEnabled:profile.boltControlEnabled!==false,status};})};
     if(name==='/validate')return validateConfiguration(body.configuration,{allowEmpty:true});
     if(name==='/review'){assert.equal(body.revision,revision);reviews++;reviewed=validateConfiguration(body.configuration,{allowEmpty:true});return{review:{token:'review-test',configuration:reviewed,requiresCommissioning:reviewed.controllers.filter(p=>!enabled||!configuration.controllers.some(old=>old.id===p.id&&JSON.stringify({...old,name:p.name})===JSON.stringify(p))).map(p=>p.id)}};}
     if(name==='/cancel'){reviewed=null;return{};}
     if(name==='/apply'){assert.equal(body.token,'review-test');if(enabled&&!reviewed.controllers.every(p=>configuration.controllers.some(old=>old.id===p.id&&JSON.stringify({...old,name:p.name})===JSON.stringify(p))))enabled=false;configuration=reviewed;revision++;applies++;if(mode==='uncertain')throw Error('response lost');return{settings:{revision,configuration}};}
-    if(name==='/probe'){probes++;probedIds.push(body.controller);if(mode==='probe-unavailable')throw Error('synthetic unavailable');return{probe:{compatible:probes>1,door:{state:'closed',feedback:'closed-sensor'},bolt:{state:'locked',feedback:'relay'},limitations:[],
+    if(name==='/probe'){probes++;probedIds.push(body.controller);if(mode==='probe-unavailable')throw Error('synthetic unavailable');const off=configuration.controllers.find(p=>p.id===body.controller)?.boltControlEnabled===false;return{probe:{compatible:probes>1,door:{state:'closed',feedback:'closed-sensor'},bolt:{state:off?'disabled':'locked',feedback:off?'disabled':'relay'},limitations:[],
       controls:[{id:'physical-keypad',name:'Physical keypad',kind:'input',error:probes===1?'input_alarm_mapping_changed':null}]}};}
     if(name==='/commission'){assert.equal(body.previousControllerStopped,true);assert.equal(body.physicalSetupReviewed,true);enabled=true;commissions++;return{};}
     if(name==='/recover'){assert.equal(body.bootId,'synthetic-boot');assert.equal(enabled,true);recoveries++;mode='enabled';return{};}
@@ -120,6 +120,38 @@ try{
  for(const [browserType,mobile,dark]of [[chromium,false,false],[webkit,true,true]]){
   const browser=await browserType.launch({headless:true});
   try{
+   {
+     const x=await fixture(browser,{mobile,dark,mode:'enabled'}),p=x.page;
+     const original=structuredClone(x.configuration().controllers[0]);
+     await p.getByLabel('Bolt control enabled',{exact:true}).uncheck();
+     assert.equal(await p.getByLabel('Show a separate bolt Lock tile',{exact:true}).isDisabled(),true);
+     await p.getByRole('button',{name:'Configure device Bolt / Lock',exact:true}).click();
+     assert.equal(await p.getByText('Bolt control is disabled.',{exact:true}).count(),1);
+     await p.getByRole('button',{name:'03 Behavior',exact:true}).click();
+     for(const label of ['Bolt feedback','Before opening (seconds)','Before closing (seconds)','Bolt extension settling (seconds)','Automatically bolt a newly closed door'])
+       assert.equal(await p.getByLabel(label,{exact:true}).isDisabled(),true);
+     await review(p);await p.getByRole('button',{name:'Save configuration',exact:true}).click();await saved(p);
+     const disabled=x.configuration().controllers[0];
+     assert.equal(disabled.boltControlEnabled,false);assert.deepEqual(disabled.bolt,original.bolt);
+     assert.deepEqual(disabled.feedback,original.feedback);assert.deepEqual(disabled.timing,original.timing);assert.deepEqual(disabled.inputs,original.inputs);
+     assert.equal(await p.locator('.garage-card').getAttribute('data-state'),'disabled');
+     await p.getByRole('button',{name:'Enable '+original.name,exact:true}).click();
+     await p.getByText('The door is physically closed, the motor relay is released, and any physical bolt is retracted and secured against extending.',{exact:true}).waitFor();
+     await p.getByRole('button',{name:'Check connections',exact:true}).click();
+     await p.locator('.commission-result').filter({hasText:'input_alarm_mapping_changed'}).waitFor();
+     await p.getByRole('button',{name:'Check connections',exact:true}).click();
+     await p.locator('.commission-result').filter({hasText:'Connections verified'}).waitFor();
+     for(const input of await p.locator('.commission-row input[type=checkbox]').all())await input.check();
+     await p.getByRole('button',{name:'Enable this garage door',exact:true}).click();await saved(p);
+     assert.equal(await p.locator('.garage-card').getAttribute('data-state'),'enabled');
+     await p.getByRole('button',{name:'01 Devices',exact:true}).click();
+     await p.getByLabel('Bolt control enabled',{exact:true}).check();
+     assert.equal(await p.getByLabel('Show a separate bolt Lock tile',{exact:true}).isEnabled(),true);
+     await review(p);await p.getByRole('button',{name:'Save configuration',exact:true}).click();await saved(p);
+     assert.deepEqual(x.configuration().controllers[0],original);
+     assert.equal(await p.locator('.garage-card').getAttribute('data-state'),'disabled');
+     assert.deepEqual(x.errors,[]);await p.close();
+   }
    {
      const x=await fixture(browser,{mobile,dark,mode:'enabled'}),p=x.page;
      const checkbox=p.getByLabel('Configure an extra Tailwind open sensor',{exact:true});

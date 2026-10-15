@@ -16,8 +16,10 @@ const lockoutOnly = sample => sample.lockout === true && sample.disabled === fal
  * No action in construction, initialization, observe(), or state publication.
  */
 export class MovementEngine {
-  constructor({ door, bolt, journal, feedback, timing = {}, motorPaths = {}, lockoutMotorPaths = [], clock = systemClock, publish = () => {}, recordFault = async () => {} }) {
-    this.door = door; this.bolt = bolt; this.journal = journal; this.clock = clock; this.publish = publish;
+  constructor({ door, bolt, boltControlEnabled = true, journal, feedback, timing = {}, motorPaths = {}, lockoutMotorPaths = [], clock = systemClock, publish = () => {}, recordFault = async () => {} }) {
+    requireValue(typeof boltControlEnabled === 'boolean', 'engine_feedback_invalid');
+    this.boltControlEnabled = boltControlEnabled;
+    this.door = door; this.bolt = boltControlEnabled ? bolt : null; this.journal = journal; this.clock = clock; this.publish = publish;
     this.recordFault = recordFault;
     this.feedback = { ...feedback }; this.timing = { ...defaults, ...timing };
     requireValue(motorPaths && typeof motorPaths === 'object' && !Object.hasOwn(motorPaths, 'primary'), 'engine_motor_paths_invalid');
@@ -26,12 +28,12 @@ export class MovementEngine {
     this.motor = door; this.interruptionAllowed = false; this.interruptionRequest = null;
     this.travel = null; this.partialOwner = null; this.autoClosePending = false;
     requireValue(['sensor', 'timed'].includes(feedback.opening) && ['sensor', 'timed'].includes(feedback.closing) &&
-      ['position', 'relay'].includes(feedback.bolt) && typeof feedback.allowEstimatedBolting === 'boolean', 'engine_feedback_invalid');
+      (!boltControlEnabled || ['position', 'relay'].includes(feedback.bolt)) && typeof feedback.allowEstimatedBolting === 'boolean', 'engine_feedback_invalid');
     requireValue(Object.keys(timing).every(key => Object.hasOwn(defaults, key)) &&
       Object.values(this.timing).every(value => Number.isFinite(value) && value >= 0 && value <= 300000) &&
       ['pollMs', 'boltTimeoutMs', 'motionTimeoutMs', 'openingMs', 'closingMs'].every(key => this.timing[key] > 0), 'engine_timing_invalid');
     this.busy = false; this.observation = null; this.initialized = false; this.stopped = false; this.lastBolt = null;
-    this.state = { phase: 'starting', door: 'unknown', bolt: 'unknown', target: null,
+    this.state = { phase: 'starting', door: 'unknown', bolt: boltControlEnabled ? 'unknown' : 'disabled', target: null,
       openEstimated: false, closeEstimated: false, fault: null, externalUnlockOverride: false };
   }
 
@@ -106,18 +108,19 @@ export class MovementEngine {
   async read({ observationOnly = false, allowLockout = this.physicalRelayOperation === true } = {}) {
     this.checkRunning();
     const sampledAt = this.clock.now();
-    const [door, bolt] = await Promise.all([this.door.read(), this.bolt.read()]);
+    const [door, bolt] = await Promise.all([this.door.read(), this.boltControlEnabled ? this.bolt.read() : null]);
     for (const motor of this.motorPaths.values()) if (typeof motor.verifyIdle === 'function') await motor.verifyIdle();
     this.checkRunning();
     requireValue(door && ['closed', 'open', 'not-closed', 'opening', 'closing'].includes(door.door) &&
       typeof door.blocked === 'boolean' && typeof door.obstruction === 'boolean' &&
-      bolt && typeof bolt.locked === 'boolean', 'unknown_state');
-    requireValue(bolt.evidence === this.feedback.bolt, 'bolt_feedback_mismatch');
-    this.lastBolt = bolt.locked;
+      (!this.boltControlEnabled || bolt && typeof bolt.locked === 'boolean'), 'unknown_state');
+    if (this.boltControlEnabled) requireValue(bolt.evidence === this.feedback.bolt, 'bolt_feedback_mismatch');
+    this.lastBolt = bolt?.locked ?? null;
     // The transport evidence and user's configured meaning must both agree.
-    const sample = { ...door, locked: bolt.locked, boltEvidence: bolt.evidence };
+    // Disabled is absence of bolt evidence, never a fabricated unlocked report.
+    const sample = { ...door, locked: bolt?.locked ?? null, boltEvidence: bolt?.evidence ?? 'disabled' };
     this.sample = sample; this.sampledAt = sampledAt; this.observedAt = Date.now();
-    this.update({ door: sample.door, bolt: sample.locked ? 'locked' : 'unlocked', obstruction: sample.obstruction, lockout: sample.lockout ?? null, disabled: sample.disabled ?? null, blocked: sample.blocked, ...(sample.door !== 'closed' ? { closedObservedDuringFault: false } : {}), unavailable: null });
+    this.update({ door: sample.door, bolt: this.boltControlEnabled ? sample.locked ? 'locked' : 'unlocked' : 'disabled', obstruction: sample.obstruction, lockout: sample.lockout ?? null, disabled: sample.disabled ?? null, blocked: sample.blocked, ...(sample.door !== 'closed' ? { closedObservedDuringFault: false } : {}), unavailable: null });
     if (!observationOnly) {
       requireValue(!door.blocked || allowLockout && lockoutOnly(door), 'door_blocked');
       requireValue(!door.obstruction, 'obstruction');
@@ -206,7 +209,7 @@ export class MovementEngine {
       // auto-bolting retains Open intent and HomeKit reports Opening again.
       // A command admitted during this read waits for it before setting intent.
       if (sample.door === 'closed') {
-        if (previousDoor !== 'closed' && previousDoor !== 'unknown' && !sample.blocked) this.autoClosePending = true;
+        if (this.boltControlEnabled && previousDoor !== 'closed' && previousDoor !== 'unknown' && !sample.blocked) this.autoClosePending = true;
         if (sample.blocked) this.autoClosePending = false;
         this.travel = null; this.partialOwner = null;
         Object.assign(changes, { phase: 'closed', target: 'closed', openEstimated: false, closeEstimated: false });
@@ -255,6 +258,7 @@ export class MovementEngine {
   async retract(closing, checked = null) {
     const sample = checked ?? await this.read();
     requireValue(!['opening', 'closing'].includes(sample.door), 'external_movement');
+    if (!this.boltControlEnabled) return { sample, at: this.sampledAt, retractionRequestedAt: null };
     const settling = closing ? this.timing.closeRetractSettleMs : this.timing.openRetractSettleMs;
     let retractionRequestedAt = null;
     // For zero-wait closing, acknowledge one OFF command when needed, then
@@ -274,6 +278,7 @@ export class MovementEngine {
 
   async execute(command, { motorPath = 'primary', timing = {}, interruption = false, owner = null, physicalInput = false, allowDuringOpenerLockout = false } = {}) {
     requireValue(['open', 'close', 'unlock', 'lock', 'observed-close'].includes(command), 'command_invalid');
+    requireValue(this.boltControlEnabled || ['open', 'close'].includes(command), 'bolt_control_disabled');
     requireValue(!this.busy, 'controller_busy');
     const relayOperation = physicalInput === true && allowDuringOpenerLockout === true && this.lockoutMotorPaths.has(motorPath) && ['open', 'close'].includes(command) && this.motorPaths.get(motorPath)?.capabilities?.pulse === true;
     const recovery = relayOperation && this.physicalLockoutRecovery(motorPath);
@@ -323,7 +328,7 @@ export class MovementEngine {
         await this.hold(this.timing.closedStableMs, s => s.door === 'closed' && s.locked, 'closed_confirmation_lost');
         this.update({ phase: 'closed', closeEstimated: false, openEstimated: false });
       } else {
-        this.update({ phase: 'unbolting' });
+        if (this.boltControlEnabled) this.update({ phase: 'unbolting' });
         const checked = await this.retract(command === 'close', command === 'close' ? sample : null);
         if (command === 'open') await this.open(); else await this.close(checked);
       }
@@ -436,7 +441,7 @@ export class MovementEngine {
         if (physical || estimated) {
           if (closedSince === null) closedSince = this.clock.now();
           if (this.clock.now() - closedSince >= this.timing.closedStableMs) {
-            if (estimated) requireValue(this.feedback.allowEstimatedBolting, 'estimated_bolting_not_allowed');
+            if (estimated && this.boltControlEnabled) requireValue(this.feedback.allowEstimatedBolting, 'estimated_bolting_not_allowed');
             await this.extend(estimated);
             return this.update({ phase: 'closed', closeEstimated: estimated });
           }
@@ -448,6 +453,7 @@ export class MovementEngine {
   }
 
   async extend(estimated) {
+    if (!this.boltControlEnabled) return;
     const closed = s => estimated ? !['opening', 'closing'].includes(s.door) : s.door === 'closed' && s.evidence === 'closed-sensor';
     const fresh = await this.read();
     requireValue(!fresh.locked && closed(fresh), 'closed_confirmation_lost');

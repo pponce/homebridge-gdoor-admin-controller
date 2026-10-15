@@ -49,7 +49,7 @@ The physical keypad is needed for physical PIN entry; it is not needed to operat
 
 Direct Tailwind access needs its local control key. Direct deCONZ access needs its API key. Homebridge accessory connections use the source bridge's pairing PIN and require unpaired accessory control to be enabled. The setup UI stores credentials privately.
 
-Every configured garage needs both a door and a bolt; door-only and bolt-only controllers are not supported. Timed feedback is an estimate, and a relay's reported state is not proof of the bolt's physical position. Choose settings that match what your devices can actually report.
+Every configured garage needs a door. **Bolt control enabled** defaults on; turn it off for door-only operation while keeping the saved bolt setup. Bolt-only controllers are not supported. Timed feedback is an estimate, and a relay's reported state is not proof of the bolt's physical position. Choose settings that match what your devices can actually report.
 
 ## Install
 
@@ -68,7 +68,7 @@ On a host managed by `hb-service`, install the release from a terminal:
 (
   set -e
   sudo hb-service stop
-  sudo hb-service add homebridge-gdoor-admin-controller@0.4.47
+  sudo hb-service add homebridge-gdoor-admin-controller@0.4.48
   sudo hb-service start
 )
 ```
@@ -77,10 +77,20 @@ If installation fails, the block stops and leaves Homebridge stopped so you can 
 
 For an existing installation, update through the Homebridge UI or use the same pinned `hb-service` command. Keep your saved configuration and HomeKit pairing; there is no need to uninstall the plugin or remove its bridge from Apple Home. Check the [changelog](CHANGELOG.md) before upgrading or downgrading.
 
+## Temporarily operate without the bolt
+
+1. Physically retract and secure the bolt so it cannot extend into the door’s path.
+2. Open **Plugin settings → Garage doors → Devices** and turn off **Bolt control enabled**. Review and save.
+3. Use the garage’s **Review setup / Enable → Check connections** flow, confirm the physical setup, and enable the garage. The door must be closed for this check.
+
+The garage door tile, motor routes, buttons and keypads continue working. Bolt reads, writes, retraction delays and automatic bolting are skipped. The separate bolt Lock tile is removed while disabled; status shows **Bolt disabled**. Bolt mapping, timing and tile preferences remain saved. Door feedback, obstruction, lockout, restart and ambiguous-command protections still apply.
+
+When the bolt relay is ready, turn the option on, review its mapping under **Bolt / Lock**, save and repeat the connection/setup checks before enabling. Replacement hardware may need its new identity selected. Re-enabling does not move the bolt.
+
 ## First setup
 
 1. In the plugin's **General** tab, add the connections and credentials for your deCONZ gateway, Tailwind controller, or existing Homebridge accessories.
-2. Add a garage. Under **Devices**, choose its opener, separate bolt, and any additional opener relays. Select the feedback and timing settings appropriate for your hardware.
+2. Add a garage. Under **Devices**, choose its opener, optional separate bolt, and any additional opener relays. Select the feedback and timing settings appropriate for your hardware.
 3. Under **Controls**, assign any buttons, switches, and physical keypads. Choose their actions and the opener they should use. Configure the web keypad if wanted.
 4. Review and save the configuration. Complete the device checks and explicitly **Enable** the garage when setup is ready. If replacing another controller, stop that controller and any competing automations before enabling this one.
 5. Test the full sequence under supervision: unlock, open, any configured stop/reverse action, close, lock, and restart recovery. Only one controller should operate a physical door-and-bolt assembly.

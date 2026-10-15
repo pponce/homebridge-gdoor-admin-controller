@@ -5,7 +5,7 @@ import { PulseMotor } from '../src/pulse-motor.js';
 import { Fault } from '../src/fault.js';
 import { InputRouter } from '../src/input-routing.js';
 
-function fixture(initial = 'closed') {
+function fixture(initial = 'closed', boltControlEnabled = true) {
   const state = { now: 0, door: initial, locked: initial === 'closed', direction: null,
     active: false, pulses: 0, journal: { inProgress: false, fault: false }, writes: [], outage: false };
   let engine; let afterSleep = () => {};
@@ -20,10 +20,10 @@ function fixture(initial = 'closed') {
       if (active) { state.pulses++; state.direction = state.direction === 'opening' ? null : state.direction === 'closing' ? 'opening' : state.door === 'closed' ? 'opening' : 'closing'; }
     } };
   const motor = new PulseMotor({ relay, openPulseMs: 100, closePulseMs: 100, clock, readOnly: false, interruption: true });
-  engine = new MovementEngine({ clock, motorPaths: { relay: motor },
+  engine = new MovementEngine({ clock, boltControlEnabled, motorPaths: { relay: motor },
     door: { read: async () => { if (state.outage) throw new Fault('door_read_failed'); return { door: state.door, evidence: 'closed-sensor', blocked: false, obstruction: false }; },
       write: async c => state.writes.push(['primary', c]) },
-    bolt: { read: async () => ({ locked: state.locked, evidence: 'relay' }), write: async v => { state.locked = v; state.writes.push(['bolt', v, state.now]); } },
+    bolt: { read: async () => { assert.equal(boltControlEnabled, true); return { locked: state.locked, evidence: 'relay' }; }, write: async v => { assert.equal(boltControlEnabled, true); state.locked = v; state.writes.push(['bolt', v, state.now]); } },
     journal: { read: async () => state.journal, write: async value => { state.journal = value; } },
     feedback: { opening: 'timed', closing: 'sensor', bolt: 'relay', allowEstimatedBolting: false },
     timing: { openingMs: 500, closingMs: 500, pollMs: 50, motionTimeoutMs: 3000, openRetractSettleMs: 0,
@@ -42,6 +42,21 @@ test('indoor opening can stop; only its next press may close from the estimated 
   f.state.closeAt = f.state.now + 300; f.hook(() => {});
   assert.equal((await f.engine.execute('close', f.options)).phase, 'closed');
   assert.equal(f.state.pulses, 3); assert.equal(f.state.locked, true); assert.equal(f.state.journal.inProgress, false);
+});
+
+test('door-only physical relay controls retain stop, close and reversal behavior without reading or writing the bolt', async () => {
+  const f = fixture('closed', false); await f.engine.initialize(); let requested = false;
+  f.hook(e => { if (!requested && e.interruptionAllowed) { requested = true; e.requestInterruption(); } });
+  assert.equal((await f.engine.execute('open', f.options)).phase, 'stopped-estimated');
+  await assert.rejects(f.engine.execute('close'), /partial_stop_requires_original_input/);
+  f.hook(() => {}); f.state.closeAt = f.state.now + 300;
+  assert.equal((await f.engine.execute('close', f.options)).phase, 'closed');
+  assert.equal(f.state.pulses, 3); assert.equal(f.engine.state.bolt, 'disabled');
+  assert.equal(f.state.writes.some(row => row[0] === 'bolt'), false);
+  const reverse = fixture('not-closed', false); await reverse.engine.initialize(); requested = false;
+  reverse.hook(e => { if (!requested && e.interruptionAllowed) { requested = true; e.requestInterruption(); } });
+  assert.equal((await reverse.engine.execute('close', reverse.options)).phase, 'open');
+  assert.equal(reverse.state.pulses, 2); assert.equal(reverse.engine.state.bolt, 'disabled');
 });
 
 test('indoor closing reverses to estimated open and loses its old bolt authority', async () => {

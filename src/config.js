@@ -236,11 +236,17 @@ export function validateConfiguration(input, { allowEmpty = false } = {}) {
   if (!Number.isInteger(port) || port < 1024 || port > 65535) fail('invalid_management_port');
   const ids = new Set(); const resources = new Set();
   const controllers = input.controllers.map(value => {
-    fields(value, ['id', 'name', 'door', 'bolt', 'sensors', 'feedback', 'exposeBoltLock', 'exposeTailwindLockout', 'exposeTailwindRestart', 'motorPaths', 'inputs', 'timing', 'autoBolt', 'keypad'], 'invalid_controller');
+    fields(value, ['id', 'name', 'door', 'bolt', 'boltControlEnabled', 'sensors', 'feedback', 'exposeBoltLock', 'exposeTailwindLockout', 'exposeTailwindRestart', 'motorPaths', 'inputs', 'timing', 'autoBolt', 'keypad'], 'invalid_controller');
     if (!identifier(value.id) || ids.has(value.id)) fail('invalid_or_duplicate_controller_id');
     ids.add(value.id);
     if (typeof value.exposeBoltLock !== 'boolean') fail('bolt_tile_choice_required');
-    const result = { id: value.id, name: string(value.name, 'invalid_controller_name', 64), door: door(value.door), bolt: bolt(value.bolt), feedback: feedback(value.feedback), exposeBoltLock: value.exposeBoltLock };
+    if (value.boltControlEnabled !== undefined && typeof value.boltControlEnabled !== 'boolean') fail('invalid_bolt_control_enabled');
+    const boltDisabled = value.boltControlEnabled === false;
+    const result = { id: value.id, name: string(value.name, 'invalid_controller_name', 64), door: door(value.door),
+      bolt: boltDisabled && value.bolt == null ? null : bolt(value.bolt), feedback: feedback(value.feedback), exposeBoltLock: value.exposeBoltLock };
+    // Omission still means enabled. Keep the existing normalized shape and
+    // commissioning hashes unchanged for all installations using a bolt.
+    if (boltDisabled) result.boltControlEnabled = false;
     if (value.sensors !== undefined) result.sensors = sensors(value.sensors);
     for (const [endpoint, key] of [['closed', 'closedSensor'], ['open', 'openSensor']]) {
       if (result.feedback[key] !== undefined && !sensorChoices(result, endpoint).some(sensor => sensor.id === result.feedback[key]))
@@ -269,7 +275,9 @@ export function validateConfiguration(input, { allowEmpty = false } = {}) {
     }
     result.motorPaths = motorPaths(value.motorPaths);
     result.inputs = inputs(value.inputs, result.motorPaths);
-    for (const item of [result.door, result.bolt, ...result.motorPaths.map(path => path.connection), ...(result.sensors ?? []).map(sensor => sensor.connection)]) {
+    // Retained bolt mappings remain reserved: another control must not operate
+    // that output while its owner has deliberately disabled bolt control.
+    for (const item of [result.door, result.bolt, ...result.motorPaths.map(path => path.connection), ...(result.sensors ?? []).map(sensor => sensor.connection)].filter(Boolean)) {
       for (const key of resourceKeys(item)) {
         if (resources.has(key)) fail('duplicate_hardware_owner');
         resources.add(key);
@@ -306,9 +314,10 @@ export function routingInventory(controller) {
 export function inventory(configuration) {
   return configuration.controllers.map(controller => ({
     id: controller.id, name: controller.name,
-    doorBackend: controller.door.type, boltBackend: controller.bolt.type,
-    exposeBoltLock: controller.exposeBoltLock,
-    feedback: { closing: controller.feedback.closing, opening: controller.feedback.opening, bolt: controller.feedback.bolt },
-    status: { phase: 'not-commissioned', door: 'unknown', bolt: 'unknown', actuationEnabled: false },
+    doorBackend: controller.door.type, boltBackend: controller.bolt?.type ?? null,
+    ...(controller.boltControlEnabled === false ? { boltControlEnabled: false } : {}),
+    exposeBoltLock: controller.boltControlEnabled !== false && controller.exposeBoltLock,
+    feedback: { closing: controller.feedback.closing, opening: controller.feedback.opening, bolt: controller.boltControlEnabled === false ? 'disabled' : controller.feedback.bolt },
+    status: { phase: 'not-commissioned', door: 'unknown', bolt: controller.boltControlEnabled === false ? 'disabled' : 'unknown', actuationEnabled: false },
   }));
 }

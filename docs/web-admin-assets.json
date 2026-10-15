@@ -89,8 +89,8 @@
   "additions": [
     {
       "path": "web-admin/public/controller.js",
-      "sha256": "a32dfe87addc2d37e3ea16df8fbeb0395d5b26015046d3fa8e29ffcffd6f2bc4",
-      "purpose": "Plugin-native controller timing editor, collapsed troubleshooting below its controls, and setup instructions when no garage exists."
+      "sha256": "ea297ee52ec041296b342939e09b71cefd7340f7b50202abd136655ad3e8b1bb",
+      "purpose": "Plugin-native controller timing editor, collapsed troubleshooting below its controls, and setup instructions when no garage exists. Display disabled bolt control and retain its inactive timing values."
     }
   ]
 }

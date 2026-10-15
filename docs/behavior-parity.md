@@ -20,6 +20,7 @@ Known gaps from the source audit: five configurable notification/reconciliation 
 | Physical keypad | Enrolled source/alarm checks, live freshness/epoch gate, native deCONZ disarm, no legacy alarm-disarm writes |
 | Virtual keypad | Pre-PIN eligibility receipt, two-second expiry, fresh alarm verification, primary motor route, no PIN forwarding |
 | Settings / maintenance | Revision-checked shared profiles, durable pause, original transaction hooks, physical confirmations when Homebridge restarts |
+| Optional bolt control (0.4.48) | Default enabled. Explicit opt-out preserves mapping, preferences and garage identity; skips bolt drivers, credentials, reads, writes and delays, rejects lock commands, suppresses automatic bolting and removes only the bolt tile. Door-only mode retains door feedback, routes, keypad eligibility, interruptions, restart and ambiguity protections. Mode changes require setup review; replacement identities are checked on re-enable. |
 | Combined Garage Door / optional Lock | Stable cached UUIDs; SET enters worker; state updates never become commands |
 
 The runtime is connected but starts with every new assembly uncommissioned. Drivers remain read-only by default. Discovery and probes never actuate; automatic bolting is separately admitted only after an observed closure while commissioned. Current release checks and remaining physical acceptance are recorded in status.md. Supported behavior is tested with synthetic devices; this does not establish timings or wiring on the owner's hardware.

@@ -162,7 +162,7 @@ export class ProfileEditor {
   refreshCards(){const current=this.root.querySelector('.garage-list');if(current)current.replaceWith(this.garageList());}
   render(){
     this.root.replaceChildren();this.root.append(this.garageList());
-    const p=this.configuration.controllers[this.selected];if(!p){const empty=el('section',undefined,'panel empty');empty.append(el('h2','No garage doors yet'),el('p','Use Add a garage door to connect an opener and its separate bolt.','subtle'));this.root.append(empty);this.viewChanged();return;}
+    const p=this.configuration.controllers[this.selected];if(!p){const empty=el('section',undefined,'panel empty');empty.append(el('h2','No garage doors yet'),el('p','Use Add a garage door to connect an opener and optionally a separate bolt.','subtle'));this.root.append(empty);this.viewChanged();return;}
     p.motorPaths??=[];p.inputs??=[];p.timing??={};
     const names=['Devices','Controls','Behavior'];
     const steps=el('nav',undefined,'steps');steps.setAttribute('aria-label','Garage setup');names.forEach((name,index)=>{const b=this.button(String(index+1).padStart(2,'0')+'  '+name,()=>{this.step=index;this.render();});if(index===this.step)b.setAttribute('aria-current','step');steps.append(b);});this.root.append(steps);
@@ -172,7 +172,16 @@ export class ProfileEditor {
   }
   devices(root,p){
     root.append(el('p','Devices operate or report on one part of your garage: the door or the bolt. Controls request a coordinated operation; the coordinator handles the door and bolt sequence.','help setup-model'));
-    const identity=this.panel(root,'Garage Door Details');const grid=this.grid(identity);this.input(grid,'Garage Door name',p,'name');identity.append(el('p','Controller ID: '+p.id+' · Use this to link the standalone administrator.','help'));this.input(grid,'Show a separate bolt Lock tile',p,'exposeBoltLock',{type:'checkbox'});
+    const identity=this.panel(root,'Garage Door Details');const grid=this.grid(identity);this.input(grid,'Garage Door name',p,'name');identity.append(el('p','Controller ID: '+p.id+' · Use this to link the standalone administrator.','help'));
+    const boltEnabled=p.boltControlEnabled!==false;
+    const boltControl=this.input(grid,'Bolt control enabled',{boltControlEnabled:boltEnabled},'boltControlEnabled',{type:'checkbox',help:'Turn off to operate only the door. Saved bolt settings are kept. First retract and secure the physical bolt so it cannot extend.'});
+    boltControl.addEventListener('change',()=>{
+      if(boltControl.checked){delete p.boltControlEnabled;p.bolt??=newGarage().bolt;}
+      else {p.boltControlEnabled=false;if(!p.bolt?.baseUrl&&!p.bolt?.resourceId&&!p.bolt?.serviceId)p.bolt=null;}
+      this.change();this.render();
+    });
+    this.input(grid,'Show a separate bolt Lock tile',p,'exposeBoltLock',{type:'checkbox'}).disabled=!boltEnabled;
+    if(!boltEnabled)identity.append(el('p','Bolt disabled — door control remains available after setup checks. Bolt commands, checks and delays are skipped.','help'));
     if (p.door.type === 'tailwind') {
       this.input(grid,'Show Tailwind Lockout contact sensor',p,'exposeTailwindLockout',{type:'checkbox'});
       this.input(grid,'Show Restart Tailwind switch',p,'exposeTailwindRestart',{type:'checkbox'});
@@ -218,7 +227,9 @@ export class ProfileEditor {
     opener.append(el('p','During movement: stop / reverse is unavailable through this garage opener connection. Use a compatible opener relay for that behavior.','help'));
     }
     if(selected==='bolt'){
-    const bolt=this.panel(root,'Bolt / Lock','This is the output that retracts and extends the bolt.');this.connection(bolt,p,'bolt','bolt');this.device(bolt,p.bolt,'bolt');if(p.bolt.serviceType!=='lock')this.input(this.grid(bolt),'Relay ON means bolt extended',p.bolt,'lockedValue',{type:'checkbox',help:'Choose the mapping that matches your wiring. A relay report does not prove physical bolt position.'});
+    const bolt=this.panel(root,'Bolt / Lock',boltEnabled?'This is the output that retracts and extends the bolt.':'Bolt control is disabled.');
+    if(boltEnabled){this.connection(bolt,p,'bolt','bolt');this.device(bolt,p.bolt,'bolt');if(p.bolt.serviceType!=='lock')this.input(this.grid(bolt),'Relay ON means bolt extended',p.bolt,'lockedValue',{type:'checkbox',help:'Choose the mapping that matches your wiring. A relay report does not prove physical bolt position.'});}
+    else bolt.append(el('p',p.bolt?'Your saved bolt connection and timing settings are retained. Enable bolt control to configure the replacement relay, then save and check the devices.':'No bolt is configured. Enable bolt control above to add one.','help'));
     }
     if(selected.startsWith('builtin:'))this.builtinSensor(root,p,selected.slice(8));
     else if(selected.startsWith('sensor:'))this.positionSensor(root,p,selected.slice(7));
@@ -252,7 +263,7 @@ export class ProfileEditor {
     });
   }
   addOpenerDevice(p){
-    p.motorPaths.push({id:freshId('motor'),name:'Opener relay',type:'pulse-relay',allowDuringOpenerLockout:false,connection:{type:'deconz',baseUrl:p.bolt.type==='deconz'?p.bolt.baseUrl:'',credentialRef:p.bolt.type==='deconz'?p.bolt.credentialRef:'garage-deconz',activeValue:true},openPulseSeconds:1,closePulseSeconds:1,interruption:'disabled'});delete p.motorPaths.at(-1).connection.lockedValue;p.motorPaths.at(-1).connection.resourceId='';p.motorPaths.at(-1).connection.uniqueId='';this.selectedDevices.set(p.id,p.motorPaths.at(-1).id);this.change();this.render();
+    p.motorPaths.push({id:freshId('motor'),name:'Opener relay',type:'pulse-relay',allowDuringOpenerLockout:false,connection:{type:'deconz',baseUrl:p.bolt?.type==='deconz'?p.bolt.baseUrl:'',credentialRef:p.bolt?.type==='deconz'?p.bolt.credentialRef:'garage-deconz',activeValue:true},openPulseSeconds:1,closePulseSeconds:1,interruption:'disabled'});delete p.motorPaths.at(-1).connection.lockedValue;p.motorPaths.at(-1).connection.resourceId='';p.motorPaths.at(-1).connection.uniqueId='';this.selectedDevices.set(p.id,p.motorPaths.at(-1).id);this.change();this.render();
   }
   sensorUsage(p,id){
     const uses=['closed','open'].filter(endpoint=>p.feedback[feedbackMode(endpoint)]==='sensor'&&selectedSensor(p,endpoint)===id);
@@ -303,7 +314,7 @@ export class ProfileEditor {
   }
 
   inputs(root,p){
-    root.append(el('p','Controls request coordinated garage and bolt operation. A button, keypad or Homebridge switch is a control when we listen to it. Choose which opener device carries out its requests; the coordinator handles the bolt automatically.','help setup-model'));
+    root.append(el('p','Controls request garage operation. A button, keypad or Homebridge switch is a control when we listen to it. Choose which opener device carries out its requests; the coordinator handles the bolt when bolt control is enabled.','help setup-model'));
     root.append(el('div','HomeKit + virtual keypad → '+(p.door.type==='tailwind'?'Tailwind API':p.door.type==='ratgdo-homekit'?'ratgdo local API (experimental)':'Garage opener (Homebridge)'),'route-note'));
     const inputs=this.panel(root,'Your controls','Select a control to edit its source, action and opener device.');
     const openerLabel='Garage opener ('+(p.door.type==='tailwind'?'Tailwind':p.door.type==='ratgdo-homekit'?'ratgdo — experimental':'Homebridge')+')';
@@ -343,11 +354,11 @@ export class ProfileEditor {
       for(const [key,label] of [['openRetractSettleSeconds','Retract before opening'],['closeRetractSettleSeconds','Retract before closing'],['openingSeconds','Estimated opening travel'],['closingSeconds','Estimated closing travel']]){
         const help='Leave blank to use the garage default.'+(key==='closeRetractSettleSeconds'?' 0 starts closing after any needed unlock command is acknowledged; retraction is monitored during travel. Above 0 waits for unlocked feedback, then this settling time.':'');
         const field=this.input(tg,label+' (seconds)',input.timing,key,{type:'number',min:key.includes('Retract')?0:1,max:300,step:.1,help:key==='openingSeconds'&&p.feedback.opening==='sensor'?'Unused: the fully-open sensor confirms arrival.':help,emptyUnset:true});
-        if(key==='openingSeconds'&&p.feedback.opening==='sensor')field.disabled=true;
+        if(key==='openingSeconds'&&p.feedback.opening==='sensor'||key.includes('Retract')&&p.boltControlEnabled===false)field.disabled=true;
       }card.append(advanced);card.append(this.button('Remove control',()=>{p.inputs.splice(index,1);this.selectedInputs.set(p.id,p.inputs[Math.min(index,p.inputs.length-1)]?.id);this.change();this.render();},'danger'));
     });
     if(p.inputs.length&&this.saveConfiguration){const actions=el('div',undefined,'actions');const saveButton=this.button('Save configuration',()=>this.saveConfiguration(),'primary');saveButton.dataset.controlSave='true';actions.append(saveButton);inputs.append(actions,el('p','Saves all pending configuration changes and keeps this page open.','help'));}
-    inputs.append(this.button(p.inputs.length?'Add another control':'Add control',()=>{p.inputs.push({id:freshId('input'),name:'Indoor button',enabled:true,source:{type:'deconz',kind:'button',baseUrl:p.bolt.baseUrl,gatewayId:p.bolt.gatewayId,resourceId:'',uniqueId:'',resourceType:'ZHASwitch',modelId:'',manufacturer:'',credentialRef:p.bolt.credentialRef},trigger:1002,action:'toggle',motorPath:p.motorPaths[0]?.id??'primary',busyBehavior:p.motorPaths[0]?.interruption==='stop-opening-reverse-closing'?'interrupt':'drop',rearmSeconds:1.5,timing:{}});this.selectedInputs.set(p.id,p.inputs.at(-1).id);this.change();this.render();}));
+    inputs.append(this.button(p.inputs.length?'Add another control':'Add control',()=>{p.inputs.push({id:freshId('input'),name:'Indoor button',enabled:true,source:{type:'deconz',kind:'button',baseUrl:p.bolt?.baseUrl??'',gatewayId:p.bolt?.gatewayId??'',resourceId:'',uniqueId:'',resourceType:'ZHASwitch',modelId:'',manufacturer:'',credentialRef:p.bolt?.credentialRef??'garage-deconz'},trigger:1002,action:'toggle',motorPath:p.motorPaths[0]?.id??'primary',busyBehavior:p.motorPaths[0]?.interruption==='stop-opening-reverse-closing'?'interrupt':'drop',rearmSeconds:1.5,timing:{}});this.selectedInputs.set(p.id,p.inputs.at(-1).id);this.change();this.render();}));
   }
   tailwindOpenSensor(grid,p,shared=this.configuration.connections.find(row=>sameConnection(row,p.door))){
     this.input(grid,'Tailwind open sensor input',p.door,'openSensorDoorIndex',{type:'number',
@@ -356,6 +367,8 @@ export class ProfileEditor {
     if(p.door.openSensorDoorIndex===p.door.doorIndex)grid.append(el('p','Choose a different Tailwind input for the fully-open sensor.','help'));
   }
   behavior(root,p){
+    const boltEnabled=p.boltControlEnabled!==false;
+    if(!boltEnabled)root.append(el('p','Bolt control is disabled. Bolt settings are retained but do not affect door operation.','help'));
     const feedback=this.panel(root,'What does your hardware actually report?','The coordinator uses this to decide when it may move or bolt the door.');const g=this.grid(feedback);
     for(const endpoint of ['closed','open']){
       const mode=feedbackMode(endpoint),choices=sensorChoices(p,endpoint);
@@ -371,20 +384,21 @@ export class ProfileEditor {
       });
       if(p.feedback[mode]==='sensor')this.confirmationSensor(g,p,endpoint);
     }
-    this.input(g,'Bolt feedback',p.feedback,'bolt',{options:[['relay','Relay ON / OFF state'],['position','Physical position sensor']],help:'The direct deCONZ relay uses relay state.'});
-    if(p.feedback.closing==='timed')this.input(g,'Allow bolting after estimated closure',p.feedback,'allowEstimatedBolting',{type:'checkbox',help:'Elapsed time cannot prove the door closed. This policy requires explicit acceptance.'});else p.feedback.allowEstimatedBolting=false;
+    this.input(g,'Bolt feedback',p.feedback,'bolt',{options:[['relay','Relay ON / OFF state'],['position','Physical position sensor']],help:'The direct deCONZ relay uses relay state.'}).disabled=!boltEnabled;
+    if(p.feedback.closing==='timed')this.input(g,'Allow bolting after estimated closure',p.feedback,'allowEstimatedBolting',{type:'checkbox',help:'Elapsed time cannot prove the door closed. This policy requires explicit acceptance.'}).disabled=!boltEnabled;
     const travel=this.panel(root,'Movement timing');const tg=this.grid(travel);
     for(const [key,label,help] of [['openingSeconds','Full opening travel','Starts after the closed sensor departs.'],['closingSeconds','Full closing travel','Used when closure is estimated.'],['closedStableSeconds','Stable closed confirmation','How long the closed sensor must remain active before bolting.'],['boltSettleSeconds','Bolt extension settling','Time to allow the mechanism to finish extending.']]){
-      const unused=key==='openingSeconds'&&p.feedback.opening==='sensor';
-      this.input(tg,label+' (seconds)',p.feedback,key,{type:'number',min:key.includes('Seconds')&&['openingSeconds','closingSeconds'].includes(key)?1:0,max:300,step:.1,help:unused?'Unused: wait for the fully-open sensor. Movement timeout still limits the operation.':help}).disabled=unused;
+      const unused=key==='openingSeconds'&&p.feedback.opening==='sensor'||key==='boltSettleSeconds'&&!boltEnabled;
+      this.input(tg,label+' (seconds)',p.feedback,key,{type:'number',min:key.includes('Seconds')&&['openingSeconds','closingSeconds'].includes(key)?1:0,max:300,step:.1,help:!boltEnabled&&key==='boltSettleSeconds'?'Unused: bolt control is disabled.':unused?'Unused: wait for the fully-open sensor. Movement timeout still limits the operation.':help}).disabled=unused;
     }
     const settling=this.panel(root,'Bolt retraction');const sg=this.grid(settling);
     this.input(sg,'Before opening (seconds)',p.timing,'openRetractSettleSeconds',{type:'number',min:0,max:120,step:.1});this.input(sg,'Before closing (seconds)',p.timing,'closeRetractSettleSeconds',{type:'number',min:0,max:120,step:.1,help:'0 starts closing after any needed unlock command is acknowledged; retraction is monitored during travel. Above 0 waits for unlocked feedback, then this settling time.'});
     this.input(sg,'Automatically bolt a newly closed door',p,'autoBolt',{type:'checkbox',help:'An external unlock remains in effect until the next operation or restart.'});
+    if(!boltEnabled)for(const field of settling.querySelectorAll('input,select'))field.disabled=true;
     const advanced=el('details');advanced.append(el('summary','Polling and timeouts'));const ag=this.grid(advanced);
     for(const [key,label,min,max] of [['operationPollSeconds','Operation poll',.1,5],['idlePollSeconds','Idle poll',.5,30],['boltTimeoutSeconds','Bolt timeout',1,120],['motionTimeoutSeconds','Movement timeout',5,300],['interruptedOpenMarginSeconds','Extra travel after reversal',0,30]]){
-      const unused=key==='interruptedOpenMarginSeconds'&&p.feedback.opening==='sensor';
-      this.input(ag,label+' (seconds)',p.timing,key,{type:'number',min,max,step:.1,help:unused?'Unused: reversal waits for the fully-open sensor.':undefined}).disabled=unused;
+      const unused=key==='interruptedOpenMarginSeconds'&&p.feedback.opening==='sensor'||key==='boltTimeoutSeconds'&&!boltEnabled;
+      this.input(ag,label+' (seconds)',p.timing,key,{type:'number',min,max,step:.1,help:!boltEnabled&&key==='boltTimeoutSeconds'?'Unused: bolt control is disabled.':unused?'Unused: reversal waits for the fully-open sensor.':undefined}).disabled=unused;
     }root.append(advanced);
   }
 }

@@ -135,7 +135,7 @@ function commissioning(root,profile){
   }
   if(!configured){
     const enable=document.createElement('button');enable.type='button';enable.className='primary';enable.textContent=active?'Approve updated setup':'Enable this garage door';enable.disabled=!form.ack.every(Boolean);
-    ['The previous controller and its automatic inputs are stopped.','The door is physically closed, the bolt wiring is checked and the motor relay is released.'].forEach((text,index)=>{
+    ['The previous controller and its automatic inputs are stopped.',row.boltControlEnabled===false?'The door is physically closed, the motor relay is released, and any physical bolt is retracted and secured against extending.':'The door is physically closed, the bolt wiring is checked and the motor relay is released.'].forEach((text,index)=>{
       const label=document.createElement('label');label.className='check';const input=document.createElement('input');input.type='checkbox';input.checked=form.ack[index];
       input.onchange=()=>{form.ack[index]=input.checked;enable.disabled=!form.ack.every(Boolean);};label.append(input,document.createTextNode(text));panel.append(label);
     });
@@ -200,7 +200,7 @@ async function reviewChanges(controllerId=null){
     const list=document.createElement('ul');list.className='review-list';
     for(const p of review.configuration.controllers){
       const old=loaded.settings.configuration.controllers.find(saved=>saved.id===p.id),li=document.createElement('li');
-      li.textContent=old&&old.name!==p.name?'Rename garage door: '+old.name+' → '+p.name:p.name+' · '+p.door.type+' opener · '+p.bolt.type+' bolt · '+p.inputs.length+' physical controls';list.append(li);
+      li.textContent=(old&&old.name!==p.name?'Rename garage door: '+old.name+' → '+p.name:p.name)+' · '+p.door.type+' opener · '+(p.boltControlEnabled===false?'Bolt disabled':p.bolt.type+' bolt')+' · '+p.inputs.length+' physical controls';list.append(li);
     }
     for(const old of loaded.settings.configuration.controllers){if(!review.configuration.controllers.some(p=>p.id===old.id)){const li=document.createElement('li');li.textContent='Remove saved garage door: '+old.name;list.append(li);}}box.append(list);
     const buttons=document.createElement('div');buttons.className='actions';const commit=document.createElement('button');commit.type='button';commit.className='primary';commit.textContent='Save configuration';commit.onclick=persist;

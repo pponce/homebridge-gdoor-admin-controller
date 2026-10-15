@@ -99,12 +99,13 @@ export class Diagnostics {
           return { state: 'unknown', feedback: 'unavailable', ...(kind === 'door' ? { blocked: null } : {}), error: code };
         }
       };
-      const [door, bolt] = await Promise.all([run(controller.door, 'door'), run(controller.bolt, 'bolt')]);
+      const [door, bolt] = await Promise.all([run(controller.door, 'door'), controller.boltControlEnabled === false
+        ? { state: 'disabled', feedback: 'disabled', error: null } : run(controller.bolt, 'bolt')]);
       const limitations = [];
       if (controller.door.type === 'tailwind' && controller.feedback.opening !== 'timed' &&
         selectedSensor(controller, 'open') === OPENER_OPEN && controller.door.openSensorDoorIndex === undefined) limitations.push('tailwind_open_requires_estimate');
       if (controller.door.type === 'tailwind' && controller.feedback.closing !== 'sensor') limitations.push('tailwind_closed_sensor_available');
-      if (controller.bolt.type === 'deconz' && controller.feedback.bolt !== 'relay') limitations.push('deconz_relay_is_not_position');
+      if (controller.boltControlEnabled !== false && controller.bolt.type === 'deconz' && controller.feedback.bolt !== 'relay') limitations.push('deconz_relay_is_not_position');
       if (door.blocked) limitations.push('door_blocked');
       if (['not-closed','open','opening','closing'].includes(door.state) && bolt.state === 'locked') limitations.push('bolt_extended_with_door_not_closed');
       return { controllerId: id, checkedAt: new Date().toISOString(), door, bolt, limitations,

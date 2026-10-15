@@ -24,7 +24,7 @@ export function debugReport({identity,controllers,reporting,activity},now=new Da
     connectionInspection:one(reporting.connectionInspection,['available','unavailable']),truncated:bool(reporting.truncated),
     controllers:rows.map(r=>{const s=r.status??{},v=s.state??{};return {garage:garage(r.id),enabled:bool(s.enabled??s.actuationEnabled),actuationAvailable:bool(s.actuationEnabled),configurationValid:bool(s.configurationValid??s.commissioned),commissioned:bool(s.commissioned),
       held:!!s.held,phase:one(v.phase,['starting','position-unknown','stopped-estimated','unavailable','not-commissioned','closed','open','opening','closing','unknown','fault','stopped','unlocking','locking']),
-      door:one(v.door,['closed','open','opening','closing','not-closed','unknown']),bolt:one(v.bolt,['locked','unlocked','locking','unlocking','unknown']),
+      door:one(v.door,['closed','open','opening','closing','not-closed','unknown']),bolt:one(v.bolt,['locked','unlocked','locking','unlocking','unknown','disabled']),
       target:one(v.target,['closed','open']),busy:bool(v.busy),fault:!!v.fault,unavailable:!!v.unavailable,obstruction:bool(v.obstruction),
       heldReason:faultCode(s.held)??one(s.held,['waiting-for-devices','checking-devices','maintenance','not-commissioned']),
       faultReason:faultCode(v.fault),faultAt:stamp(v.faultAt),unavailableReason:faultCode(v.unavailable),reconciling:!!v.reconciling,

@@ -156,6 +156,22 @@ try {
       await editor.getByRole('button', { name: 'Reload saved timings', exact: true }).click();
       await editor.waitForFunction(() => document.querySelector('[data-default-group="feedback"][data-key="closingSeconds"]')?.value === '14');
       assert.equal(saves, 3);
+      const off=runtime.settings();off.configuration.controllers[0].boltControlEnabled=false;
+      off.configuration.controllers[0].inputs[0].timing.closeRetractSettleSeconds=2.5;
+      await runtime.apply((await runtime.review(off.configuration,off.revision)).token);
+      await editor.evaluate(()=>panel.load());await editor.locator('[data-bolt-disabled]').waitFor();
+      assert.equal(await editor.locator('[data-default-group="timing"][data-key="openRetractSettleSeconds"]').isDisabled(),true);
+      assert.equal(await editor.locator('[data-default-group="feedback"][data-key="boltSettleSeconds"]').isDisabled(),true);
+      await editor.getByText('Indoor button',{exact:true}).click();
+      assert.equal(await editor.locator('[data-inherit="0"][data-key="closeRetractSettleSeconds"]').isDisabled(),true);
+      assert.equal(await editor.locator('[data-input-index="0"][data-key="closeRetractSettleSeconds"]').isDisabled(),true);
+      await editor.locator('[data-default-group="feedback"][data-key="closingSeconds"]').fill('15');
+      await editor.getByRole('button',{name:'Review timing changes',exact:true}).click();
+      await editor.getByRole('button',{name:'Apply timings',exact:true}).click();
+      await editor.getByText('Timings saved and active. Homebridge was not restarted.',{exact:true}).waitFor();
+      assert.equal(runtime.configuration.controllers[0].inputs[0].timing.closeRetractSettleSeconds,2.5);
+      assert.equal(runtime.configuration.controllers[0].timing.openRetractSettleSeconds,0.3);
+      assert.equal(runtime.configuration.controllers[0].feedback.closingSeconds,15);
       if (process.env.PREVIEW_OUTPUT) { await mkdir(process.env.PREVIEW_OUTPUT, { recursive: true }); await editor.screenshot({ path: join(process.env.PREVIEW_OUTPUT, 'controller-' + kind + '.png'), fullPage: true }); }
       assert.equal(await editor.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
       await editor.evaluate(async () => { window.readOnly = true; await panel.load(); });

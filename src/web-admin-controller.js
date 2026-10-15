@@ -20,7 +20,7 @@ export class WebAdminController {
       activeMotorPath: engine?.busy ? [...engine.motorPaths].find(([, motor]) => motor === engine.motor)?.[0] ?? null : null,
       interruptionAllowed: engine?.interruptionAllowed === true,
       partialStopOwner: engine?.partialOwner ?? null, autoClosePending: engine?.autoClosePending === true,
-      autoBolt: profile.autoBolt, restartWaitMs: Math.max(0, (entry.restartingUntil ?? 0) - Date.now()),
+      autoBolt: profile.boltControlEnabled !== false && profile.autoBolt, restartWaitMs: Math.max(0, (entry.restartingUntil ?? 0) - Date.now()),
       homekit: this.runtime.homekitStatus?.(profile.id) ?? null,
       motorPaths: profile.motorPaths.map(path => ({ id: path.id, name: path.name,
         busy: engine?.motorPaths.get(path.id)?.busy === true,
@@ -29,9 +29,9 @@ export class WebAdminController {
   }
   read() {
     return { revision: this.runtime.state.revision, fields: controllerTimingFields,
-      controllers: this.runtime.configuration.controllers.map(profile => ({ id: profile.id, name: profile.name,
+      controllers: this.runtime.configuration.controllers.map(profile => ({ id: profile.id, name: profile.name, boltControlEnabled: profile.boltControlEnabled !== false,
         status: this.runtime.status(profile.id), troubleshooting: this.troubleshooting(profile), values: controllerTimingValues(profile),
-        feedback: { opening: profile.feedback.opening, closing: profile.feedback.closing, bolt: profile.feedback.bolt },
+        feedback: { opening: profile.feedback.opening, closing: profile.feedback.closing, bolt: profile.boltControlEnabled === false ? 'disabled' : profile.feedback.bolt },
         inputs: profile.inputs.map(input => ({ id: input.id, name: input.name, enabled: input.enabled, motorPath: input.motorPath, kind: input.source.kind })),
         motorPaths: profile.motorPaths.map(motor => ({ id: motor.id, name: motor.name })),
       })) };

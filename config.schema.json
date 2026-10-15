@@ -2,7 +2,7 @@
   "pluginAlias": "GDoorAndBoltCoordinator",
   "pluginType": "platform",
   "singular": true,
-  "headerDisplay": "Coordinate a garage door and separate bolt. Use the guided settings to choose devices, assign controls and review feedback. New or changed garages stay disabled until explicitly checked and enabled. See docs/owner-test.md for installation.",
+  "headerDisplay": "Coordinate a garage door with optional bolt control. Use the guided settings to choose devices, assign controls and review feedback. New or changed garages stay disabled until explicitly checked and enabled. See docs/owner-test.md for installation.",
   "schema": {
     "type": "object",
     "properties": {
@@ -29,7 +29,6 @@
             "id",
             "name",
             "door",
-            "bolt",
             "feedback",
             "exposeBoltLock"
           ],
@@ -104,8 +103,17 @@
               },
               "description": "Tailwind, existing Homebridge garage services, or experimental untested homekit-ratgdo local HTTP API. ratgdo authentication uses a private JSON username/password credential reference."
             },
+            "boltControlEnabled": {
+              "title": "Bolt control enabled",
+              "type": "boolean",
+              "default": true,
+              "description": "Disable to operate only the door. Saved bolt settings are retained. Retract and secure any physical bolt before using door-only control."
+            },
             "bolt": {
-              "type": "object",
+              "type": [
+                "object",
+                "null"
+              ],
               "required": [
                 "type",
                 "credentialRef"

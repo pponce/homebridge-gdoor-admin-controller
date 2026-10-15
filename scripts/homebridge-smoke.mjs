@@ -271,6 +271,46 @@ async function main() {
     hardware.state.closed=true;hardware.state.locked=false;
     await until(async()=>{const s=(await management(endpoint+'/state')).status;return s.state.phase==='closed'&&!s.state.reconciling;});
     assert.deepEqual(hardware.state.writes,writes,'Post-restart observation cannot replay a pulse or automatically bolt');
+    // Temporarily run this same garage without the failed bolt. Applying the
+    // setting removes only its lock accessory and requires setup approval again.
+    const changeBoltMode = async enabled => {
+      const saved = (await management('/v1/settings')).settings;
+      saved.configuration.controllers[0].boltControlEnabled = enabled;
+      const reviewed = (await management('/v1/settings/review', saved)).review;
+      assert.deepEqual(reviewed.requiresCommissioning, [id]);
+      return (await management('/v1/settings/apply', { token: reviewed.token })).settings;
+    };
+    const doorOnly = await changeBoltMode(false);
+    assert.equal((await management(endpoint+'/state')).status.actuationEnabled, false);
+    hardware.state.reachable = false;
+    const requestStart = hardware.state.requests.length;
+    const offProbe = (await management(endpoint+'/probe', {})).probe;
+    assert.equal(offProbe.compatible, true); assert.equal(offProbe.bolt.state, 'disabled');
+    await management(endpoint+'/commission', { revision: doorOnly.revision, previousControllerStopped: true, physicalSetupReviewed: true });
+    const hapAccessories = async () => (await (await fetch(hapOrigin+'/accessories', { headers: { Authorization:'031-45-154' } })).json()).accessories;
+    await until(async () => (await hapAccessories()).length === 4);
+    assert.equal((await hapAccessories()).find(a=>a.services.some(s=>serviceType(s,'41'))).aid, garage.aid);
+    assert.equal((await hapAccessories()).some(a=>a.services.some(s=>serviceType(s,'45'))), false);
+    for (const [value, phase] of [[0, 'open'], [1, 'closed']]) {
+      const write = await fetch(hapOrigin+'/characteristics', { method:'PUT', headers:{Authorization:'031-45-154','Content-Type':'application/hap+json'},
+        body:JSON.stringify({characteristics:[{aid:garage.aid,iid:target.iid,value}]}) });
+      assert.equal(write.status, 204);
+      await until(async () => { const s=(await management(endpoint+'/state')).status.state; return s.phase===phase&&!s.busy; });
+      assert.equal((await management(endpoint+'/state')).status.state.bolt, 'disabled');
+    }
+    assert.deepEqual(hardware.state.writes.slice(writes.length), [['door','open'], ['door','close']]);
+    writes = structuredClone(hardware.state.writes);
+    state = await restart(false); assert.equal(state.actuationEnabled, true); assert.equal(state.state.bolt, 'disabled');
+    assert.deepEqual(hardware.state.writes, writes);
+    assert.equal(hardware.state.requests.slice(requestStart).some(r=>r.path.includes('/lights/'+hardware.config.bolt.resourceId)), false);
+    hardware.state.reachable = true;
+    const boltAgain = await changeBoltMode(true);
+    assert.equal((await management(endpoint+'/state')).status.actuationEnabled, false);
+    await management(endpoint+'/commission', { revision: boltAgain.revision, previousControllerStopped: true, physicalSetupReviewed: true });
+    await until(async () => (await hapAccessories()).length === 5);
+    assert.equal((await hapAccessories()).find(a=>a.services.some(s=>serviceType(s,'41'))).aid, garage.aid);
+    assert.equal((await hapAccessories()).find(a=>a.services.some(s=>serviceType(s,'45'))).aid, bolt.aid);
+    assert.deepEqual(hardware.state.writes, writes, 'Re-enabling the bolt must not actuate it');
     const latest = await (await fetch(hapOrigin+'/accessories',{headers:{Authorization:'031-45-154'}})).json();
     const restartAccessory = latest.accessories.find(a=>a.services.some(s=>serviceType(s,'49')));
     const restartOn = restartAccessory.services.find(s=>serviceType(s,'49')).characteristics.find(c=>serviceType(c,'25'));

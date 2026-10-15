@@ -66,7 +66,8 @@ export class CoordinatorRuntime {
       : new (profile.door.type === 'tailwind' ? TailwindDoor : HomebridgeDoor)(profile.door, key(profile.door.credentialRef), { readOnly, feedback: profile.feedback });
     const door = withPositionFeedback(profile, opener, sensor =>
       new HomebridgeContactSensor(sensor, key(sensor.connection.credentialRef)));
-    const bolt = new (profile.bolt.type === 'deconz' ? DeconzBolt : HomebridgeBolt)(profile.bolt, key(profile.bolt.credentialRef), { readOnly, feedback: profile.feedback.bolt });
+    const bolt = profile.boltControlEnabled === false ? null :
+      new (profile.bolt.type === 'deconz' ? DeconzBolt : HomebridgeBolt)(profile.bolt, key(profile.bolt.credentialRef), { readOnly, feedback: profile.feedback.bolt });
     const motorPaths = {};
     for (const p of profile.motorPaths) {
       motorPaths[p.id] = new PulseMotor({ relay: new (p.connection.type === 'deconz' ? DeconzMotorRelay : HomebridgeMotorRelay)(p.connection, key(p.connection.credentialRef), { readOnly }),
@@ -87,7 +88,7 @@ export class CoordinatorRuntime {
       entry.held = 'checking-devices'; this.publish(p.id, this.status(p.id).state);
       try {
         const hw = await this.makeDrivers(p);
-        const engine = new MovementEngine({ ...hw, lockoutMotorPaths: p.motorPaths.filter(m => m.allowDuringOpenerLockout === true).map(m => m.id), journal: new StateJournal(this.storagePath, p.id), feedback: p.feedback, timing: timing(p),
+        const engine = new MovementEngine({ ...hw, boltControlEnabled: p.boltControlEnabled !== false, lockoutMotorPaths: p.motorPaths.filter(m => m.allowDuringOpenerLockout === true).map(m => m.id), journal: new StateJournal(this.storagePath, p.id), feedback: p.feedback, timing: timing(p),
           ...(this.clock ? { clock: this.clock } : {}), publish: snapshot => this.publish(p.id, snapshot) });
         engine.recordFault = async fault => {
           const previous = this.state.faults[p.id];
@@ -136,7 +137,7 @@ export class CoordinatorRuntime {
         }
         if (!this.changing && !this.state.maintenance && !entry.job && !entry.engine.busy && !entry.engine.observation && Date.now() >= (entry.restartingUntil ?? 0) && (entry.engine.initialized || entry.engine.state.fault)) {
           await entry.engine.observe();
-          if (!this.changing && !this.state.maintenance && !entry.job && !entry.engine.busy && entry.profile.autoBolt && entry.engine.autoClosePending && !entry.engine.snapshot().externalUnlockOverride && entry.engine.initialized) {
+          if (!this.changing && !this.state.maintenance && !entry.job && !entry.engine.busy && entry.profile.boltControlEnabled !== false && entry.profile.autoBolt && entry.engine.autoClosePending && !entry.engine.snapshot().externalUnlockOverride && entry.engine.initialized) {
             await this.submit(entry.profile.id, { command: 'observed-close', requestId: randomUUID(), issuedAt: Date.now(), bootId: this.bootId }, 'automatic');
           }
         }
@@ -156,7 +157,7 @@ export class CoordinatorRuntime {
       tailwind: e.profile.door.type === 'tailwind',
       restarting: Date.now() < (e.restartingUntil ?? 0),
       held: this.state.maintenance ? 'maintenance' : this.storageFault ? 'private_storage_write_failed' : e.held, inputStates: { ...e.inputStates },
-      state: sample ?? { phase: 'not-commissioned', door: 'unknown', bolt: 'unknown', busy: false, fault: null },
+      state: sample ?? { phase: 'not-commissioned', door: 'unknown', bolt: e.profile.boltControlEnabled === false ? 'disabled' : 'unknown', busy: false, fault: null },
       revision: this.state.revision };
     status.canRecover = enabled && configurationValid && !this.stopped && !this.storageFault && !this.changing && !this.state.maintenance &&
       !sample?.busy && !e.initializing && Boolean(sample?.fault || sample?.unavailable || e.held && e.held !== 'checking-devices');
@@ -335,9 +336,9 @@ export class CoordinatorRuntime {
     const e = this.entry(id); this.changing = true;
     try {
       const hw = await this.makeDrivers(e.profile, true);
-      const [door, bolt] = await Promise.all([hw.door.read(), hw.bolt.read()]);
+      const [door, bolt] = await Promise.all([hw.door.read(), e.profile.boltControlEnabled === false ? null : hw.bolt.read()]);
       requireValue(door.door === 'closed' && (door.evidence === 'closed-sensor' || e.profile.feedback.closing === 'timed') && !door.blocked && !door.obstruction, 'commissioning_requires_closed_sensor');
-      requireValue(bolt.evidence === e.profile.feedback.bolt, 'bolt_feedback_mismatch');
+      if (e.profile.boltControlEnabled !== false) requireValue(bolt.evidence === e.profile.feedback.bolt, 'bolt_feedback_mismatch');
       for (const motor of Object.values(hw.motorPaths)) await motor.verifyIdle();
       for (const driver of hw.inputDrivers.values()) await driver.inspect();
       const journal = new StateJournal(this.storagePath, id); const previous = await journal.read();
@@ -360,6 +361,7 @@ export class CoordinatorRuntime {
     if (duplicate) { requireValue(duplicate.controllerId === id && duplicate.command === body.command, 'command_request_conflict'); return { accepted: false, duplicate: true, requestId: body.requestId, status: duplicate.status }; }
     requireValue(Number.isFinite(body.issuedAt) && Math.abs(Date.now() - body.issuedAt) <= 15000, 'command_request_expired');
     requireValue(['open', 'close', 'lock', 'unlock', ...(source === 'automatic' ? ['observed-close'] : [])].includes(body.command), 'command_invalid');
+    requireValue(e.profile.boltControlEnabled !== false || ['open', 'close'].includes(body.command), 'bolt_control_disabled');
     requireValue(!this.stopped && !this.storageFault && !this.changing && !this.state.maintenance && Date.now() >= (e.restartingUntil ?? 0) && e.ready && e.engine.initialized && !e.engine.state.fault && !e.engine.state.unavailable, 'controller_held');
     requireValue(e.engine.acceptsFreshCommand(body.command), 'controller_observing_movement');
     requireValue(!e.job && !e.engine.busy && e.router.activeInput === null, 'controller_busy');
@@ -379,8 +381,8 @@ export class CoordinatorRuntime {
   guard() { requireValue(!this.stopped && !this.storageFault && !this.changing && !this.state.maintenance, 'maintenance_held'); return true; }
   async stationary() {
     for (const p of this.configuration.controllers.filter(p => this.state.enabled[p.id] === true && this.state.commissioned[p.id] === hash(p))) {
-      const hw = await this.makeDrivers(p, true); const [door, bolt] = await Promise.all([hw.door.read(), hw.bolt.read()]);
-      requireValue(door.door === 'closed' && door.evidence === 'closed-sensor' && !door.blocked && !door.obstruction && bolt.locked,
+      const hw = await this.makeDrivers(p, true); const [door, bolt] = await Promise.all([hw.door.read(), p.boltControlEnabled === false ? null : hw.bolt.read()]);
+      requireValue(door.door === 'closed' && door.evidence === 'closed-sensor' && !door.blocked && !door.obstruction && (p.boltControlEnabled === false || bolt.locked),
         'physical_stationary_confirmation_required');
       for (const motor of Object.values(hw.motorPaths)) await motor.verifyIdle();
     }
@@ -424,8 +426,8 @@ export class CoordinatorRuntime {
       // Validate every commissioned assembly without moving anything. Keep the
       // durable pause until complete, even after a successful read-only verify.
       for (const p of this.configuration.controllers.filter(p => this.state.enabled[p.id] === true && this.state.commissioned[p.id] === hash(p))) {
-        const hw = await this.makeDrivers(p, true); const [door, bolt] = await Promise.all([hw.door.read(), hw.bolt.read()]);
-        requireValue(!door.blocked && !door.obstruction && (door.door === 'closed' || !bolt.locked), 'maintenance_devices_require_review');
+        const hw = await this.makeDrivers(p, true); const [door, bolt] = await Promise.all([hw.door.read(), p.boltControlEnabled === false ? null : hw.bolt.read()]);
+        requireValue(!door.blocked && !door.obstruction && (p.boltControlEnabled === false || door.door === 'closed' || !bolt.locked), 'maintenance_devices_require_review');
         for (const m of Object.values(hw.motorPaths)) await m.verifyIdle();
         for (const driver of hw.inputDrivers.values()) await driver.inspect();
       }
