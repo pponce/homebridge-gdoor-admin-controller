@@ -27,8 +27,8 @@ const stateValid = s => (s?.schema === 1 || s?.schema === 2 && s.enabled && s.fa
   (s.faults === undefined || s.faults && !Array.isArray(s.faults) && typeof s.faults === 'object' && Object.values(s.faults).every(v => v && faultCode(v.reason) && (v.at === null || typeof v.at === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(v.at)))) &&
   (s.maintenance === null || typeof s.maintenance?.id === 'string');
 const timing = p => ({ pollMs: p.timing.operationPollSeconds * 1000, boltTimeoutMs: p.timing.boltTimeoutSeconds * 1000,
-  motionTimeoutMs: p.timing.motionTimeoutSeconds * 1000, openRetractSettleMs: p.timing.openRetractSettleSeconds * 1000,
-  closeRetractSettleMs: p.timing.closeRetractSettleSeconds * 1000, closedStableMs: p.feedback.closedStableSeconds * 1000,
+  motionTimeoutMs: p.timing.motionTimeoutSeconds * 1000, openRetractSettleMs: (p.timing.openRetractSettleSeconds ?? p.feedback.boltSettleSeconds) * 1000,
+  closeRetractSettleMs: (p.timing.closeRetractSettleSeconds ?? p.feedback.boltSettleSeconds) * 1000, closedStableMs: p.feedback.closedStableSeconds * 1000,
   boltSettleMs: p.feedback.boltSettleSeconds * 1000, openingMs: p.feedback.openingSeconds * 1000,
   closingMs: p.feedback.closingSeconds * 1000, interruptedOpenMarginMs: p.timing.interruptedOpenMarginSeconds * 1000 });
 

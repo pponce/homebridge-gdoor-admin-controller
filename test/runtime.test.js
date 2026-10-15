@@ -12,6 +12,33 @@ import { controllerTimingValues } from '../src/controller-timings.js';
 import { WebAdminController } from '../src/web-admin-controller.js';
 import { StateJournal } from '../src/journal.js';
 const example = JSON.parse(await readFile(new URL('../examples/development-config.json', import.meta.url), 'utf8'));
+test('shared settling changes both runtime waits, preserves overrides and approval, and survives restart without writes', async t => {
+  const f = await fixture(t); await f.commission();
+  const engine = f.runtime.entry(f.id).engine;
+  const values = controllerTimingValues(f.runtime.entry(f.id).profile);
+  values.timing.openRetractSettleSeconds = null; values.timing.closeRetractSettleSeconds = null;
+  for (const seconds of [.3, .6]) {
+    values.feedback.boltSettleSeconds = seconds;
+    await f.runtime.applyTimings(f.id, values, f.runtime.state.revision);
+    assert.equal(f.runtime.entry(f.id).engine, engine);
+    assert.equal(engine.timing.openRetractSettleMs, seconds * 1000);
+    assert.equal(engine.timing.closeRetractSettleMs, seconds * 1000);
+    assert.equal(engine.timing.boltSettleMs, seconds * 1000);
+    assert.equal(f.runtime.status(f.id).actuationEnabled, true);
+  }
+  values.timing.closeRetractSettleSeconds = 0;
+  await f.runtime.applyTimings(f.id, values, f.runtime.state.revision);
+  assert.equal(engine.timing.closeRetractSettleMs, 0);
+  await f.runtime.stop();
+  const restored = new CoordinatorRuntime({ storagePath: f.storagePath, configuration: f.config,
+    credentials: async () => f.hardware.credentials, clock: f.clock });
+  t.after(() => restored.stop()); await restored.start();
+  assert.equal(restored.status(f.id).actuationEnabled, true);
+  assert.equal(restored.entry(f.id).profile.timing.openRetractSettleSeconds, null);
+  assert.equal(restored.entry(f.id).engine.timing.openRetractSettleMs, 600);
+  assert.equal(restored.entry(f.id).engine.timing.closeRetractSettleMs, 0);
+  assert.deepEqual(f.hardware.state.writes, []);
+});
 test('timing-only saves update the existing engine, retain overrides and enablement, persist and send no commands', async t => {
   const f = await fixture(t, true); await f.commission();
   const entry = f.runtime.entry(f.id), engine = entry.engine, router = entry.router, boot = f.runtime.bootId;

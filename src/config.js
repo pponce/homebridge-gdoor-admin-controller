@@ -286,7 +286,10 @@ export function validateConfiguration(input, { allowEmpty = false } = {}) {
       openRetractSettleSeconds: [0, 120, 2], closeRetractSettleSeconds: [0, 120, 2],
       boltTimeoutSeconds: [1, 120, 10], motionTimeoutSeconds: [5, 300, 45], interruptedOpenMarginSeconds: [0, 30, 1] };
     fields(timing, Object.keys(bounds), 'invalid_controller_timing');
-    result.timing = Object.fromEntries(Object.entries(bounds).map(([k, [min, max, fallback]]) => [k, number(timing[k] ?? fallback, min, max, 'invalid_controller_timing')]));
+    // Missing legacy fields retain their historical default. Explicit null
+    // selects shared settling; numeric values (including 0) remain overrides.
+    result.timing = Object.fromEntries(Object.entries(bounds).map(([k, [min, max, fallback]]) => [k,
+      k.includes('RetractSettle') && timing[k] === null ? null : number(timing[k] ?? fallback, min, max, 'invalid_controller_timing')]));
     if (value.autoBolt !== undefined && typeof value.autoBolt !== 'boolean') fail('invalid_auto_bolt');
     result.autoBolt = value.autoBolt ?? true;
     result.keypad = null;

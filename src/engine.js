@@ -5,7 +5,7 @@ import { TravelEstimate, followInterruptedTravel } from './interruption.js';
 
 const systemClock = { now: () => performance.now(), sleep: ms => new Promise(resolve => setTimeout(resolve, ms)) };
 const defaults = Object.freeze({ pollMs: 500, boltTimeoutMs: 10000, motionTimeoutMs: 45000,
-  openRetractSettleMs: 2000, closeRetractSettleMs: 2000, closedStableMs: 2000,
+  openRetractSettleMs: null, closeRetractSettleMs: null, closedStableMs: 2000,
   boltSettleMs: 2000, openingMs: 20000, closingMs: 20000, interruptedOpenMarginMs: 1000 });
 const code = error => error instanceof Fault ? error.message : 'unexpected_adapter_error';
 const commandSampleMaxAgeMs = 1500;
@@ -22,6 +22,7 @@ export class MovementEngine {
     this.door = door; this.bolt = boltControlEnabled ? bolt : null; this.journal = journal; this.clock = clock; this.publish = publish;
     this.recordFault = recordFault;
     this.feedback = { ...feedback }; this.timing = { ...defaults, ...timing };
+    for (const key of ['openRetractSettleMs', 'closeRetractSettleMs']) this.timing[key] ??= this.timing.boltSettleMs;
     requireValue(motorPaths && typeof motorPaths === 'object' && !Object.hasOwn(motorPaths, 'primary'), 'engine_motor_paths_invalid');
     this.motorPaths = new Map([['primary', door], ...Object.entries(motorPaths)]);
     this.lockoutMotorPaths = new Set(lockoutMotorPaths);
@@ -33,6 +34,7 @@ export class MovementEngine {
       Object.values(this.timing).every(value => Number.isFinite(value) && value >= 0 && value <= 300000) &&
       ['pollMs', 'boltTimeoutMs', 'motionTimeoutMs', 'openingMs', 'closingMs'].every(key => this.timing[key] > 0), 'engine_timing_invalid');
     this.busy = false; this.observation = null; this.initialized = false; this.stopped = false; this.lastBolt = null;
+    this.boltOperation = null;
     this.state = { phase: 'starting', door: 'unknown', bolt: boltControlEnabled ? 'unknown' : 'disabled', target: null,
       openEstimated: false, closeEstimated: false, fault: null, externalUnlockOverride: false,
       ...(this.bolt?.capabilities?.commandBased ? { boltEstimated: false } : {}) };
@@ -53,8 +55,15 @@ export class MovementEngine {
       (this.state.fault === 'door_blocked' || movementFailures.has(this.state.fault));
   }
   update(changes) { Object.assign(this.state, changes); this.publish(this.snapshot()); }
-  checkRunning() { requireValue(!this.stopped, 'operation_interrupted'); }
-  stop() { this.stopped = true; this.admitInterruption(false); this.bolt?.stop?.(); for (const motor of this.motorPaths.values()) motor.stop?.(); }
+  checkRunning() {
+    requireValue(!this.stopped, 'operation_interrupted');
+    if (this.boltOperation?.error) throw this.boltOperation.error;
+  }
+  stop() {
+    this.stopped = true; this.admitInterruption(false); this.bolt?.stop?.();
+    if (this.bolt?.capabilities?.commandBased) this.update({ bolt: 'unknown', boltEstimated: false });
+    for (const motor of this.motorPaths.values()) motor.stop?.();
+  }
   isRetracted(sample) { return !this.boltControlEnabled || sample.locked === false; }
   admitInterruption(allowed) {
     this.interruptionAllowed = allowed && this.interruptionOperation && this.interruptionRequest === null;
@@ -264,23 +273,55 @@ export class MovementEngine {
     }
   }
 
+  async finishBoltPulse() {
+    const operation = this.boltOperation;
+    if (!operation) return;
+    await operation.completion;
+    if (operation.error) throw operation.error;
+    if (this.boltOperation === operation) this.boltOperation = null;
+  }
+
+  // Settling and travel may overlap a pulse, but the same worker retains its
+  // completion/error until OFF is checked. Drain it before any next direction.
+  async writeBolt(locked, beforeWrite = () => this.checkRunning()) {
+    await this.finishBoltPulse(); this.checkRunning();
+    if (!this.bolt.capabilities?.commandBased) {
+      await this.bolt.write(locked, { beforeWrite });
+      return this.clock.now();
+    }
+    let acknowledge, reject;
+    const accepted = new Promise((resolve, fail) => { acknowledge = resolve; reject = fail; });
+    const operation = { completion: null, error: null };
+    this.boltOperation = operation;
+    operation.completion = this.bolt.write(locked, { beforeWrite,
+      onAcknowledged: () => acknowledge(this.clock.now()),
+    }).then(() => {}, error => { operation.error = error; reject(error); });
+    const at = await accepted;
+    this.checkRunning();
+    return at;
+  }
+
+  async settleBolt(at, duration, predicate, failure) {
+    await this.hold(Math.max(0, duration - (this.clock.now() - at)), predicate, failure);
+  }
+
   async retract(closing, checked = null) {
     const sample = checked ?? await this.read();
     requireValue(!['opening', 'closing'].includes(sample.door), 'external_movement');
     if (!this.boltControlEnabled) return { sample, at: this.sampledAt, retractionRequestedAt: null };
     const settling = closing ? this.timing.closeRetractSettleMs : this.timing.openRetractSettleMs;
     let retractionRequestedAt = null;
+    let settlingAt = this.clock.now();
     // For zero-wait closing, acknowledge one OFF command when needed, then
     // monitor its outcome during travel. Never invent an OFF observation.
     if (sample.locked !== false) {
-      retractionRequestedAt = this.clock.now();
-      await this.bolt.write(false, { beforeWrite: () => this.checkRunning() });
+      settlingAt = retractionRequestedAt = await this.writeBolt(false);
     }
     if (!closing || settling > 0 && sample.locked !== false || this.bolt.capabilities?.separateRelays) {
       await this.wait(s => this.isRetracted(s), this.timing.boltTimeoutMs, 'bolt_retract_timeout');
       retractionRequestedAt = null;
     }
-    if (settling > 0 || !closing) await this.hold(settling,
+    if (settling > 0 || !closing) await this.settleBolt(settlingAt, settling,
       s => this.isRetracted(s) && !['opening', 'closing'].includes(s.door), 'bolt_retract_confirmation_lost');
     return { sample: this.sample, at: this.sampledAt, retractionRequestedAt };
   }
@@ -324,9 +365,9 @@ export class MovementEngine {
       const sample = await this.read();
       requireValue(!['opening', 'closing'].includes(sample.door), 'external_movement');
       if (command === 'unlock') {
-        await this.bolt.write(false, { beforeWrite: () => this.checkRunning() });
+        const at = await this.writeBolt(false);
         await this.wait(s => this.isRetracted(s), this.timing.boltTimeoutMs, 'bolt_retract_timeout');
-        await this.hold(this.timing.openRetractSettleMs, s => this.isRetracted(s), 'bolt_retract_confirmation_lost');
+        await this.settleBolt(at, this.timing.openRetractSettleMs, s => this.isRetracted(s), 'bolt_retract_confirmation_lost');
       } else if (command === 'lock' || command === 'observed-close') {
         requireValue(sample.door === 'closed' && this.feedback.closing === 'sensor' && sample.evidence === 'closed-sensor', 'locking_requires_closed_sensor');
         await this.confirmClosed(this.clock.now() + this.timing.motionTimeoutMs);
@@ -341,8 +382,16 @@ export class MovementEngine {
         const checked = await this.retract(command === 'close', command === 'close' ? sample : null);
         if (command === 'open') await this.open(); else await this.close(checked);
       }
+      // Keep durable intent and busy ownership until every pulse is released.
+      await this.finishBoltPulse();
+      this.checkRunning();
       await this.journal.write({ inProgress: Boolean(this.partialOwner), fault: false });
     } catch (error) {
+      this.bolt?.invalidate?.();
+      try { await this.finishBoltPulse(); } catch (cleanupError) {
+        // An unresolved OFF must remain a fault even during shutdown.
+        if (code(cleanupError) === 'bolt_relay_release_unconfirmed') error = cleanupError;
+      }
       if (this.stopped && (code(error) === 'operation_interrupted' || retryableRead(code(error)))) {
         // The durable intent already exists. A routine shutdown keeps enablement
         // and resumes observation next boot; ambiguous writes still latch below.
@@ -350,7 +399,7 @@ export class MovementEngine {
         this.update({ phase: 'position-unknown', reconciling: true, openEstimated: false, closeEstimated: false });
       } else await this.fail(code(error));
     }
-    finally { this.admitInterruption(false); this.interruptionOperation = false; this.operationOwner = null; this.physicalRelayOperation = false; this.motor = this.door; this.timing = previousTiming; this.busy = false; }
+    finally { this.boltOperation = null; this.admitInterruption(false); this.interruptionOperation = false; this.operationOwner = null; this.physicalRelayOperation = false; this.motor = this.door; this.timing = previousTiming; this.busy = false; }
     return this.snapshot();
   }
 
@@ -440,7 +489,7 @@ export class MovementEngine {
       if (sample.locked) {
         closedSince = null;
         if (retractPending === null) {
-          retractPending = this.clock.now(); await this.bolt.write(false, { beforeWrite: () => this.checkRunning() });
+          retractPending = await this.writeBolt(false);
         }
         requireValue(this.clock.now() - retractPending < this.timing.boltTimeoutMs, 'bolt_retract_timeout');
       } else {
@@ -467,13 +516,13 @@ export class MovementEngine {
     const closed = s => estimated ? !['opening', 'closing'].includes(s.door) : s.door === 'closed' && s.evidence === 'closed-sensor';
     const fresh = await this.read();
     requireValue((this.isRetracted(fresh) || fresh.locked === null && this.bolt.capabilities?.separateRelays) && closed(fresh), 'closed_confirmation_lost');
-    await this.bolt.write(true, { beforeWrite: async () => {
+    const at = await this.writeBolt(true, async () => {
       this.checkRunning();
       // Releasing the opposite relay takes time. Check closure again immediately
       // before the separate lock output can turn ON.
       if (this.bolt.capabilities?.separateRelays) requireValue(closed(await this.read()), 'closed_confirmation_lost');
-    } });
+    });
     await this.wait(s => { requireValue(closed(s), 'closed_confirmation_lost'); return s.locked; }, this.timing.boltTimeoutMs, 'bolt_extend_timeout');
-    await this.hold(this.timing.boltSettleMs, s => closed(s) && s.locked, 'close_or_bolt_confirmation_lost');
+    await this.settleBolt(at, this.timing.boltSettleMs, s => closed(s) && s.locked, 'close_or_bolt_confirmation_lost');
   }
 }

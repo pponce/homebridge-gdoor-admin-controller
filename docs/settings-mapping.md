@@ -10,7 +10,7 @@ This maps the original web administrator's **Controller** page to the coordinato
 | Opening · bolt retraction wait | Before opening (seconds) | Behavior → Bolt retraction |
 | Closing · bolt retraction wait | Before closing (seconds) | Behavior → Bolt retraction |
 | Closed confirmation time | Stable closed confirmation (seconds) | Behavior → Movement timing |
-| Bolt extension verify | Bolt extension settling (seconds) | Behavior → Movement timing |
+| Bolt extension verify | Bolt extension/retraction settling (seconds) | Behavior → Movement timing; shared default for retraction unless overridden |
 | Bolt state timeout | Bolt timeout (seconds) | Behavior → Polling and timeouts |
 | Door travel timeout | Movement timeout (seconds) | Behavior → Polling and timeouts |
 | Operation poll | Operation poll (seconds) | Behavior → Polling and timeouts |

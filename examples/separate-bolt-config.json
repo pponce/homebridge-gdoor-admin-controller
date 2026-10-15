@@ -36,6 +36,10 @@
         "pulseSeconds": 0.2
       },
       "exposeBoltLock": true,
+      "timing": {
+        "openRetractSettleSeconds": null,
+        "closeRetractSettleSeconds": null
+      },
       "feedback": {
         "closing": "sensor",
         "opening": "timed",

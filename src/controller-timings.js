@@ -16,7 +16,7 @@ export const controllerTimingFields = {
     ['openingSeconds', 'Opening travel time', 1, 300],
     ['closingSeconds', 'Closing travel time', 1, 300],
     ['closedStableSeconds', 'Closed sensor stability wait', 0, 60],
-    ['boltSettleSeconds', 'Bolt extension settling time', 0, 60],
+    ['boltSettleSeconds', 'Bolt extension/retraction settling time', 0, 60],
   ],
   inputs: [
     ['openRetractSettleSeconds', 'Before opening: bolt retraction wait', 0, 120],

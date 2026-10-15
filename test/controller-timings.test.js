@@ -4,6 +4,20 @@ import { controllerTimingValues, profileWithTimings } from '../src/controller-ti
 import { validateConfiguration } from '../src/config.js';
 import { readFile } from 'node:fs/promises';
 const base = JSON.parse(await readFile(new URL('../examples/development-config.json', import.meta.url)));
+test('shared retraction selection persists as null while legacy and explicit zero waits are preserved', () => {
+  const original = validateConfiguration(base).controllers[0];
+  const values = controllerTimingValues(original);
+  values.feedback.boltSettleSeconds = .3;
+  values.timing.openRetractSettleSeconds = null;
+  values.timing.closeRetractSettleSeconds = 0;
+  const changed = profileWithTimings(original, values);
+  const normalized = validateConfiguration({ ...base, controllers: [changed] }).controllers[0];
+  assert.equal(normalized.timing.openRetractSettleSeconds, null);
+  assert.equal(normalized.timing.closeRetractSettleSeconds, 0);
+  assert.equal(normalized.feedback.boltSettleSeconds, .3);
+  assert.equal(original.timing.openRetractSettleSeconds, 2);
+  assert.equal(original.timing.closeRetractSettleSeconds, 2);
+});
 test('device overrides retain explicit zero, remove inheritance overrides, and reject injected settings', () => {
   const config = structuredClone(base), profile = config.controllers[0];
   profile.inputs = [{ id: 'button', name: 'Indoor button', enabled: true,

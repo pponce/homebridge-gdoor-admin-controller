@@ -1,3 +1,63 @@
+## 2026-10-15 — Shared bolt settling and overlapping pulse, 0.4.51 candidate
+
+The owner explicitly approved public publication on 2026-10-15 ("yes publish").
+Proceed with the review branch, required hosted checks and verified release,
+then provide the pinned owner updater. The earlier approval block below is
+historical; npm authentication and host installation remain owner-run.
+
+Owner update preparation: the owner subsequently requested their update script.
+The 0.4.51 updater is prepared with the established SSH checkout, one npm
+publication attempt, verified registry download, stop/add/verify/start sequence,
+and new timing-setting guidance. Shell syntax and all 42 updater installation
+outcomes pass. A runnable launcher still requires verified hosted CI and release.
+
+The owner requests a 0.5- or 1-second momentary pulse without delaying garage
+movement beyond the selected settling time. They explicitly retain ownership
+until OFF is checked, prevent opposite output overlap, make retraction waits
+overrides rather than extra delays, and keep position estimated. The shared
+setting must apply to all bolt configurations, not only separate relays.
+
+The engine now starts settling at successful command acknowledgement. It waits
+for required feedback concurrently, then continues the garage sequence. A
+momentary write remains owned in the background through OFF and verification;
+the next bolt write drains that operation first. Busy state and durable intent
+are retained through cleanup. Pulse faults are surfaced during travel and before
+operation completion. Errors and shutdown cancel the remaining pulse wait and
+attempt release; an unresolved OFF remains a durable fault even on shutdown.
+No ON retry, automatic motor replay, or physical-position claim is introduced.
+
+Both settings interfaces expose shared extension/retraction settling and
+explicit opening/closing overrides. New garages inherit via null; existing
+numeric waits, including zero, retain their meaning as overrides. Missing
+legacy JSON waits retain their historical default and approval hash. Per-input
+overrides still replace the resolved controller wait. Timing changes retain
+setup approval and apply while idle without issuing hardware commands.
+
+Deterministic concurrent-clock checks cover 0.1/0.5/1-second pulses against
+0.3-second settling, delayed acknowledgement, direction reversal, late release
+failure, ambiguous ON, lost closure, obstruction and graceful shutdown. Engine
+checks cover relay and position feedback, delayed feedback without double waits,
+maintained separate outputs and explicit overrides. Runtime checks cover shared
+timing edits, persisted null/zero, approval retention and restart without writes.
+Desktop/mobile browser assertions cover inheritance and explicit zero in both
+settings interfaces. Local browser execution requires CI's browser binaries.
+All 539 local Node checks and 16 cross-repository API checks pass. Static demo
+freshness, release notes, changed-script syntax and the exact 0.4.51 npm package
+also pass local validation. GitHub main matches this source baseline apart from
+two existing documentation images absent from the local checkout; publication
+preserves those images.
+
+Candidate source is not a live installation or physical acceptance. No hardware
+commands or host-service changes were made. Release remains subject to the five
+Coordinator checks and the reviewed release workflow.
+
+GitHub upload was blocked by automatic approval review, including after verifying
+that the authenticated pponce account owns the existing public repository and
+that its source baseline matches. The stated reason is missing explicit user
+authorization to publish this payload to that public destination. No branch,
+PR, release or npm publication was created. Hosted Homebridge/browser checks
+remain pending that authorization; the completed change is committed locally.
+
 ## 2026-10-15 — 0.4.50 source and GitHub release verified
 
 PR #11 is merged. Tested source and tag v0.4.50 point to

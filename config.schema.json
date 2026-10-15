@@ -323,7 +323,7 @@
                     "command"
                   ],
                   "default": "relay",
-                  "description": "command is required for separate momentary bolt relays: last completed pulse, an estimate that is forgotten after restart. Relay reports do not prove physical position."
+                  "description": "command is required for separate momentary bolt relays: last acknowledged command, an estimate forgotten after restart. Settling may finish while the pulse continues; OFF remains owned and checked. Relay reports do not prove physical position."
                 },
                 "openingSeconds": {
                   "title": "Estimated full opening travel (seconds)",
@@ -347,11 +347,12 @@
                   "default": 2
                 },
                 "boltSettleSeconds": {
-                  "title": "Bolt extension settling time (seconds)",
+                  "title": "Bolt extension/retraction settling time (seconds)",
                   "type": "number",
                   "minimum": 0,
                   "maximum": 60,
-                  "default": 2
+                  "default": 2,
+                  "description": "Shared bolt movement wait from a successful command, for every bolt setup. Set controller timing.openRetractSettleSeconds and closeRetractSettleSeconds to null to inherit it; numeric values override it."
                 },
                 "allowEstimatedBolting": {
                   "title": "Allow bolting after an estimated close",

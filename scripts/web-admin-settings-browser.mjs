@@ -142,10 +142,23 @@ try {
       assert.equal(runtime.configuration.controllers[0].inputs[0].timing.closeRetractSettleSeconds, 0); assert.equal(saves, 1);
       await editor.getByText('Indoor button', { exact: true }).click();
       await editor.locator('[data-inherit="0"][data-key="closeRetractSettleSeconds"]').check();
+      await editor.locator('[data-shared-settling="openRetractSettleSeconds"]').check();
+      await editor.locator('[data-shared-settling="closeRetractSettleSeconds"]').check();
+      await editor.locator('[data-default-group="feedback"][data-key="boltSettleSeconds"]').fill('0.4');
+      for(const key of ['openRetractSettleSeconds','closeRetractSettleSeconds']){
+        assert.equal(await editor.locator(`[data-default-group="timing"][data-key="${key}"]`).isDisabled(),true);
+        assert.equal(await editor.locator(`[data-default-group="timing"][data-key="${key}"]`).inputValue(),'0.4');
+        assert.equal(await editor.locator(`[data-input-index="0"][data-key="${key}"]`).inputValue(),'0.4');
+      }
       await editor.getByRole('button', { name: 'Review timing changes', exact: true }).click();
       await editor.getByRole('button', { name: 'Apply timings', exact: true }).click();
       await editor.getByText('Timings saved and active. Homebridge was not restarted.', { exact: true }).waitFor();
       assert.deepEqual(runtime.configuration.controllers[0].inputs[0].timing, {});
+      assert.equal(runtime.configuration.controllers[0].timing.openRetractSettleSeconds,null);
+      assert.equal(runtime.configuration.controllers[0].timing.closeRetractSettleSeconds,null);
+      assert.equal(runtime.entry(id).engine.timing.openRetractSettleMs,400);
+      assert.equal(runtime.entry(id).engine.timing.closeRetractSettleMs,400);
+      assert.equal(runtime.status(id).actuationEnabled,true);
       assert.equal(saves, 2);
       loseReply = true;
       await editor.locator('[data-default-group="feedback"][data-key="closingSeconds"]').fill('14');
@@ -170,7 +183,7 @@ try {
       await editor.getByRole('button',{name:'Apply timings',exact:true}).click();
       await editor.getByText('Timings saved and active. Homebridge was not restarted.',{exact:true}).waitFor();
       assert.equal(runtime.configuration.controllers[0].inputs[0].timing.closeRetractSettleSeconds,2.5);
-      assert.equal(runtime.configuration.controllers[0].timing.openRetractSettleSeconds,0.3);
+      assert.equal(runtime.configuration.controllers[0].timing.openRetractSettleSeconds,null);
       assert.equal(runtime.configuration.controllers[0].feedback.closingSeconds,15);
       if (process.env.PREVIEW_OUTPUT) { await mkdir(process.env.PREVIEW_OUTPUT, { recursive: true }); await editor.screenshot({ path: join(process.env.PREVIEW_OUTPUT, 'controller-' + kind + '.png'), fullPage: true }); }
       assert.equal(await editor.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);

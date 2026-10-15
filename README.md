@@ -88,7 +88,7 @@ bolt Lock tile that controls them together.
 For separate outputs, **Momentary relay outputs** sends ON then OFF using a
 configurable pulse, default **0.2 seconds**. With it disabled, the selected
 output stays ON until the opposite command. Momentary bolt position is an
-estimate from the last completed pulse and is unknown after restart. Use the
+estimate from the last acknowledged bolt command and is unknown after restart. Use the
 coordinated Lock tile; pulses from other apps can be missed. See
 [separate bolt relays](docs/separate-bolt-relays.md) for setup and feedback limits.
 

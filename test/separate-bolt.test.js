@@ -194,10 +194,12 @@ for (const momentary of [true, false]) test('engine with separate relays ' + mom
     [['4', true], ['door', 'open'], ['door', 'close'], ['4', false], ['3', true]]);
 });
 
-test('unknown pulse position at zero-wait close still completes and releases an unlock pulse before the motor', async () => {
+test('unknown pulse position at zero-wait close requests one unlock and eventually releases both outputs', async () => {
   const f = engineFixture(); f.state.door = 'not-closed'; await f.engine.initialize();
   await f.engine.execute('close'); assert.equal(f.engine.state.fault, null);
-  assert.deepEqual(f.state.writes.slice(0, 3).map(w => w.slice(0, 2)), [['4', true], ['4', false], ['door', 'close']]);
+  assert.equal(f.state.writes.filter(w => w[0] === '4' && w[1]).length, 1);
+  assert.equal(f.state.writes.filter(w => w[0] === 'door').length, 1);
+  assert.deepEqual(f.state.outputs, { '3': false, '4': false });
 });
 
 test('one logical lock/unlock command runs the matching pulse and preserves manual-unlock override', async () => {

@@ -19,12 +19,16 @@ export class DeconzSeparateBolt {
     this.lock = output(lockRelay); this.unlock = output(unlockRelay);
     this.momentary = momentary; this.pulseMs = pulseSeconds * 1000;
     this.readOnly = readOnly; this.clock = clock; this.busy = false; this.stopped = false; this.lastCommand = null;
+    this.activePulse = null;
     this.cancelled = new Promise(resolve => { this.cancel = resolve; });
     this.capabilities = Object.freeze({ separateRelays: true, commandBased: momentary });
   }
 
-  stop() { this.stopped = true; this.lastCommand = null; this.cancel(); }
-  invalidate() { this.lastCommand = null; }
+  stop() { this.stopped = true; this.invalidate(); this.cancel(); }
+  invalidate() {
+    this.lastCommand = null;
+    if (this.activePulse) { this.activePulse.invalidated = true; this.activePulse.cancel(); }
+  }
   checkRunning() { requireValue(!this.stopped, 'operation_interrupted'); }
   async outputs() {
     const [lock, unlock] = await Promise.all([this.lock.read(), this.unlock.read()]);
@@ -32,14 +36,19 @@ export class DeconzSeparateBolt {
     return { lock: lock.locked, unlock: unlock.locked };
   }
   async read() {
+    // OFF cleanup may complete while this read is in flight. Only this
+    // operation's ownership can explain an active momentary output.
+    const pulse = this.activePulse;
     try {
       const state = await this.outputs();
       if (this.momentary) {
-        requireValue(!state.lock && !state.unlock, 'bolt_relay_active_requires_review');
+        const owned = pulse?.acknowledged && !pulse.invalidated;
+        requireValue(owned ? !(pulse.locked ? state.unlock : state.lock) : !state.lock && !state.unlock,
+          'bolt_relay_active_requires_review');
         return { locked: this.lastCommand, evidence: 'command' };
       }
       return { locked: state.lock ? true : state.unlock ? false : null, evidence: 'relay' };
-    } catch (error) { this.lastCommand = null; throw error; }
+    } catch (error) { this.invalidate(); throw error; }
   }
 
   async release(output) {
@@ -55,13 +64,15 @@ export class DeconzSeparateBolt {
     throw new Fault('bolt_relay_release_unconfirmed');
   }
 
-  async write(locked, { beforeWrite } = {}) {
+  async write(locked, { beforeWrite, onAcknowledged } = {}) {
     requireValue(!this.readOnly && !this.stopped, 'actuation_disabled');
     requireValue(typeof locked === 'boolean' && typeof beforeWrite === 'function', 'bolt_command_context_required');
     requireValue(!this.busy, 'bolt_relay_busy');
     this.busy = true;
     const selected = locked ? this.lock : this.unlock, opposite = locked ? this.unlock : this.lock;
     let attempted = false, started;
+    const pulse = this.momentary ? { locked, acknowledged: false, invalidated: false } : null;
+    if (pulse) pulse.cancelled = new Promise(resolve => { pulse.cancel = resolve; });
     try {
       const initial = await this.outputs();
       if (this.momentary) requireValue(!initial.lock && !initial.unlock, 'bolt_relay_active_requires_review');
@@ -71,13 +82,21 @@ export class DeconzSeparateBolt {
       if (locked ? initial.unlock : initial.lock) await this.release(opposite);
       if (!this.momentary && (locked ? initial.lock : initial.unlock)) return;
       try {
+        this.activePulse = pulse;
         await selected.write(true, { beforeWrite: async () => {
           requireValue((await opposite.read()).locked === false, 'bolt_relays_conflict');
           await beforeWrite(); this.checkRunning();
           started = this.clock.now(); attempted = true;
         } });
         if (this.momentary) {
-          await Promise.race([this.clock.sleep(Math.max(0, this.pulseMs - (this.clock.now() - started))), this.cancelled]);
+          this.checkRunning();
+          requireValue(!pulse.invalidated, 'bolt_write_unconfirmed');
+          pulse.acknowledged = true;
+          // Settling may use this command estimate while this write still
+          // owns the mandatory OFF and release check.
+          this.lastCommand = locked;
+          onAcknowledged?.();
+          await Promise.race([this.clock.sleep(Math.max(0, this.pulseMs - (this.clock.now() - started))), this.cancelled, pulse.cancelled]);
           this.checkRunning();
         }
       } finally {
@@ -89,8 +108,9 @@ export class DeconzSeparateBolt {
       requireValue(this.momentary ? !final.lock && !final.unlock : locked ? final.lock && !final.unlock : final.unlock && !final.lock,
         'bolt_write_unconfirmed');
       this.checkRunning();
+      requireValue(!pulse?.invalidated, 'bolt_write_unconfirmed');
       this.lastCommand = locked;
     } catch (error) { this.lastCommand = null; throw error; }
-    finally { this.busy = false; }
+    finally { this.activePulse = null; this.busy = false; }
   }
 }

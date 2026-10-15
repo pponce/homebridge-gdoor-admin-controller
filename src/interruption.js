@@ -27,7 +27,7 @@ export async function followInterruptedTravel(engine, direction, departing = fal
     if (direction === 'closing') {
       if (s.locked) {
         e.admitInterruption(false);
-        if (retractPending === null) { retractPending = now; await e.bolt.write(false, { beforeWrite: () => e.checkRunning() }); }
+        if (retractPending === null) retractPending = await e.writeBolt(false);
         requireValue(now - retractPending < e.timing.boltTimeoutMs, 'bolt_retract_timeout');
       } else { requireValue(e.isRetracted(s), 'bolt_retract_confirmation_lost'); retractPending = null; }
     } else requireValue(e.isRetracted(s), 'bolt_extended_during_open');
@@ -88,7 +88,7 @@ async function followSensorTravel(e, direction, checked) {
     if (direction === 'closing') {
       if (s.locked) {
         e.admitInterruption(false);
-        if (retractPending === null) { retractPending = now; await e.bolt.write(false, { beforeWrite: () => e.checkRunning() }); }
+        if (retractPending === null) retractPending = await e.writeBolt(false);
         requireValue(now - retractPending < e.timing.boltTimeoutMs, 'bolt_retract_timeout');
       } else { requireValue(e.isRetracted(s), 'bolt_retract_confirmation_lost'); retractPending = null; }
     } else requireValue(e.isRetracted(s), 'bolt_extended_during_open');

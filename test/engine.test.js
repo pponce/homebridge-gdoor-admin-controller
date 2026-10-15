@@ -83,6 +83,31 @@ test('open retracts, settles, commands once, then estimates from closed-sensor d
   assert.deepEqual(model.journal, { inProgress: false, fault: false });
 });
 
+for (const evidence of ['relay', 'position']) test(`shared settling applies to retraction and extension with ${evidence} feedback`, async () => {
+  const { engine, model } = fixture({ feedback: { bolt: evidence },
+    timing: { openRetractSettleMs: null, closeRetractSettleMs: null, boltSettleMs: 30, closedStableMs: 0 },
+    door: (command, m) => { m.door = command === 'close' ? 'closed' : 'not-closed'; } });
+  engine.bolt.read = async () => ({ locked: model.locked, evidence });
+  await engine.initialize(); await engine.execute('open');
+  assert.equal(model.writes[1][2], 30);
+  const start = model.now; await engine.execute('close');
+  assert.equal(model.writes[2][2] - start, 30);
+  assert.equal(model.now - model.writes[3][2], 30);
+  assert.equal(engine.state.fault, null);
+});
+
+for (const delay of [20, 40]) test(`position feedback at ${delay}ms and settling at 30ms are awaited without adding them`, async () => {
+  const { engine, model } = fixture({ feedback: { bolt: 'position' },
+    timing: { openRetractSettleMs: null, boltSettleMs: 30 },
+    bolt: (_locked, m) => { m.retractAt = m.now + delay; },
+    tick: m => { if (m.now >= m.retractAt) m.locked = false; },
+    door: (_command, m) => { m.door = 'not-closed'; } });
+  engine.bolt.read = async () => ({ locked: model.locked, evidence: 'position' });
+  await engine.initialize(); await engine.execute('open');
+  assert.equal(model.writes[1][2], Math.max(30, delay));
+  assert.equal(engine.state.fault, null);
+});
+
 test('already retracted open still waits; fully-open sensor mode never uses timer', async () => {
   const { engine, model } = fixture({ model: { locked: false }, feedback: { opening: 'sensor' }, door: (_c, m) => { m.door = 'not-closed'; } });
   await engine.initialize(); await engine.execute('open');
@@ -138,7 +163,7 @@ test('zero-wait closing uses one recent assembly check before the motor command'
   assert.equal(engine.state.phase,'closed');assert.equal(engine.state.fault,null);
 });
 
-test('an initially-ON bolt closes after unlock acknowledgement at zero wait, or after OFF confirmation and positive settling', async () => {
+test('an initially-ON bolt closes after acknowledgement at zero wait, or once both feedback and settling are satisfied', async () => {
   for(const settling of [0,20]){
     const {engine,model}=fixture({model:{door:'not-closed',locked:false},timing:{closeRetractSettleMs:settling},
       bolt:(locked,m)=>{if(locked)m.locked=true;else m.retractAt=m.now+30;},
@@ -147,7 +172,7 @@ test('an initially-ON bolt closes after unlock acknowledgement at zero wait, or 
     engine.door.write=async(command,{beforeWrite})=>{
       await beforeWrite();assert.equal(model.locked,settling===0);
       assert.equal(engine.state.bolt,settling===0?'locked':'unlocked','No fabricated OFF report');
-      assert.equal(model.now,settling===0?0:50);
+      assert.equal(model.now,settling===0?0:30);
       model.writes.push(['door',command,model.now]);model.closeAt=model.now+80;
     };
     await engine.execute('close');

@@ -157,6 +157,23 @@ try{
      assert.equal(await p.getByLabel('Bolt relay setup',{exact:true}).inputValue(),'separate');
      await p.getByRole('button',{name:'03 Behavior',exact:true}).click();
      assert.equal(await p.getByLabel('Bolt feedback',{exact:true}).inputValue(),'command');
+     await p.getByLabel('Use shared settling before opening',{exact:true}).check();
+     await p.getByLabel('Use shared settling before closing',{exact:true}).check();
+     await p.getByLabel('Bolt extension/retraction settling (seconds)',{exact:true}).fill('0.4');
+     for(const direction of ['opening','closing']){
+       assert.equal(await p.getByLabel('Before '+direction+' (seconds)',{exact:true}).isDisabled(),true);
+       assert.equal(await p.getByLabel('Before '+direction+' (seconds)',{exact:true}).inputValue(),'0.4');
+     }
+     await p.getByLabel('Use shared settling before closing',{exact:true}).uncheck();
+     await p.getByLabel('Before closing (seconds)',{exact:true}).fill('0');
+     await review(p);await p.getByRole('button',{name:'Save configuration',exact:true}).click();await saved(p);
+     profile=x.configuration().controllers[0];
+     assert.equal(profile.timing.openRetractSettleSeconds,null);assert.equal(profile.timing.closeRetractSettleSeconds,0);
+     assert.equal(profile.feedback.boltSettleSeconds,.4);
+     await p.reload();await p.locator('#garages-tab').click();
+     await p.getByRole('button',{name:'03 Behavior',exact:true}).click();
+     assert.equal(await p.getByLabel('Use shared settling before opening',{exact:true}).isChecked(),true);
+     assert.equal(await p.getByLabel('Use shared settling before closing',{exact:true}).isChecked(),false);
      await p.getByRole('button',{name:'01 Devices',exact:true}).click();
      await p.getByRole('button',{name:'Configure device Bolt / Lock',exact:true}).click();
      await p.getByLabel('Bolt relay setup',{exact:true}).selectOption('single');
@@ -177,7 +194,7 @@ try{
      await p.getByRole('button',{name:'Configure device Bolt / Lock',exact:true}).click();
      assert.equal(await p.getByText('Bolt control is disabled.',{exact:true}).count(),1);
      await p.getByRole('button',{name:'03 Behavior',exact:true}).click();
-     for(const label of ['Bolt feedback','Before opening (seconds)','Before closing (seconds)','Bolt extension settling (seconds)','Automatically bolt a newly closed door'])
+     for(const label of ['Bolt feedback','Before opening (seconds)','Before closing (seconds)','Bolt extension/retraction settling (seconds)','Automatically bolt a newly closed door'])
        assert.equal(await p.getByLabel(label,{exact:true}).isDisabled(),true);
      await review(p);await p.getByRole('button',{name:'Save configuration',exact:true}).click();await saved(p);
      const disabled=x.configuration().controllers[0];

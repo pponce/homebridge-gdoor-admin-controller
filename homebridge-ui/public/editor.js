@@ -8,7 +8,7 @@ export function newGarage() {
     door: { type:'tailwind', baseUrl:'', doorIndex:0, credentialRef:'garage-tailwind' },
     bolt: { type:'deconz', baseUrl:'', gatewayId:'', resourceId:'', uniqueId:'', resourceType:'On/Off output', modelId:'', manufacturer:'', credentialRef:'garage-deconz', lockedValue:true },
     feedback: { closing:'sensor', opening:'timed', bolt:'relay', openingSeconds:20, closingSeconds:20, closedStableSeconds:2, boltSettleSeconds:2, allowEstimatedBolting:false },
-    timing: { operationPollSeconds:.5, idlePollSeconds:2, openRetractSettleSeconds:2, closeRetractSettleSeconds:2, boltTimeoutSeconds:10, motionTimeoutSeconds:45, interruptedOpenMarginSeconds:1 },
+    timing: { operationPollSeconds:.5, idlePollSeconds:2, openRetractSettleSeconds:null, closeRetractSettleSeconds:null, boltTimeoutSeconds:10, motionTimeoutSeconds:45, interruptedOpenMarginSeconds:1 },
     motorPaths:[], inputs:[], keypad:null };
 }
 export class ProfileEditor {
@@ -281,7 +281,7 @@ export class ProfileEditor {
       card.dataset.boltRelay=key;this.device(card,p.bolt[key],'bolt',{showConnection:false,gatewayConnection:p.bolt,selectionLabel:label});
     }
     root.append(el('p',p.bolt.momentary?
-      'Bolt position is estimated from the last completed pulse. It is unknown after restart. Use this controller for bolt commands: short pulses from other apps can be missed. The next door command retracts the bolt first when its position is unknown.':
+      'Bolt position is estimated from the last acknowledged bolt command. It is unknown after restart. Settling can finish while a pulse continues; the coordinator still owns and checks OFF. Use this controller for bolt commands: short pulses from other apps can be missed. The next door command retracts the bolt first when its position is unknown.':
       'The opposite relay is turned OFF and checked before the selected relay turns ON. Relay state does not prove physical bolt position.','help'));
   }
   applyDeviceBehavior(p,path){
@@ -394,7 +394,7 @@ export class ProfileEditor {
       this.input(actions,'Rearm delay (seconds)',input,'rearmSeconds',{type:'number',min:0,max:10,step:.1});
       const advanced=el('details');advanced.append(el('summary','Timing for this control'));const tg=this.grid(advanced);input.timing??={};
       for(const [key,label] of [['openRetractSettleSeconds','Retract before opening'],['closeRetractSettleSeconds','Retract before closing'],['openingSeconds','Estimated opening travel'],['closingSeconds','Estimated closing travel']]){
-        const help='Leave blank to use the garage default.'+(key==='closeRetractSettleSeconds'?' 0 starts closing after any needed unlock command is acknowledged; retraction is monitored during travel. Above 0 waits for unlocked feedback, then this settling time.':'');
+        const help='Leave blank to use the garage default.'+(key.includes('Retract')?' An explicit value replaces the default settling time, measured from the successful unlock command; 0 requests no settling wait.':'');
         const field=this.input(tg,label+' (seconds)',input.timing,key,{type:'number',min:key.includes('Retract')?0:1,max:300,step:.1,help:key==='openingSeconds'&&p.feedback.opening==='sensor'?'Unused: the fully-open sensor confirms arrival.':help,emptyUnset:true});
         if(key==='openingSeconds'&&p.feedback.opening==='sensor'||key.includes('Retract')&&p.boltControlEnabled===false)field.disabled=true;
       }card.append(advanced);card.append(this.button('Remove control',()=>{p.inputs.splice(index,1);this.selectedInputs.set(p.id,p.inputs[Math.min(index,p.inputs.length-1)]?.id);this.change();this.render();},'danger'));
@@ -427,15 +427,27 @@ export class ProfileEditor {
       if(p.feedback[mode]==='sensor')this.confirmationSensor(g,p,endpoint);
     }
     const pulseBolt=p.bolt?.relayMode==='separate'&&p.bolt.momentary;
-    this.input(g,'Bolt feedback',p.feedback,'bolt',{options:pulseBolt?[['command','Last completed pulse (estimated)']]:[['relay','Relay ON / OFF state'],['position','Physical position sensor']],help:pulseBolt?'Both outputs turn OFF after a pulse. Physical position is not sensed.':'The direct deCONZ relay uses relay state.'}).disabled=!boltEnabled||p.bolt?.relayMode==='separate';
+    this.input(g,'Bolt feedback',p.feedback,'bolt',{options:pulseBolt?[['command','Last acknowledged bolt command (estimated)']]:[['relay','Relay ON / OFF state'],['position','Physical position sensor']],help:pulseBolt?'Settling may finish before the pulse. The coordinator still owns and checks relay release. Physical position is not sensed.':'The direct deCONZ relay uses relay state.'}).disabled=!boltEnabled||p.bolt?.relayMode==='separate';
     if(p.feedback.closing==='timed')this.input(g,'Allow bolting after estimated closure',p.feedback,'allowEstimatedBolting',{type:'checkbox',help:'Elapsed time cannot prove the door closed. This policy requires explicit acceptance.'}).disabled=!boltEnabled;
     const travel=this.panel(root,'Movement timing');const tg=this.grid(travel);
-    for(const [key,label,help] of [['openingSeconds','Full opening travel','Starts after the closed sensor departs.'],['closingSeconds','Full closing travel','Used when closure is estimated.'],['closedStableSeconds','Stable closed confirmation','How long the closed sensor must remain active before bolting.'],['boltSettleSeconds','Bolt extension settling','Time to allow the mechanism to finish extending.']]){
+    for(const [key,label,help] of [['openingSeconds','Full opening travel','Starts after the closed sensor departs.'],['closingSeconds','Full closing travel','Used when closure is estimated.'],['closedStableSeconds','Stable closed confirmation','How long the closed sensor must remain active before bolting.'],['boltSettleSeconds','Bolt extension/retraction settling','Shared movement wait for every bolt setup, measured from a successful bolt command. Runs alongside a momentary pulse. Retraction overrides below replace this wait.']]){
       const unused=key==='openingSeconds'&&p.feedback.opening==='sensor'||key==='boltSettleSeconds'&&!boltEnabled;
       this.input(tg,label+' (seconds)',p.feedback,key,{type:'number',min:key.includes('Seconds')&&['openingSeconds','closingSeconds'].includes(key)?1:0,max:300,step:.1,help:!boltEnabled&&key==='boltSettleSeconds'?'Unused: bolt control is disabled.':unused?'Unused: wait for the fully-open sensor. Movement timeout still limits the operation.':help}).disabled=unused;
     }
-    const settling=this.panel(root,'Bolt retraction');const sg=this.grid(settling);
-    this.input(sg,'Before opening (seconds)',p.timing,'openRetractSettleSeconds',{type:'number',min:0,max:120,step:.1});this.input(sg,'Before closing (seconds)',p.timing,'closeRetractSettleSeconds',{type:'number',min:0,max:120,step:.1,help:'0 starts closing after any needed unlock command is acknowledged; retraction is monitored during travel. Above 0 waits for unlocked feedback, then this settling time.'});
+    const settling=this.panel(root,'Bolt retraction overrides','Use the shared settling time, or replace it for opening or closing. Saved numeric waits remain explicit overrides, including zero.');const sg=this.grid(settling);
+    for(const [key,label] of [['openRetractSettleSeconds','Before opening'],['closeRetractSettleSeconds','Before closing']]){
+      const inherited=p.timing[key]===null;
+      const choice={inherit:inherited};
+      const checkbox=this.input(sg,'Use shared settling '+label.toLowerCase(),choice,'inherit',{type:'checkbox'});
+      checkbox.dataset.inheritSettling=key;
+      checkbox.addEventListener('change',()=>{p.timing[key]=checkbox.checked?null:p.feedback.boltSettleSeconds;this.change();this.render();});
+      const value=inherited?{[key]:p.feedback.boltSettleSeconds}:p.timing;
+      this.input(sg,label+' (seconds)',value,key,{type:'number',min:0,max:120,step:.1,help:'Replaces shared settling; it is never added to it. An explicit 0 requests no settling wait.'}).disabled=inherited;
+    }
+    tg.querySelector('[data-field="boltSettleSeconds"]').addEventListener('input',()=>{
+      for(const key of ['openRetractSettleSeconds','closeRetractSettleSeconds'])
+        if(p.timing[key]===null)sg.querySelector(`[data-field="${key}"]`).value=p.feedback.boltSettleSeconds;
+    });
     this.input(sg,'Automatically bolt a newly closed door',p,'autoBolt',{type:'checkbox',help:'An external unlock remains in effect until the next operation or restart.'});
     if(!boltEnabled)for(const field of settling.querySelectorAll('input,select'))field.disabled=true;
     const advanced=el('details');advanced.append(el('summary','Polling and timeouts'));const ag=this.grid(advanced);

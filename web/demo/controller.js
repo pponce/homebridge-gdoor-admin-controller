@@ -11,6 +11,7 @@ window.ConfiguratorController = ({ root, api, readOnly }) => {
   const input = (field, value, attributes = '') => `<label class="gp-field">${esc(field[1])} · seconds<input type="number" min="${field[2]}" max="${field[3]}" step="any" required value="${esc(value)}" ${attributes}></label>`;
   const profile = () => data.controllers.find(row => row.id === selected);
   const boltTiming = key => ['openRetractSettleSeconds', 'closeRetractSettleSeconds', 'boltTimeoutSeconds', 'boltSettleSeconds'].includes(key);
+  const retractionTiming = key => ['openRetractSettleSeconds', 'closeRetractSettleSeconds'].includes(key);
   const unusedBoltTiming = key => profile()?.boltControlEnabled === false && boltTiming(key);
   async function load() {
     if (saving) return;
@@ -163,7 +164,7 @@ window.ConfiguratorController = ({ root, api, readOnly }) => {
       <p class="gp-sub">All times are in seconds. Changes apply to the next operation without restarting Homebridge. Save when controllers are idle.</p>
       <p class="gp-sub">Opening feedback: ${esc(row.feedback.opening)} · Closing feedback: ${esc(row.feedback.closing)} · Bolt feedback: ${esc(row.feedback.bolt)}. Travel times are estimates when timed feedback is selected.</p>
       ${row.boltControlEnabled === false ? '<p class="gp-note" data-bolt-disabled>Bolt disabled — door-only operation. Bolt commands, checks and delays are skipped; saved bolt settings are retained. Change Bolt control enabled in Homebridge → Garage doors → Devices.</p>' : ''}
-      ${row.feedback.bolt === 'command' ? '<p class="gp-note" data-bolt-estimated>Bolt position is estimated from the last completed pulse, and is unknown after restart. Use the coordinated bolt Lock tile; pulses from other apps can be missed.</p>' : ''}
+      ${row.feedback.bolt === 'command' ? '<p class="gp-note" data-bolt-estimated>Bolt position is estimated from the last acknowledged bolt command, and is unknown after restart. Settling can finish while its pulse continues; the coordinator still owns and checks OFF. Use the coordinated bolt Lock tile; pulses from other apps can be missed.</p>' : ''}
       ${row.feedback.opening === 'sensor' ? '<p class="gp-note">The fully-open sensor confirms opening, including after reversal. Opening travel time, per-device opening overrides and extra opening time after interruption are unused. Movement timeout still limits how long confirmation may take.</p>' : ''}
       <p data-controller-message role="status" aria-live="polite"></p>
       <form data-controller-form><fieldset ${readOnly() ? 'disabled' : ''}>
@@ -171,12 +172,16 @@ window.ConfiguratorController = ({ root, api, readOnly }) => {
       <p class="gp-sub">Both the relay device and the initiating physical button/keypad must allow it. HomeKit, the virtual keypad and primary opener routes cannot bypass lockout. Obstruction, disabled state, uncertain position and bolt safeguards remain in force.</p>
       ${row.motorPaths.map((motor,index)=>`<label class="gp-check"><input type="checkbox" data-lockout-group="motorPaths" data-lockout-index="${index}" ${values.motorPaths[index].allowDuringOpenerLockout === true ? 'checked' : ''}>${esc(motor.name)} — Allow operation during opener lockout</label>`).join('')}
       ${row.inputs.map((device,index)=>['button','keypad'].includes(device.kind)?`<label class="gp-check"><input type="checkbox" data-lockout-group="inputs" data-lockout-index="${index}" ${values.inputs[index].allowDuringOpenerLockout === true ? 'checked' : ''}>${esc(device.name)} — Allow operation during opener lockout${device.motorPath === 'primary' ? ' (inactive: primary opener route)' : ''}</label>`:'').join('')}
-      <h3>Controller defaults</h3><p class="gp-sub">Used by HomeKit, the virtual keypad and devices without an override.</p>
-      <div class="gp-two">${['timing', 'feedback'].flatMap(group => fields[group].map(field => input(field, values[group][field[0]], `data-default-group="${group}" data-key="${field[0]}" ${unusedBoltTiming(field[0]) ? 'disabled' : ''}`))).join('')}</div>
+      <h3>Controller defaults</h3><p class="gp-sub">Used by HomeKit, the virtual keypad and devices without an override. Shared bolt settling applies to extension and retraction on every bolt setup, from the successful command. Retraction overrides replace it; waits are never added together.</p>
+      <div class="gp-two">${['timing', 'feedback'].flatMap(group => fields[group].map(field => {
+        const shared = retractionTiming(field[0]) && values[group][field[0]] === null;
+        const checkbox = retractionTiming(field[0]) ? `<label class="gp-check"><input type="checkbox" data-shared-settling="${field[0]}" ${shared ? 'checked' : ''} ${unusedBoltTiming(field[0]) ? 'disabled' : ''}>Use shared settling for ${esc(field[1].toLowerCase())}</label>` : '';
+        return `<div>${checkbox}${input(field, shared ? values.feedback.boltSettleSeconds : values[group][field[0]], `data-default-group="${group}" data-key="${field[0]}" ${shared || unusedBoltTiming(field[0]) ? 'disabled' : ''}`)}</div>`;
+      })).join('')}</div>
       <h3>Device timing overrides</h3><p class="gp-sub">Use the controller default or set a different time for an individual button, switch or keypad.</p>
       ${row.inputs.length ? row.inputs.map((device, index) => `<details class="gp-panel gp-body"><summary>${esc(device.name)}${device.enabled ? '' : ' (disabled)'}</summary><p class="gp-sub">Motor: ${esc(row.motorPaths.find(m => m.id === device.motorPath)?.name || 'Primary opener')}</p><div class="gp-two">${fields.inputs.map(field => {
         const override = Object.hasOwn(values.inputs[index].timing, field[0]);
-        const fallback = values.timing[field[0]] ?? values.feedback[field[0]];
+        const fallback = values.timing[field[0]] ?? values.feedback[retractionTiming(field[0]) ? 'boltSettleSeconds' : field[0]];
         return `<div><label class="gp-check"><input type="checkbox" data-inherit="${index}" data-key="${field[0]}" ${override ? '' : 'checked'} ${unusedBoltTiming(field[0]) ? 'disabled' : ''}>Use default for ${esc(field[1].toLowerCase())}</label>${input(field, override ? values.inputs[index].timing[field[0]] : fallback, `data-input-index="${index}" data-key="${field[0]}" ${override && !unusedBoltTiming(field[0]) ? '' : 'disabled'}`)}</div>`;
       }).join('')}${input(['rearmSeconds', 'Input rearm wait', 0, 10], values.inputs[index].rearmSeconds, `data-rearm="${index}"`)}</div></details>`).join('') : '<p class="gp-sub">No physical input devices configured.</p>'}
       ${row.motorPaths.length ? '<h3>Motor relay pulses</h3>' + row.motorPaths.map((motor, index) => `<details class="gp-panel gp-body"><summary>${esc(motor.name)}</summary><div class="gp-two">${fields.motorPaths.map(field => input(field, values.motorPaths[index][field[0]], `data-motor-index="${index}" data-key="${field[0]}"`)).join('')}</div></details>`).join('') : ''}
@@ -193,6 +198,11 @@ window.ConfiguratorController = ({ root, api, readOnly }) => {
     form.oninput = () => {
       if (!uncertain) message('');
       dirty = true;
+      for (const checkbox of root.querySelectorAll('[data-shared-settling]')) {
+        const number = root.querySelector(`[data-default-group="timing"][data-key="${checkbox.dataset.sharedSettling}"]`);
+        number.disabled = checkbox.checked || unusedBoltTiming(checkbox.dataset.sharedSettling);
+        if (checkbox.checked) number.value = root.querySelector('[data-default-group="feedback"][data-key="boltSettleSeconds"]').value;
+      }
       for (const checkbox of root.querySelectorAll('[data-inherit]')) {
         const number = root.querySelector(`[data-input-index="${checkbox.dataset.inherit}"][data-key="${checkbox.dataset.key}"]`);
         number.disabled = checkbox.checked || unusedBoltTiming(checkbox.dataset.key);
@@ -207,7 +217,11 @@ window.ConfiguratorController = ({ root, api, readOnly }) => {
         const target=next[element.dataset.lockoutGroup][Number(element.dataset.lockoutIndex)];
         if ((target.allowDuringOpenerLockout === true) !== element.checked) change(target, 'allowDuringOpenerLockout', element.checked, element.closest('label').textContent);
       }
-      for (const element of root.querySelectorAll('[data-default-group]')) change(next[element.dataset.defaultGroup], element.dataset.key, Number(element.value), element.closest('label').textContent);
+      for (const element of root.querySelectorAll('[data-default-group]')) {
+        if (unusedBoltTiming(element.dataset.key)) continue;
+        const shared = root.querySelector(`[data-shared-settling="${element.dataset.key}"]`)?.checked;
+        change(next[element.dataset.defaultGroup], element.dataset.key, shared ? null : Number(element.value), element.closest('label').textContent);
+      }
       for (const element of root.querySelectorAll('[data-input-index]')) {
         if (unusedBoltTiming(element.dataset.key)) continue;
         const index = Number(element.dataset.inputIndex);

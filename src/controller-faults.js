@@ -90,5 +90,5 @@ export function controllerHealth(status) {
     detail: 'Neither fully closed nor fully open is confirmed. The previous travel estimate was not restored.', code: null };
   if (state.busy || ['opening', 'closing'].includes(state.door)) return { title: state.phase === 'opening' ? 'Opening' : state.phase === 'closing' ? 'Closing' : 'Operating', detail: '', code: null };
   return { title: state.door === 'closed' ? 'Ready · Closed' : state.door === 'open' ? 'Ready · Open' : 'Ready',
-    detail: state.bolt === 'unknown' ? 'Bolt position is unknown. A new door command will request retraction before operating the opener.' : state.boltEstimated ? 'Bolt position is estimated from the last completed pulse.' : '', code: null };
+    detail: state.bolt === 'unknown' ? 'Bolt position is unknown. A new door command will request retraction before operating the opener.' : state.boltEstimated ? 'Bolt position is estimated from the last acknowledged bolt command.' : '', code: null };
 }

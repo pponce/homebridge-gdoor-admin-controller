@@ -2,6 +2,13 @@
 
 User-facing changes for `homebridge-gdoor-admin-controller`. GitHub releases use matching `vVERSION` tags. Development history and validation receipts are in [developer documentation](docs/developer/README.md).
 
+## 0.4.51 — 2026-10-15
+
+- Use **Bolt extension/retraction settling** for both directions with every bolt setup: one relay, separate maintained/momentary relays, and Homebridge lock/switch devices. Measure the wait from successful command acknowledgement; required feedback and settling run together.
+- Let garage movement begin after retraction settling while a separate momentary pulse continues. Keep the worker and unfinished-operation journal owned until OFF is checked. Opposite bolt commands wait for release; release failures hold control and invalidate the estimate.
+- Add **Use shared settling** for the opening and closing retraction waits. New garages inherit it; existing numeric waits, including zero, remain explicit overrides. Per-control overrides replace the selected default. No waits are added twice.
+- Continue labeling momentary position as estimated, now from the last acknowledged command. Restart clears it. Timing saves preserve approved setup and do not operate devices.
+
 ## 0.4.50 — 2026-10-15
 
 - Keep an approved controller enabled and its HomeKit tiles available when changing only the separate bolt's pulse length, including 0.2 → 0.1 → 0.2 seconds. Save while idle; no setup recheck or Homebridge restart is needed.

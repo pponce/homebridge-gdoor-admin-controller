@@ -14,8 +14,8 @@ tile and preserves the complete two-output mapping for later use.
 Choose **Momentary relay outputs** for ON followed by OFF. The default pulse
 length is **0.2 seconds**, adjustable from 0.1 to 2 seconds. This is a configurable
 software duration, not a hardware recommendation or a guaranteed electrical
-pulse width: network latency can lengthen it. The existing retraction and
-extension settling settings remain separate from pulse length. Verify the
+pulse width: network latency can lengthen it. Shared extension/retraction
+settling runs independently from pulse length. Verify the
 duration and wiring on the actual bolt before relying on it.
 
 With momentary outputs disabled, the selected output remains ON. The opposite
@@ -26,9 +26,11 @@ does not prove the bolt's mechanical position.
 ## Momentary feedback
 
 Both outputs are OFF after a completed pulse. Bolt feedback is therefore
-**Last completed pulse (estimated)**. A successful ON acknowledgement, checked
-OFF release and the configured settling wait permit the coordinated sequence;
-they do not establish physical position. HomeKit has no separate estimated-lock
+**Last acknowledged bolt command (estimated)**. After a successful ON
+acknowledgement, the shared settling timer starts and the garage sequence can
+advance when that wait finishes, even while the pulse is still ON. The worker
+continues to own OFF cleanup and the release check. These reports and waits
+do not establish physical position. HomeKit has no separate estimated-lock
 state, so its Lock tile displays the commanded result. The web Controller page
 identifies the estimate. Initial/restarted state is Unknown, and the next fresh
 door operation requests retraction before operating the motor when needed.
@@ -44,10 +46,15 @@ fresh operation. An interrupted or faulted separate-relay operation requires
 **Check again** after checking the physical mechanism and relay state. That
 check performs no movement; the next operation establishes a new command state.
 
-One worker serializes both outputs and the garage opener. An uncertain ON is
-never retried. OFF cleanup is attempted and checked even after a lost ON reply
+One worker owns both outputs and the garage opener through the entire operation,
+including pulse cleanup that overlaps garage movement. It stays busy, with its
+unfinished-operation journal set, until OFF is checked. A subsequent opposite
+bolt command waits for release before energizing the other output, and closure
+is checked again immediately before extension. An uncertain ON is never
+retried. OFF cleanup is attempted and checked even after a lost ON reply
 or graceful shutdown during a pulse; only idempotent OFF may be retried, up to
-three attempts. Failure to establish release holds control. Sudden process or
+three attempts. Failure to establish release holds control and invalidates the
+estimate, including when the garage has already started moving. Sudden process or
 power loss can prevent software cleanup; hardware auto-release is not assumed.
 
 The legacy maintenance flow that explicitly requires locked relay/position
@@ -56,6 +63,12 @@ momentary bolt profiles. Ordinary read-only checks and current web-admin PIN
 updates retain their existing paths.
 
 ## Existing installations
+
+The shared **Bolt extension/retraction settling** also applies to single-output
+and Homebridge bolt configurations. Opening/closing retraction waits are explicit
+overrides, never extra delays; select **Use shared settling** for both to inherit.
+Existing numeric waits remain overrides, including zero. See
+[timing settings](controller-timings.md) for feedback and inheritance behavior.
 
 **Single relay controls lock / unlock** retains the existing one-output mapping,
 polarity, feedback and optional Lock tile. Existing saved profiles and approval
