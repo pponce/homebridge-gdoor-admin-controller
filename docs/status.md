@@ -1,3 +1,22 @@
+## 2026-10-15 — Opt-in settling overrides, 0.4.52 candidate
+
+The owner requests that unchecked opening/closing boxes use shared bolt
+settling and checked boxes enable their individual overrides. Both settings
+interfaces now use Override shared settling before opening/closing, explicitly
+reference Bolt extension/retraction settling (seconds), and explain replacement
+rather than addition. New garages leave both unchecked. Existing null/numeric
+choices are preserved: saved numeric values, including zero, appear checked.
+No timing engine, pulse handling, feedback or stored configuration format changes.
+
+Browser checks cover new-garage defaults, saved numeric/zero overrides, switching
+between shared and individual waits, shared field updates and persistence after
+reload. The static demo, current documentation and owner updater are updated.
+All 551 local Node checks pass, including 48 owner-updater installation outcomes.
+Changed-script syntax, static demo freshness and release-note preparation pass.
+Desktop/mobile browser checks require the hosted browser binaries. Hosted checks
+and release publication are pending; the owner's earlier explicit publication
+authorization remains in effect. No host or hardware commands are run.
+
 ## 2026-10-15 — 0.4.51 source and GitHub release verified
 
 PR #12 is merged. The tested source and v0.4.51 tag both point to

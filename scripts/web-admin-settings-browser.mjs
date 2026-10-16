@@ -122,7 +122,14 @@ try {
       await editor.getByText('Device states checked. No movement command was sent.', { exact: true }).waitFor();
       assert.deepEqual(hardwareWrites, []);
       assert.equal(await statusValue('Manual unlock override').textContent(), 'Yes');
+      for(const direction of ['opening','closing'])
+        assert.equal(await editor.getByLabel('Override shared settling before '+direction,{exact:true}).isChecked(),true,'Saved numeric waits remain overrides');
+      await editor.getByLabel('Override shared settling before opening',{exact:true}).uncheck();
+      assert.equal(await editor.locator('[data-default-group="timing"][data-key="openRetractSettleSeconds"]').isDisabled(),true);
+      await editor.getByLabel('Override shared settling before opening',{exact:true}).check();
+      assert.equal(await editor.locator('[data-default-group="timing"][data-key="openRetractSettleSeconds"]').isEnabled(),true);
       await editor.locator('[data-default-group="timing"][data-key="openRetractSettleSeconds"]').fill('0.3');
+      await editor.locator('[data-default-group="timing"][data-key="closeRetractSettleSeconds"]').fill('0');
       assert.equal(await editor.locator('[data-lockout-group="inputs"]').isChecked(), false);
       await editor.locator('[data-lockout-group="inputs"]').check();
       await editor.getByRole('button', { name: 'Restart Tailwind', exact: true }).click();
@@ -138,12 +145,14 @@ try {
       await editor.getByRole('button', { name: 'Apply timings', exact: true }).click();
       await editor.getByText('Timings saved and active. Homebridge was not restarted.', { exact: true }).waitFor();
       assert.equal(runtime.configuration.controllers[0].timing.openRetractSettleSeconds, 0.3);
+      assert.equal(runtime.configuration.controllers[0].timing.closeRetractSettleSeconds, 0);
+      assert.equal(await editor.getByLabel('Override shared settling before closing',{exact:true}).isChecked(),true,'Explicit zero is an override after save/reload');
       assert.equal(runtime.configuration.controllers[0].inputs[0].allowDuringOpenerLockout, true);
       assert.equal(runtime.configuration.controllers[0].inputs[0].timing.closeRetractSettleSeconds, 0); assert.equal(saves, 1);
       await editor.getByText('Indoor button', { exact: true }).click();
       await editor.locator('[data-inherit="0"][data-key="closeRetractSettleSeconds"]').check();
-      await editor.locator('[data-shared-settling="openRetractSettleSeconds"]').check();
-      await editor.locator('[data-shared-settling="closeRetractSettleSeconds"]').check();
+      await editor.getByLabel('Override shared settling before opening',{exact:true}).uncheck();
+      await editor.getByLabel('Override shared settling before closing',{exact:true}).uncheck();
       await editor.locator('[data-default-group="feedback"][data-key="boltSettleSeconds"]').fill('0.4');
       for(const key of ['openRetractSettleSeconds','closeRetractSettleSeconds']){
         assert.equal(await editor.locator(`[data-default-group="timing"][data-key="${key}"]`).isDisabled(),true);
@@ -159,6 +168,8 @@ try {
       assert.equal(runtime.entry(id).engine.timing.openRetractSettleMs,400);
       assert.equal(runtime.entry(id).engine.timing.closeRetractSettleMs,400);
       assert.equal(runtime.status(id).actuationEnabled,true);
+      for(const direction of ['opening','closing'])
+        assert.equal(await editor.getByLabel('Override shared settling before '+direction,{exact:true}).isChecked(),false,'Shared settling stays unchecked after save/reload');
       assert.equal(saves, 2);
       loseReply = true;
       await editor.locator('[data-default-group="feedback"][data-key="closingSeconds"]').fill('14');

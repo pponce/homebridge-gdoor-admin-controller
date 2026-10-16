@@ -434,15 +434,15 @@ export class ProfileEditor {
       const unused=key==='openingSeconds'&&p.feedback.opening==='sensor'||key==='boltSettleSeconds'&&!boltEnabled;
       this.input(tg,label+' (seconds)',p.feedback,key,{type:'number',min:key.includes('Seconds')&&['openingSeconds','closingSeconds'].includes(key)?1:0,max:300,step:.1,help:!boltEnabled&&key==='boltSettleSeconds'?'Unused: bolt control is disabled.':unused?'Unused: wait for the fully-open sensor. Movement timeout still limits the operation.':help}).disabled=unused;
     }
-    const settling=this.panel(root,'Bolt retraction overrides','Use the shared settling time, or replace it for opening or closing. Saved numeric waits remain explicit overrides, including zero.');const sg=this.grid(settling);
+    const settling=this.panel(root,'Override shared settling time','Leave each box unchecked to use Bolt extension/retraction settling (seconds). Check a box to use its Before opening or Before closing value instead. These waits allow the bolt to retract before garage movement; they replace the shared wait, never add to it. Bolt extension after closure always uses the shared setting.');const sg=this.grid(settling);
     for(const [key,label] of [['openRetractSettleSeconds','Before opening'],['closeRetractSettleSeconds','Before closing']]){
       const inherited=p.timing[key]===null;
-      const choice={inherit:inherited};
-      const checkbox=this.input(sg,'Use shared settling '+label.toLowerCase(),choice,'inherit',{type:'checkbox'});
-      checkbox.dataset.inheritSettling=key;
-      checkbox.addEventListener('change',()=>{p.timing[key]=checkbox.checked?null:p.feedback.boltSettleSeconds;this.change();this.render();});
+      const choice={override:!inherited};
+      const checkbox=this.input(sg,'Override shared settling '+label.toLowerCase(),choice,'override',{type:'checkbox'});
+      checkbox.dataset.overrideSettling=key;
+      checkbox.addEventListener('change',()=>{p.timing[key]=checkbox.checked?p.feedback.boltSettleSeconds:null;this.change();this.render();});
       const value=inherited?{[key]:p.feedback.boltSettleSeconds}:p.timing;
-      this.input(sg,label+' (seconds)',value,key,{type:'number',min:0,max:120,step:.1,help:'Replaces shared settling; it is never added to it. An explicit 0 requests no settling wait.'}).disabled=inherited;
+      this.input(sg,label+' (seconds)',value,key,{type:'number',min:0,max:120,step:.1,help:inherited?'Using Bolt extension/retraction settling (seconds). Check the override above to set a different wait.':'Replaces Bolt extension/retraction settling (seconds) for this direction only. Set 0 for no settling wait.'}).disabled=inherited;
     }
     tg.querySelector('[data-field="boltSettleSeconds"]').addEventListener('input',()=>{
       for(const key of ['openRetractSettleSeconds','closeRetractSettleSeconds'])

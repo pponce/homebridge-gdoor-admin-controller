@@ -2,6 +2,12 @@
 
 User-facing changes for `homebridge-gdoor-admin-controller`. GitHub releases use matching `vVERSION` tags. Development history and validation receipts are in [developer documentation](docs/developer/README.md).
 
+## 0.4.52 — 2026-10-15
+
+- Make **Override shared settling before opening** and **Override shared settling before closing** opt-in checkboxes in both settings interfaces. Unchecked uses **Bolt extension/retraction settling (seconds)**; checked enables the corresponding individual wait. New garages leave both unchecked.
+- Explain that each override replaces the shared wait for bolt retraction before garage movement. Waits are never added together; bolt extension after closure still uses the shared setting.
+- Preserve existing saved timing choices, including explicit zero overrides, and keep inherited fields disabled while displaying the shared value. Pulse duration and relay release handling are unchanged.
+
 ## 0.4.51 — 2026-10-15
 
 - Use **Bolt extension/retraction settling** for both directions with every bolt setup: one relay, separate maintained/momentary relays, and Homebridge lock/switch devices. Measure the wait from successful command acknowledgement; required feedback and settling run together.

@@ -14,7 +14,18 @@ Open **Controller** in the web administrator and select a garage. Administrator 
 
 **Bolt extension/retraction settling** applies to every enabled bolt configuration, including a single deCONZ relay, separate maintained or momentary outputs, and a Homebridge lock/switch. The timer starts when the bolt command succeeds. Required position/relay feedback is awaited concurrently, so a 0.3-second wait with feedback arriving after 0.4 seconds permits the next step at 0.4 seconds, not 0.7. If the bolt is already retracted and no command is needed, retraction settling starts from that operation's initial check. Stable closed confirmation remains a separate requirement before extension.
 
-For each opening/closing retraction wait, **Use shared settling** selects this shared value. A numeric override, including zero, replaces it. New garages select shared settling. Existing numeric settings remain explicit overrides; select **Use shared settling** to inherit instead. In JSON, controller `openRetractSettleSeconds` and `closeRetractSettleSeconds` use `null` for shared settling. Missing legacy fields retain their historical two-second default for configuration/approval compatibility. Per-input missing fields inherit the resolved controller wait; explicit per-input values replace it again. Extension always uses the shared setting. An explicit zero retains the existing single-relay closing behavior: start after any needed unlock acknowledgement and monitor retraction during travel. Other feedback safeguards remain in force.
+**Override shared settling before opening** and **Override shared settling before closing** are opt-in checkboxes. Leave either unchecked to use **Bolt extension/retraction settling (seconds)** for that direction; its individual field is disabled and displays the shared value. Check it to enable and use the corresponding **Before opening** or **Before closing** value instead. An override replaces the shared wait; the two waits are never added together. New garages leave both boxes unchecked. Existing numeric settings remain explicit overrides, including zero, and appear checked; uncheck a box to switch that direction to shared settling. Bolt extension after closure always uses the shared setting.
+
+For example, with shared settling at 0.3 seconds, an opening override of 1 second and a closing override of 0.5 seconds:
+
+| Opening override | Closing override | Wait before opening | Wait before closing |
+| --- | --- | --- | --- |
+| Unchecked | Unchecked | 0.3 seconds | 0.3 seconds |
+| Checked | Unchecked | 1 second | 0.3 seconds |
+| Unchecked | Checked | 0.3 seconds | 0.5 seconds |
+| Checked | Checked | 1 second | 0.5 seconds |
+
+In JSON, controller `openRetractSettleSeconds` and `closeRetractSettleSeconds` use `null` for shared settling. Missing legacy fields retain their historical two-second default for configuration/approval compatibility. Per-input missing fields inherit the resolved controller wait; explicit per-input values replace it again. An explicit zero retains the existing single-relay closing behavior: start after any needed unlock acknowledgement and monitor retraction during travel. Other feedback safeguards remain in force.
 
 With separate momentary outputs, pulse duration and settling run independently. For a one-second pulse and 0.3-second settling, the opener may start at 0.3 seconds after unlock acknowledgement while the unlock output is still ON. The worker remains busy and its unfinished-operation journal stays set until OFF is sent and the released state is checked. An opposite bolt command waits for that release. Failed release faults the operation even if garage movement already started; the motor command is never automatically repeated. See [separate bolt relays](separate-bolt-relays.md).
 

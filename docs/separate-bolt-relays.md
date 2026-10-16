@@ -66,8 +66,10 @@ updates retain their existing paths.
 
 The shared **Bolt extension/retraction settling** also applies to single-output
 and Homebridge bolt configurations. Opening/closing retraction waits are explicit
-overrides, never extra delays; select **Use shared settling** for both to inherit.
-Existing numeric waits remain overrides, including zero. See
+overrides, never extra delays. Leave **Override shared settling before opening**
+and **Override shared settling before closing** unchecked to inherit the shared
+value. Check either box to use its individual wait instead. Existing numeric
+waits remain overrides and appear checked, including zero. See
 [timing settings](controller-timings.md) for feedback and inheritance behavior.
 
 **Single relay controls lock / unlock** retains the existing one-output mapping,

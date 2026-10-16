@@ -157,14 +157,16 @@ try{
      assert.equal(await p.getByLabel('Bolt relay setup',{exact:true}).inputValue(),'separate');
      await p.getByRole('button',{name:'03 Behavior',exact:true}).click();
      assert.equal(await p.getByLabel('Bolt feedback',{exact:true}).inputValue(),'command');
-     await p.getByLabel('Use shared settling before opening',{exact:true}).check();
-     await p.getByLabel('Use shared settling before closing',{exact:true}).check();
+     for(const direction of ['opening','closing'])
+       assert.equal(await p.getByLabel('Override shared settling before '+direction,{exact:true}).isChecked(),true,'Saved numeric waits remain overrides');
+     await p.getByLabel('Override shared settling before opening',{exact:true}).uncheck();
+     await p.getByLabel('Override shared settling before closing',{exact:true}).uncheck();
      await p.getByLabel('Bolt extension/retraction settling (seconds)',{exact:true}).fill('0.4');
      for(const direction of ['opening','closing']){
        assert.equal(await p.getByLabel('Before '+direction+' (seconds)',{exact:true}).isDisabled(),true);
        assert.equal(await p.getByLabel('Before '+direction+' (seconds)',{exact:true}).inputValue(),'0.4');
      }
-     await p.getByLabel('Use shared settling before closing',{exact:true}).uncheck();
+     await p.getByLabel('Override shared settling before closing',{exact:true}).check();
      await p.getByLabel('Before closing (seconds)',{exact:true}).fill('0');
      await review(p);await p.getByRole('button',{name:'Save configuration',exact:true}).click();await saved(p);
      profile=x.configuration().controllers[0];
@@ -172,8 +174,11 @@ try{
      assert.equal(profile.feedback.boltSettleSeconds,.4);
      await p.reload();await p.locator('#garages-tab').click();
      await p.getByRole('button',{name:'03 Behavior',exact:true}).click();
-     assert.equal(await p.getByLabel('Use shared settling before opening',{exact:true}).isChecked(),true);
-     assert.equal(await p.getByLabel('Use shared settling before closing',{exact:true}).isChecked(),false);
+     assert.equal(await p.getByLabel('Override shared settling before opening',{exact:true}).isChecked(),false);
+     assert.equal(await p.getByLabel('Override shared settling before closing',{exact:true}).isChecked(),true);
+     assert.equal(await p.getByLabel('Before opening (seconds)',{exact:true}).isDisabled(),true);
+     assert.equal(await p.getByLabel('Before closing (seconds)',{exact:true}).isEnabled(),true);
+     assert.equal(await p.getByLabel('Before closing (seconds)',{exact:true}).inputValue(),'0');
      await p.getByRole('button',{name:'01 Devices',exact:true}).click();
      await p.getByRole('button',{name:'Configure device Bolt / Lock',exact:true}).click();
      await p.getByLabel('Bolt relay setup',{exact:true}).selectOption('single');
@@ -434,6 +439,11 @@ try{
    await page.getByRole('button',{name:'Add a garage door',exact:true}).click();
    assert.equal(await page.locator('.garage-card').count(),2);
    assert.equal(await page.locator('.garage-card').last().getAttribute('data-state'),'unconfigured');
+   await page.getByRole('button',{name:'03 Behavior',exact:true}).click();
+   for(const direction of ['opening','closing']){
+     assert.equal(await page.getByLabel('Override shared settling before '+direction,{exact:true}).isChecked(),false,'New garages use shared settling');
+     assert.equal(await page.getByLabel('Before '+direction+' (seconds)',{exact:true}).isDisabled(),true);
+   }
    await page.getByRole('button',{name:'Review setup My garage',exact:true}).click();
    await page.getByText('Save this garage door before checking its connections.',{exact:true}).waitFor();
    assert.equal(await page.getByRole('button',{name:'Check connections',exact:true}).count(),0);

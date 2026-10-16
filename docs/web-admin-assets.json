@@ -89,8 +89,8 @@
   "additions": [
     {
       "path": "web-admin/public/controller.js",
-      "sha256": "8f2368466f784383c9e2108ab45e3d336dbe8dcb4033224e37038d6e62b01e2e",
-      "purpose": "Plugin-native controller timing editor, collapsed troubleshooting below its controls, and setup instructions when no garage exists. Display disabled bolt control and retain its inactive timing values. Shared extension/retraction settling with explicit overrides. Identify separate momentary bolt position as an estimate from the last acknowledged command while retaining pulse release ownership."
+      "sha256": "c7a58cdc54a39806a76f6af3f2526e0bf98c288afae8b5aa80ae967ad80f6bce",
+      "purpose": "Plugin-native controller timing editor, collapsed troubleshooting below its controls, and setup instructions when no garage exists. Display disabled bolt control and retain its inactive timing values. Shared extension/retraction settling with explicit overrides. Identify separate momentary bolt position as an estimate from the last acknowledged command while retaining pulse release ownership. Opt-in opening/closing settling overrides: unchecked uses shared settling, checked uses the individual wait, preserving saved choices."
     }
   ]
 }
