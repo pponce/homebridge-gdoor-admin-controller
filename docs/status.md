@@ -1,3 +1,36 @@
+## 2026-10-15 — 0.4.52 source and GitHub release verified
+
+PR #13 is merged. The tested source and v0.4.52 tag both point to
+739ea5a62174d87a00953b4c86e58551e38efa37. All five Coordinator checks passed
+on the PR in run 38833072001 and on main in run 38833358756:
+https://github.com/pponce/homebridge-gdoor-admin-controller/actions/runs/38833358756
+
+Validation covers Node 22/24, actual Homebridge 2.0/2.4 and desktop/mobile
+configuration and web-admin flows. Browser checks confirm new garages start
+with both overrides unchecked, saved numeric/zero overrides remain checked,
+checking enables the individual wait, unchecking inherits the shared value,
+and saves/reloads preserve both choices. All 551 unit checks and 48 owner-updater
+installation outcomes pass. Demo freshness and exact npm packaging also pass.
+
+Publish GitHub release run 38833627595 and Deploy web demo run 38833358759
+both succeeded. The published release is:
+https://github.com/pponce/homebridge-gdoor-admin-controller/releases/tag/v0.4.52
+
+The release contains the checked npm tarball, demo ZIP and source commit receipt.
+The tarball is 2107621 bytes with SHA-256:
+cac86ed5d86852ab452226ceb50dc7bdf26303fb15977399f50997d0cad4c690
+
+The pinned launcher fetches v0.4.52 over SSH, verifies the full commit above,
+and runs scripts/update-owner-0.4.52.sh. npm publication and installation remain
+owner-run through the established verify/download/stop/add/check/start flow.
+No live host services or hardware were operated here.
+
+Both interfaces now use Override shared settling before opening/closing.
+Unchecked uses Bolt extension/retraction settling (seconds); checked uses the
+individual direction's value instead. Existing saved overrides are preserved.
+The timing engine, pulse release ownership and stored null/numeric semantics
+are unchanged.
+
 ## 2026-10-15 — Opt-in settling overrides, 0.4.52 candidate
 
 The owner requests that unchecked opening/closing boxes use shared bolt
