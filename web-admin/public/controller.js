@@ -13,6 +13,7 @@ window.ConfiguratorController = ({ root, api, readOnly }) => {
   const boltTiming = key => ['openRetractSettleSeconds', 'closeRetractSettleSeconds', 'boltTimeoutSeconds', 'boltSettleSeconds'].includes(key);
   const retractionTiming = key => ['openRetractSettleSeconds', 'closeRetractSettleSeconds'].includes(key);
   const unusedBoltTiming = key => profile()?.boltControlEnabled === false && boltTiming(key);
+  const settlingSummary = (key, override, value) => unusedBoltTiming(key) ? 'Unused while bolt control is disabled.' : value === '' ? 'Enter a settling time in seconds.' : `${override ? 'Using override' : 'Using shared settling'}: ${value} seconds.${override ? ' Replaces the shared wait.' : ''}`;
   async function load() {
     if (saving) return;
     const turn = ++generation;
@@ -172,13 +173,31 @@ window.ConfiguratorController = ({ root, api, readOnly }) => {
       <p class="gp-sub">Both the relay device and the initiating physical button/keypad must allow it. HomeKit, the virtual keypad and primary opener routes cannot bypass lockout. Obstruction, disabled state, uncertain position and bolt safeguards remain in force.</p>
       ${row.motorPaths.map((motor,index)=>`<label class="gp-check"><input type="checkbox" data-lockout-group="motorPaths" data-lockout-index="${index}" ${values.motorPaths[index].allowDuringOpenerLockout === true ? 'checked' : ''}>${esc(motor.name)} — Allow operation during opener lockout</label>`).join('')}
       ${row.inputs.map((device,index)=>['button','keypad'].includes(device.kind)?`<label class="gp-check"><input type="checkbox" data-lockout-group="inputs" data-lockout-index="${index}" ${values.inputs[index].allowDuringOpenerLockout === true ? 'checked' : ''}>${esc(device.name)} — Allow operation during opener lockout${device.motorPath === 'primary' ? ' (inactive: primary opener route)' : ''}</label>`:'').join('')}
-      <h3>Controller defaults</h3><p class="gp-sub">Used by HomeKit, the virtual keypad and devices without an override. Bolt extension/retraction settling (seconds) is the shared wait for every bolt setup, measured from a successful bolt command.</p>
-      <p class="gp-sub">Leave each Override shared settling box unchecked to use that shared wait. Check a box to use its Before opening or Before closing value instead, allowing the bolt to retract before garage movement. Each override replaces the shared wait; the times are never added together. Bolt extension after closure always uses the shared setting.</p>
-      <div class="gp-two">${['timing', 'feedback'].flatMap(group => fields[group].map(field => {
-        const shared = retractionTiming(field[0]) && values[group][field[0]] === null;
-        const checkbox = retractionTiming(field[0]) ? `<label class="gp-check"><input type="checkbox" data-override-settling="${field[0]}" ${shared ? '' : 'checked'} ${unusedBoltTiming(field[0]) ? 'disabled' : ''}>Override shared settling before ${field[0] === 'openRetractSettleSeconds' ? 'opening' : 'closing'}</label>` : '';
-        return `<div>${checkbox}${input(field, shared ? values.feedback.boltSettleSeconds : values[group][field[0]], `data-default-group="${group}" data-key="${field[0]}" ${shared || unusedBoltTiming(field[0]) ? 'disabled' : ''}`)}</div>`;
-      })).join('')}</div>
+      <h3>Controller defaults</h3><p class="gp-sub">Used by HomeKit, the virtual keypad and devices without an override.</p>
+      <section class="gp-panel gp-body gp-bolt-settling" data-bolt-settling aria-labelledby="controller-bolt-settling-title">
+        <h4 id="controller-bolt-settling-title">Bolt settling</h4>
+        <p class="gp-sub">Set the shared movement wait, then optionally override retraction before opening or closing the garage. Each wait starts from a successful bolt command.</p>
+        <div class="gp-settling-shared">
+          ${input(fields.feedback.find(field => field[0] === 'boltSettleSeconds'), values.feedback.boltSettleSeconds, `data-default-group="feedback" data-key="boltSettleSeconds" aria-describedby="controller-shared-settling-help" ${unusedBoltTiming('boltSettleSeconds') ? 'disabled' : ''}`)}
+          <p class="gp-sub" id="controller-shared-settling-help">Bolt extension uses this shared time. Retraction also uses it unless overridden below. Pulse duration is separate.</p>
+        </div>
+        <div class="gp-two">${fields.timing.filter(field => retractionTiming(field[0])).map(field => {
+          const key = field[0], shared = values.timing[key] === null;
+          const direction = key === 'openRetractSettleSeconds' ? 'opening' : 'closing';
+          const value = shared ? values.feedback.boltSettleSeconds : values.timing[key];
+          return `<div class="gp-settling-direction" data-settling-direction="${direction}">
+            <h5>Before ${direction}</h5>
+            <label class="gp-check"><input type="checkbox" data-override-settling="${key}" aria-controls="settling-${key}" ${shared ? '' : 'checked'} ${unusedBoltTiming(key) ? 'disabled' : ''}>Override shared settling before ${direction}</label>
+            ${input([key, 'Before ' + direction, field[2], field[3]], value, `id="settling-${key}" data-default-group="timing" data-key="${key}" aria-describedby="settling-summary-${key}" ${shared || unusedBoltTiming(key) ? 'disabled' : ''}`)}
+            <p class="gp-sub" id="settling-summary-${key}" data-settling-summary="${key}" aria-live="polite">${esc(settlingSummary(key, !shared, value))}</p>
+          </div>`;
+        }).join('')}</div>
+        <p class="gp-sub gp-settling-help">Unchecked: use the shared time shown above. Checked: use the individual value instead. Override times replace the shared wait; they are never added to it.</p>
+      </section>
+      <h4>Other controller timings</h4>
+      <div class="gp-two">${['timing', 'feedback'].flatMap(group => fields[group].filter(field => !retractionTiming(field[0]) && field[0] !== 'boltSettleSeconds').map(field =>
+        input(field, values[group][field[0]], `data-default-group="${group}" data-key="${field[0]}" ${unusedBoltTiming(field[0]) ? 'disabled' : ''}`)
+      )).join('')}</div>
       <h3>Device timing overrides</h3><p class="gp-sub">Use the controller default or set a different time for an individual button, switch or keypad.</p>
       ${row.inputs.length ? row.inputs.map((device, index) => `<details class="gp-panel gp-body"><summary>${esc(device.name)}${device.enabled ? '' : ' (disabled)'}</summary><p class="gp-sub">Motor: ${esc(row.motorPaths.find(m => m.id === device.motorPath)?.name || 'Primary opener')}</p><div class="gp-two">${fields.inputs.map(field => {
         const override = Object.hasOwn(values.inputs[index].timing, field[0]);
@@ -203,6 +222,7 @@ window.ConfiguratorController = ({ root, api, readOnly }) => {
         const number = root.querySelector(`[data-default-group="timing"][data-key="${checkbox.dataset.overrideSettling}"]`);
         number.disabled = !checkbox.checked || unusedBoltTiming(checkbox.dataset.overrideSettling);
         if (!checkbox.checked) number.value = root.querySelector('[data-default-group="feedback"][data-key="boltSettleSeconds"]').value;
+        root.querySelector(`[data-settling-summary="${checkbox.dataset.overrideSettling}"]`).textContent = settlingSummary(checkbox.dataset.overrideSettling, checkbox.checked, number.value);
       }
       for (const checkbox of root.querySelectorAll('[data-inherit]')) {
         const number = root.querySelector(`[data-input-index="${checkbox.dataset.inherit}"][data-key="${checkbox.dataset.key}"]`);

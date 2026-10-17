@@ -311,6 +311,18 @@ body.gp-extension-embedded{margin:0;padding:0;background:transparent}.gp-extensi
 /* Keep the garage selector compact while fitting narrow screens. */
 #configurator-preview .gp-controller-selector{width:20rem;max-width:100%}
 
+/* Keep shared bolt settling and its two overrides together. */
+#configurator-preview .gp-bolt-settling{margin:16px 0 22px}
+#configurator-preview .gp-bolt-settling h4{margin:0 0 6px;font-size:15px}
+#configurator-preview .gp-settling-shared{margin:14px 0;padding:14px;border-radius:8px;background:var(--gp-tint)}
+#configurator-preview .gp-settling-shared .gp-field{max-width:28rem}
+#configurator-preview .gp-settling-direction{min-width:0;padding:14px;border:1px solid var(--gp-line);border-radius:8px}
+#configurator-preview .gp-settling-direction h5{margin:0 0 8px;font-size:14px}
+#configurator-preview .gp-settling-direction .gp-check{margin-bottom:12px;align-items:flex-start}
+#configurator-preview .gp-bolt-settling .gp-field{margin-bottom:8px}
+#configurator-preview .gp-bolt-settling input:disabled{opacity:1;background:var(--gp-bg);color:var(--gp-muted);-webkit-text-fill-color:var(--gp-muted)}
+#configurator-preview .gp-bolt-settling .gp-settling-help{margin-top:14px}
+
 /* Live controller troubleshooting values remain readable on narrow screens. */
 #configurator-preview .gp-controller-status{margin:8px 0 20px;min-width:0}
 #configurator-preview .gp-controller-status>div{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;padding:6px 0;border-bottom:1px solid var(--gp-line)}

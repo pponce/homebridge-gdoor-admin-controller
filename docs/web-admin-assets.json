@@ -82,15 +82,15 @@
       "path": "web-admin/public/style.css",
       "gitBlob": "a989313e78d1454a31c6a9b7327647066e510942",
       "sha256": "38bee5eb6eaa4bc8a7344fee7fbb6c790498ca46db3553cc3dc8ea76b10d93e8",
-      "adaptedSha256": "c7936c99f170775ed61b7f8ecdf5fc848d3e666231dac6b200d5ff3d7e95d32c",
-      "adaptation": "Separate the signed-in account password section from web account management and identify the current user. Keep the Controller garage selector compact and responsive. Add responsive controller troubleshooting status rows."
+      "adaptedSha256": "89270214f6c66b07ee3385a2bf1304031a73989dc6399a31b5e772af0ab38040",
+      "adaptation": "Separate the signed-in account password section from web account management and identify the current user. Keep the Controller garage selector compact and responsive. Add responsive controller troubleshooting status rows. Group shared bolt settling and opening/closing overrides in one responsive section with readable inherited values."
     }
   ],
   "additions": [
     {
       "path": "web-admin/public/controller.js",
-      "sha256": "c7a58cdc54a39806a76f6af3f2526e0bf98c288afae8b5aa80ae967ad80f6bce",
-      "purpose": "Plugin-native controller timing editor, collapsed troubleshooting below its controls, and setup instructions when no garage exists. Display disabled bolt control and retain its inactive timing values. Shared extension/retraction settling with explicit overrides. Identify separate momentary bolt position as an estimate from the last acknowledged command while retaining pulse release ownership. Opt-in opening/closing settling overrides: unchecked uses shared settling, checked uses the individual wait, preserving saved choices."
+      "sha256": "4e1ac0f837ae56c346bcfb7d1987dbe81980554f5b7ebd754b47f74e2df0ad0f",
+      "purpose": "Plugin-native controller timing editor, collapsed troubleshooting below its controls, and setup instructions when no garage exists. Display disabled bolt control and retain its inactive timing values. Shared extension/retraction settling with explicit overrides. Identify separate momentary bolt position as an estimate from the last acknowledged command while retaining pulse release ownership. Opt-in opening/closing settling overrides: unchecked uses shared settling, checked uses the individual wait, preserving saved choices. Group shared settling above both overrides and show live resolved-wait notes, including zero and disabled-bolt status."
     }
   ]
 }

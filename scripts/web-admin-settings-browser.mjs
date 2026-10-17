@@ -84,6 +84,14 @@ try {
     });
     try {
       await editor.goto(origin + '/controller'); await editor.locator('[data-default-group="timing"]').first().waitFor();
+      const settling = editor.locator('[data-bolt-settling]');
+      assert.equal(await settling.locator('[data-default-group]').count(),3,'Shared settling and both overrides form one section');
+      const sharedBox = await settling.locator('.gp-settling-shared').boundingBox();
+      const openingBox = await settling.locator('[data-settling-direction="opening"]').boundingBox();
+      const closingBox = await settling.locator('[data-settling-direction="closing"]').boundingBox();
+      assert.ok(openingBox.y >= sharedBox.y + sharedBox.height,'Shared setting appears above both overrides');
+      if(kind === 'webkit') assert.ok(closingBox.y >= openingBox.y + openingBox.height,'Override cards stack on mobile');
+      else assert.ok(closingBox.x >= openingBox.x + openingBox.width && Math.abs(closingBox.y - openingBox.y) < 1,'Override cards sit together on desktop');
       const troubleshooting = editor.locator('[data-controller-troubleshooting-section]');
       const openTroubleshooting = () => troubleshooting.locator('summary').click();
       assert.equal(await troubleshooting.evaluate(el=>el.open),false,'Troubleshooting starts collapsed');
@@ -147,17 +155,25 @@ try {
       assert.equal(runtime.configuration.controllers[0].timing.openRetractSettleSeconds, 0.3);
       assert.equal(runtime.configuration.controllers[0].timing.closeRetractSettleSeconds, 0);
       assert.equal(await editor.getByLabel('Override shared settling before closing',{exact:true}).isChecked(),true,'Explicit zero is an override after save/reload');
+      assert.equal(await settling.locator('[data-settling-summary="closeRetractSettleSeconds"]').textContent(),'Using override: 0 seconds. Replaces the shared wait.');
+      if(process.env.PREVIEW_OUTPUT){await mkdir(process.env.PREVIEW_OUTPUT,{recursive:true});await settling.screenshot({path:join(process.env.PREVIEW_OUTPUT,'bolt-settling-overrides-'+kind+'.png')});}
       assert.equal(runtime.configuration.controllers[0].inputs[0].allowDuringOpenerLockout, true);
       assert.equal(runtime.configuration.controllers[0].inputs[0].timing.closeRetractSettleSeconds, 0); assert.equal(saves, 1);
       await editor.getByText('Indoor button', { exact: true }).click();
       await editor.locator('[data-inherit="0"][data-key="closeRetractSettleSeconds"]').check();
       await editor.getByLabel('Override shared settling before opening',{exact:true}).uncheck();
       await editor.getByLabel('Override shared settling before closing',{exact:true}).uncheck();
+      await editor.locator('[data-default-group="feedback"][data-key="boltSettleSeconds"]').fill('0');
+      for(const key of ['openRetractSettleSeconds','closeRetractSettleSeconds']){
+        assert.equal(await settling.locator(`[data-key="${key}"]`).inputValue(),'0','Inherited zero is displayed, not blank');
+        assert.equal(await settling.locator(`[data-settling-summary="${key}"]`).textContent(),'Using shared settling: 0 seconds.');
+      }
       await editor.locator('[data-default-group="feedback"][data-key="boltSettleSeconds"]').fill('0.4');
       for(const key of ['openRetractSettleSeconds','closeRetractSettleSeconds']){
         assert.equal(await editor.locator(`[data-default-group="timing"][data-key="${key}"]`).isDisabled(),true);
         assert.equal(await editor.locator(`[data-default-group="timing"][data-key="${key}"]`).inputValue(),'0.4');
         assert.equal(await editor.locator(`[data-input-index="0"][data-key="${key}"]`).inputValue(),'0.4');
+        assert.equal(await settling.locator(`[data-settling-summary="${key}"]`).textContent(),'Using shared settling: 0.4 seconds.');
       }
       await editor.getByRole('button', { name: 'Review timing changes', exact: true }).click();
       await editor.getByRole('button', { name: 'Apply timings', exact: true }).click();
@@ -170,6 +186,12 @@ try {
       assert.equal(runtime.status(id).actuationEnabled,true);
       for(const direction of ['opening','closing'])
         assert.equal(await editor.getByLabel('Override shared settling before '+direction,{exact:true}).isChecked(),false,'Shared settling stays unchecked after save/reload');
+      for(const key of ['openRetractSettleSeconds','closeRetractSettleSeconds']){
+        assert.equal(await settling.locator(`[data-key="${key}"]`).inputValue(),'0.4','Inherited fields stay populated after reload');
+        assert.equal(await settling.locator(`[data-key="${key}"]`).isDisabled(),true);
+        assert.equal(await settling.locator(`[data-settling-summary="${key}"]`).textContent(),'Using shared settling: 0.4 seconds.');
+      }
+      if(process.env.PREVIEW_OUTPUT)await settling.screenshot({path:join(process.env.PREVIEW_OUTPUT,'bolt-settling-shared-'+kind+'.png')});
       assert.equal(saves, 2);
       loseReply = true;
       await editor.locator('[data-default-group="feedback"][data-key="closingSeconds"]').fill('14');
@@ -186,6 +208,8 @@ try {
       await editor.evaluate(()=>panel.load());await editor.locator('[data-bolt-disabled]').waitFor();
       assert.equal(await editor.locator('[data-default-group="timing"][data-key="openRetractSettleSeconds"]').isDisabled(),true);
       assert.equal(await editor.locator('[data-default-group="feedback"][data-key="boltSettleSeconds"]').isDisabled(),true);
+      for(const key of ['openRetractSettleSeconds','closeRetractSettleSeconds'])
+        assert.equal(await settling.locator(`[data-settling-summary="${key}"]`).textContent(),'Unused while bolt control is disabled.');
       await editor.getByText('Indoor button',{exact:true}).click();
       assert.equal(await editor.locator('[data-inherit="0"][data-key="closeRetractSettleSeconds"]').isDisabled(),true);
       assert.equal(await editor.locator('[data-input-index="0"][data-key="closeRetractSettleSeconds"]').isDisabled(),true);

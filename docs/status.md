@@ -1,3 +1,27 @@
+## 2026-10-16 — Grouped web Controller bolt settling, 0.4.53 candidate
+
+The owner requests that shared settling and the opening/closing overrides be
+shown together in the web Controller page, with explicit override checkboxes
+and populated inherited values. The 0.4.52 source already contains the checkbox
+semantics and null-to-shared fallback, but spreads the related fields apart.
+The reported blank fields and older label are not independently reproduced on
+the current source; no claim is made about the installed or loaded page version.
+
+Controller defaults now contains one Bolt settling section: shared time first,
+then two direction cards. Unchecked fields display the shared value and a live
+Using shared settling note. Checked fields are editable and show Using override;
+zero remains visible, and disabled bolt control is identified as unused. Other
+controller timing fields follow separately. The existing shared/null/numeric
+save semantics, per-device inheritance and movement behavior are unchanged.
+
+Desktop/mobile browser checks cover grouping/order, responsive cards, shared
+zero and fractional values, live summaries, explicit zero overrides, save/reload
+and disabled-bolt retention. Current docs, static demo and owner updater are
+synchronized. All 557 local Node checks pass, including 54 owner-updater outcomes.
+Script syntax, demo freshness and release-note preparation also pass. Hosted
+browser validation and release are pending under the existing publication
+authorization; no host-service or hardware commands are run here.
+
 ## 2026-10-15 — 0.4.52 source and GitHub release verified
 
 PR #13 is merged. The tested source and v0.4.52 tag both point to

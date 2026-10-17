@@ -2,6 +2,12 @@
 
 User-facing changes for `homebridge-gdoor-admin-controller`. GitHub releases use matching `vVERSION` tags. Development history and validation receipts are in [developer documentation](docs/developer/README.md).
 
+## 0.4.53 — 2026-10-16
+
+- Group the web Controller page's shared bolt settling time and opening/closing overrides in one **Bolt settling** section, with the shared setting first and both overrides directly below it.
+- Keep the override checkboxes beside their individual waits. Unchecked fields display the shared value, including zero, with a live **Using shared settling** note; checked fields show **Using override**. Explain that overrides replace the shared wait and pulse duration is separate.
+- Keep the section readable on desktop and mobile, preserve saved timing choices, and show when bolt timing is unused because bolt control is disabled. No movement or pulse behavior changes.
+
 ## 0.4.52 — 2026-10-15
 
 - Make **Override shared settling before opening** and **Override shared settling before closing** opt-in checkboxes in both settings interfaces. Unchecked uses **Bolt extension/retraction settling (seconds)**; checked enables the corresponding individual wait. New garages leave both unchecked.
