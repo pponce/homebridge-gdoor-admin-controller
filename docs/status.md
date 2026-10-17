@@ -1,3 +1,33 @@
+## 2026-10-16 — 0.4.53 grouped settling release verified
+
+PR #14 is merged. The tested source and v0.4.53 tag both point to
+a7ba3c1cc16106279be998693831661cd886918b. All five Coordinator checks passed
+on the PR in run 38987380657 and on main in run 38987633772:
+https://github.com/pponce/homebridge-gdoor-admin-controller/actions/runs/38987633772
+
+Validation covers Node 22/24, actual Homebridge 2.0/2.4, and desktop/mobile UI.
+Browser checks confirm the shared field and both overrides occupy one section,
+with the shared field first and override cards side by side on desktop or stacked
+on mobile. Inherited zero/fractional values, live notes, explicit zero overrides,
+save/reload, disabled-bolt retention and the static demo passed. All 557 local
+Node checks and 54 owner-updater installation outcomes also passed.
+
+Publish GitHub release run 38987865282 and Deploy web demo run 38987633774
+succeeded. Release assets and the tag were verified:
+https://github.com/pponce/homebridge-gdoor-admin-controller/releases/tag/v0.4.53
+
+The release contains the checked npm tarball, demo ZIP and source commit receipt.
+The tarball is 2109448 bytes with SHA-256:
+e0a934f7a66d547ccd84e02cd60e59b48c49b9793da4a5cb492e92010d75bfd2
+
+The owner explicitly requested the local Git/GitHub release/npm update script.
+The pinned launcher fetches v0.4.53 over SSH, verifies the full revision above,
+and runs scripts/update-owner-0.4.53.sh. GitHub publication is complete; the
+script synchronizes the local checkout, publishes npm with the established
+SSH-friendly browser approval, verifies the registry artifact, then performs the
+existing stop/add/check/start Homebridge update. npm publication and host
+installation remain owner-run; no live services or hardware were operated here.
+
 ## 2026-10-16 — Grouped web Controller bolt settling, 0.4.53 candidate
 
 The owner requests that shared settling and the opening/closing overrides be
