@@ -268,21 +268,29 @@ export class ProfileEditor {
       this.input(this.grid(root),'Relay ON means bolt extended',p.bolt,'lockedValue',{type:'checkbox',help:'Choose the mapping that matches your wiring. A relay report does not prove physical bolt position.'});
       return;
     }
-    const g=this.grid(root),momentary=this.input(g,'Momentary relay outputs',p.bolt,'momentary',{type:'checkbox',
-      help:'Turn ON the selected relay, then turn it OFF after the pulse. When disabled, the selected relay stays ON until the opposite command.'});
+    const g=this.grid(root),momentary=this.input(g,'Relays are momentary',p.bolt,'hardwareMomentary',{type:'checkbox',
+      help:'Check when the relays turn themselves OFF using built-in momentary/inching mode. The plugin sends ON and retains an estimated bolt position after release. Uncheck to choose a software pulse or maintained output.'});
     momentary.addEventListener('change',()=>{
-      if(p.bolt.momentary)p.bolt.pulseSeconds??=.2;else delete p.bolt.pulseSeconds;
-      p.feedback.bolt=p.bolt.momentary?'command':'relay';this.change();this.render();
+      p.bolt.momentary=false;delete p.bolt.pulseSeconds;
+      p.feedback.bolt=p.bolt.hardwareMomentary?'command':'relay';this.change();this.render();
     });
-    if(p.bolt.momentary)this.input(g,'Pulse length (seconds)',p.bolt,'pulseSeconds',{type:'number',min:.1,max:2,step:.05,
-      help:'Default 0.2 seconds. Choose a duration suitable for your bolt; network delays can lengthen a software pulse.'});
+    if(!p.bolt.hardwareMomentary){
+      const pulse={seconds:p.bolt.momentary?(p.bolt.pulseSeconds??.2):0};
+      const field=this.input(g,'Pulse duration · seconds',pulse,'seconds',{type:'number',min:0,max:2,step:.1,
+        help:'0 leaves the output ON until the opposite command. Set 0.1–2 seconds for the plugin to send and check OFF automatically. Network delays can lengthen a software pulse.'});
+      field.addEventListener('input',()=>{
+        p.bolt.momentary=pulse.seconds>0;
+        if(p.bolt.momentary)p.bolt.pulseSeconds=pulse.seconds;else delete p.bolt.pulseSeconds;
+        p.feedback.bolt=p.bolt.momentary?'command':'relay';this.change();
+      });
+    }
     for(const [key,title,label]of [['lockRelay','Lock relay','lock relay'],['unlockRelay','Unlock relay','unlock relay']]){
       const card=this.panel(root,title,'ON requests '+(key==='lockRelay'?'locking':'unlocking')+'. Choose a different output for each direction.');
       card.dataset.boltRelay=key;this.device(card,p.bolt[key],'bolt',{showConnection:false,gatewayConnection:p.bolt,selectionLabel:label});
     }
-    root.append(el('p',p.bolt.momentary?
-      'Bolt position is estimated from the last acknowledged bolt command. It is unknown after restart. Settling can finish while a pulse continues; the coordinator still owns and checks OFF. Use this controller for bolt commands: short pulses from other apps can be missed. The next door command retracts the bolt first when its position is unknown.':
-      'The opposite relay is turned OFF and checked before the selected relay turns ON. Relay state does not prove physical bolt position.','help'));
+    root.append(el('p',p.bolt.momentary||p.bolt.hardwareMomentary?
+      'Bolt position is estimated, not physically sensed. The Lock tile retains Locked/Unlocked after release and starts Unknown after restart. Use this controller for bolt commands: external pulses can be missed. Shared settling controls when the garage sequence continues. The opposite output is released and checked before changing direction.':
+      'With pulse duration 0, the selected output stays ON until the opposite command. The opposite output is released and checked first. Relay direction supplies bolt state; both OFF means Unknown. Relay state does not prove physical bolt position.','help'));
   }
   applyDeviceBehavior(p,path){
     const enabled=path.interruption==='stop-opening-reverse-closing';
@@ -426,7 +434,7 @@ export class ProfileEditor {
       });
       if(p.feedback[mode]==='sensor')this.confirmationSensor(g,p,endpoint);
     }
-    const pulseBolt=p.bolt?.relayMode==='separate'&&p.bolt.momentary;
+    const pulseBolt=p.bolt?.relayMode==='separate'&&(p.bolt.momentary||p.bolt.hardwareMomentary);
     this.input(g,'Bolt feedback',p.feedback,'bolt',{options:pulseBolt?[['command','Last acknowledged bolt command (estimated)']]:[['relay','Relay ON / OFF state'],['position','Physical position sensor']],help:pulseBolt?'Settling may finish before the pulse. The coordinator still owns and checks relay release. Physical position is not sensed.':'The direct deCONZ relay uses relay state.'}).disabled=!boltEnabled||p.bolt?.relayMode==='separate';
     if(p.feedback.closing==='timed')this.input(g,'Allow bolting after estimated closure',p.feedback,'allowEstimatedBolting',{type:'checkbox',help:'Elapsed time cannot prove the door closed. This policy requires explicit acceptance.'}).disabled=!boltEnabled;
     const travel=this.panel(root,'Movement timing');const tg=this.grid(travel);

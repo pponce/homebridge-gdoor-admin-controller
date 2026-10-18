@@ -108,7 +108,7 @@ export class Diagnostics {
         selectedSensor(controller, 'open') === OPENER_OPEN && controller.door.openSensorDoorIndex === undefined) limitations.push('tailwind_open_requires_estimate');
       if (controller.door.type === 'tailwind' && controller.feedback.closing !== 'sensor') limitations.push('tailwind_closed_sensor_available');
       if (controller.boltControlEnabled !== false && controller.bolt.type === 'deconz' &&
-        controller.feedback.bolt !== (controller.bolt.relayMode === 'separate' && controller.bolt.momentary ? 'command' : 'relay')) limitations.push('deconz_relay_is_not_position');
+        controller.feedback.bolt !== (controller.bolt.relayMode === 'separate' && (controller.bolt.momentary || controller.bolt.hardwareMomentary) ? 'command' : 'relay')) limitations.push('deconz_relay_is_not_position');
       if (door.blocked) limitations.push('door_blocked');
       if (['not-closed','open','opening','closing'].includes(door.state) && bolt.state === 'locked') limitations.push('bolt_extended_with_door_not_closed');
       return { controllerId: id, checkedAt: new Date().toISOString(), door, bolt, limitations,

@@ -11,19 +11,33 @@ mode. Both outputs are operated through one coordinated HomeKit Lock tile. The
 garage door retains its own tile. Disabling bolt control still removes the bolt
 tile and preserves the complete two-output mapping for later use.
 
-Choose **Momentary relay outputs** for ON followed by OFF. The default pulse
-length is **0.2 seconds**, adjustable from 0.1 to 2 seconds. This is a configurable
-software duration, not a hardware recommendation or a guaranteed electrical
-pulse width: network latency can lengthen it. Shared extension/retraction
-settling runs independently from pulse length. Verify the
-duration and wiring on the actual bolt before relying on it.
+## Relay mode
 
-With momentary outputs disabled, the selected output remains ON. The opposite
-output is turned OFF and its released state checked before the new output can
-turn ON. Both ON is a fault; both OFF means unknown position. A relay report
-does not prove the bolt's mechanical position.
+- **Relays are momentary — checked:** the hardware handles auto-OFF. No software
+  pulse field is shown. The plugin sends ON and retains estimated Locked/Unlocked
+  after release, even if the hardware releases before the acknowledgement arrives.
+- **Unchecked, Pulse duration · seconds greater than 0:** the plugin sends ON,
+  waits the configured 0.1–2 seconds, sends OFF and checks release. New separate
+  setups default to 0.2 seconds. Network latency can lengthen a software pulse.
+- **Unchecked, pulse duration 0:** no timed OFF. The selected output stays ON until
+  released for the opposite command. Relay direction supplies state; both OFF is
+  Unknown. Neither relay reports nor command estimates prove physical position.
 
-## Momentary feedback
+In every mode the opposite output is released and checked before energizing the
+selected output. Both ON is a fault. Hardware momentary mode remembers a single
+observed active direction, but external pulses between polls can be missed.
+Shared settling determines when garage coordination proceeds independently of
+pulse length. Read failures and uncertain commands clear estimates; no uncertain
+ON is retried. After restart, momentary position starts Unknown with both OFF.
+
+Existing configurations retain their old behavior: software pulses become an
+unchecked box with their saved duration; maintained outputs become unchecked
+with duration 0. Select the checkbox explicitly for a hardware-inching board.
+The existing JSON `momentary` key still means software pulses; the new optional
+`hardwareMomentary: true` selects hardware inching. The editor manages both and
+rejects conflicting settings. No automatic mode change occurs during upgrade.
+
+## Software pulse ownership
 
 Both outputs are OFF after a completed pulse. Bolt feedback is therefore
 **Last acknowledged bolt command (estimated)**. After a successful ON
@@ -79,7 +93,7 @@ outputs, saving, and completing setup checks. Changing only the pulse duration
 retains an already approved setup, its enabled/disabled choice and both HomeKit
 tiles. Save while idle; no Homebridge restart or setup recheck is needed. A
 restart still clears the command estimate to Unknown. Changes to either relay,
-the connection, single/separate setup, momentary/maintained operation or bolt
+the connection, single/separate setup, software pulse enablement or bolt
 control enablement still require setup review. Pulse edits cannot restore a
 missing approval or clear an outstanding fault. See the synthetic
 [configuration example](../examples/separate-bolt-config.json).

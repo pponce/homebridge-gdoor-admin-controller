@@ -2,6 +2,12 @@
 
 User-facing changes for `homebridge-gdoor-admin-controller`. GitHub releases use matching `vVERSION` tags. Development history and validation receipts are in [developer documentation](docs/developer/README.md).
 
+## 0.4.54 — 2026-10-18
+
+- Add **Relays are momentary** for separate lock/unlock outputs. Checked uses built-in hardware inching and retains estimated Locked/Unlocked after release. Unchecked shows **Pulse duration · seconds**: 0 keeps the output maintained; 0.1–2 seconds generates and verifies a software pulse.
+- Keep native momentary bolt state through idle polling, including hardware release before the ON acknowledgement. Restart starts Unknown; failed or ambiguous commands invalidate estimates. Maintained mode continues to use relay direction, with both OFF meaning Unknown.
+- Preserve existing software-pulse durations and maintained configurations. Hardware momentary mode is an explicit choice requiring setup review. Opposite-output release checks and shared settling remain in effect.
+
 ## 0.4.53 — 2026-10-16
 
 - Group the web Controller page's shared bolt settling time and opening/closing overrides in one **Bolt settling** section, with the shared setting first and both overrides directly below it.

@@ -1,3 +1,44 @@
+## 2026-10-18 — 0.4.54 explicit relay modes and owner updater
+
+Supersedes the automatic both-OFF fallback candidate below. The owner requested
+Relays are momentary as a hardware checkbox, with a software pulse duration when
+unchecked. Hardware mode retains command estimates; unchecked with positive
+pulse retains software cleanup ownership; unchecked with zero preserves
+maintained relay feedback (both OFF Unknown). Existing serialized settings and
+approval hashes retain their meanings. Selecting hardware mode is explicit and
+requires the normal setup review. No hardware commands occur on save or startup.
+
+All 568 local tests passed, including all three state paths, early native release,
+ambiguous acknowledgements, polling, faults, migration and owner-updater cases.
+Syntax checks and release-note generation passed. Browser checks cover the new
+checkbox, hidden duration, zero mode and saving/reloading; the local browser
+executable is unavailable, so release CI must validate that flow before release.
+The 0.4.54 owner updater follows the existing SSH-friendly npm approval and
+verified stop/install/start sequence. No live installation has been performed.
+
+## 2026-10-18 — Native inching bolt state, local candidate
+
+The owner replaced the board with OEM firmware providing separate hardware
+lock/unlock pulses and leaves software pulses disabled. The maintained-output
+read path previously returned Unknown whenever both outputs released. It now
+retains the last successful command (or observed active direction) in memory
+and marks the both-OFF result estimated. Acknowledged ON can complete even if
+hardware already released. Restart with both OFF remains Unknown; read errors,
+conflicts, ambiguous writes and engine faults invalidate estimates. Maintained
+direction reports, opposite-output release checks and software pulse ownership
+remain supported. Configuration keys and commissioning hashes are unchanged.
+
+The UI/schema now say Generate relay pulses in the plugin and distinguish
+software timed OFF from hardware inching. The web Controller page marks native
+inching estimates. Documentation and browser-test selectors match the new copy.
+
+Validation: 56 focused driver/configuration/settling tests passed. The broader
+561-test run passed 560 tests and identified the changed web asset checksum;
+after updating its manifest, both asset tests passed. Syntax and diff checks
+passed. Browser execution was attempted but blocked by the missing Playwright
+Chromium executable. No live hardware was commanded. Changes are local only;
+publication, npm release, installation and physical acceptance remain pending.
+
 ## 2026-10-16 — 0.4.53 grouped settling release verified
 
 PR #14 is merged. The tested source and v0.4.53 tag both point to

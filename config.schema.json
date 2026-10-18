@@ -276,9 +276,9 @@
                   "title": "Unlock relay"
                 },
                 "momentary": {
-                  "title": "Momentary relay outputs",
+                  "title": "Software pulse enabled (legacy configuration)",
                   "type": "boolean",
-                  "description": "Separate relays only. ON then OFF when true; the selected output stays ON when false."
+                  "description": "Internal compatibility setting managed by the device editor. True generates ON then timed OFF. False with hardwareMomentary false leaves the output maintained."
                 },
                 "pulseSeconds": {
                   "title": "Pulse length (seconds)",
@@ -287,6 +287,11 @@
                   "maximum": 2,
                   "default": 0.2,
                   "description": "Momentary separate relays only. Network delays can lengthen a software pulse."
+                },
+                "hardwareMomentary": {
+                  "title": "Relays are momentary",
+                  "type": "boolean",
+                  "description": "Built-in hardware inching: sends ON without a software pulse and retains estimated bolt state after release. Use the device editor to configure pulse duration when unchecked."
                 }
               },
               "description": "Expected identity fields are checked before any relay read is accepted. Use JSON configuration for Homebridge declarations."

@@ -54,7 +54,7 @@ window.ConfiguratorController = ({ root, api, readOnly }) => {
         ['Opener lockout reporting', detail.lockoutReporting === 'not-supported' ? 'Not supported by this adapter; not a confirmed clear flag' : lockout],
         ['Door feedback', state.door], ['Controller phase', state.phase], ['Requested target', state.target],
         ['Bolt control enabled', yes(row.boltControlEnabled !== false)], ['Bolt feedback', state.bolt], ['Bolt feedback source', row.feedback.bolt],
-        ...(row.feedback.bolt === 'command' ? [['Bolt position is estimated', yes(state.boltEstimated === true)]] : []),
+        ...(row.feedback.bolt === 'command' || state.boltEstimated === true ? [['Bolt position is estimated', yes(state.boltEstimated === true)]] : []),
         ['Opening feedback', row.feedback.opening], ['Closing feedback', row.feedback.closing],
         ['Open is estimated', yes(state.openEstimated === true)], ['Closed is estimated', yes(state.closeEstimated === true)],
         ['Closed confirmed during fault', yes(state.closedObservedDuringFault === true)],

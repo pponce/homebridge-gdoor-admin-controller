@@ -61,7 +61,7 @@ export class MovementEngine {
   }
   stop() {
     this.stopped = true; this.admitInterruption(false); this.bolt?.stop?.();
-    if (this.bolt?.capabilities?.commandBased) this.update({ bolt: 'unknown', boltEstimated: false });
+    if (this.bolt?.capabilities?.retainsCommand || this.bolt?.capabilities?.commandBased) this.update({ bolt: 'unknown', boltEstimated: false });
     for (const motor of this.motorPaths.values()) motor.stop?.();
   }
   isRetracted(sample) { return !this.boltControlEnabled || sample.locked === false; }
@@ -136,7 +136,8 @@ export class MovementEngine {
     const sample = { ...door, locked: bolt?.locked ?? null, boltEvidence: bolt?.evidence ?? 'disabled' };
     this.sample = sample; this.sampledAt = sampledAt; this.observedAt = Date.now();
     this.update({ door: sample.door, bolt: this.boltControlEnabled ? sample.locked === null ? 'unknown' : sample.locked ? 'locked' : 'unlocked' : 'disabled',
-      ...(this.bolt?.capabilities?.commandBased ? { boltEstimated: sample.locked !== null } : {}),
+      ...(this.bolt?.capabilities?.retainsCommand || this.bolt?.capabilities?.commandBased ?
+        { boltEstimated: sample.locked !== null && (this.bolt.capabilities.commandBased || bolt.estimated === true) } : {}),
       obstruction: sample.obstruction, lockout: sample.lockout ?? null, disabled: sample.disabled ?? null, blocked: sample.blocked, ...(sample.door !== 'closed' ? { closedObservedDuringFault: false } : {}), unavailable: null });
     if (!observationOnly) {
       requireValue(!door.blocked || allowLockout && lockoutOnly(door), 'door_blocked');
@@ -146,7 +147,7 @@ export class MovementEngine {
   }
 
   async fail(reason) {
-    if (this.bolt?.capabilities?.commandBased) { this.bolt.invalidate?.(); this.update({ bolt: 'unknown', boltEstimated: false }); }
+    if (this.bolt?.capabilities?.retainsCommand || this.bolt?.capabilities?.commandBased) { this.bolt.invalidate?.(); this.update({ bolt: 'unknown', boltEstimated: false }); }
     this.admitInterruption(false); this.travel = null; this.partialOwner = null; this.autoClosePending = false;
     this.initialized = false; this.startupRetry = false; this.recoveryClosedSince = null;
     reason = faultCode(reason) ?? 'unexpected_adapter_error';

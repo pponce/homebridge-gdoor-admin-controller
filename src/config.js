@@ -78,8 +78,10 @@ function bolt(value) {
   if (value.type === 'homebridge') return homebridge(value, true);
   if (value.type !== 'deconz') fail('unsupported_bolt_backend');
   if (value.relayMode === 'separate') {
-    fields(value, ['type', 'baseUrl', 'gatewayId', 'credentialRef', 'relayMode', 'lockRelay', 'unlockRelay', 'momentary', 'pulseSeconds'], 'invalid_deconz_connection');
+    fields(value, ['type', 'baseUrl', 'gatewayId', 'credentialRef', 'relayMode', 'lockRelay', 'unlockRelay', 'momentary', 'hardwareMomentary', 'pulseSeconds'], 'invalid_deconz_connection');
     if (typeof value.momentary !== 'boolean') fail('invalid_bolt_momentary');
+    if (value.hardwareMomentary !== undefined && typeof value.hardwareMomentary !== 'boolean') fail('invalid_bolt_momentary');
+    if (value.hardwareMomentary && (value.momentary || value.pulseSeconds !== undefined)) fail('invalid_bolt_pulse_duration');
     const shared = { type: 'deconz', baseUrl: baseUrl(value.baseUrl), gatewayId: string(value.gatewayId, 'invalid_gateway_id'),
       credentialRef: secretRef(value.credentialRef) };
     const relay = row => {
@@ -90,7 +92,8 @@ function bolt(value) {
     };
     if (!value.momentary && value.pulseSeconds !== undefined) fail('invalid_bolt_pulse_duration');
     return { ...shared, relayMode: 'separate', lockRelay: relay(value.lockRelay), unlockRelay: relay(value.unlockRelay),
-      momentary: value.momentary, ...(value.momentary ? { pulseSeconds: number(value.pulseSeconds ?? 0.2, 0.1, 2, 'invalid_bolt_pulse_duration') } : {}) };
+      momentary: value.momentary, ...(value.hardwareMomentary ? { hardwareMomentary: true } : {}),
+      ...(value.momentary ? { pulseSeconds: number(value.pulseSeconds ?? 0.2, 0.1, 2, 'invalid_bolt_pulse_duration') } : {}) };
   }
   fields(value, ['type', 'baseUrl', 'gatewayId', 'resourceId', 'uniqueId', 'resourceType', 'modelId', 'manufacturer', 'credentialRef', 'lockedValue'], 'invalid_deconz_connection');
   if (typeof value.resourceId !== 'string' || !/^[1-9][0-9]{0,5}$/.test(value.resourceId)) fail('invalid_deconz_resource');
@@ -267,7 +270,7 @@ export function validateConfiguration(input, { allowEmpty = false } = {}) {
     // commissioning hashes unchanged for all installations using a bolt.
     if (boltDisabled) result.boltControlEnabled = false;
     if (result.bolt?.relayMode === 'separate' && !result.exposeBoltLock) fail('separate_bolt_lock_tile_required');
-    const commandBolt = result.bolt?.type === 'deconz' && result.bolt.relayMode === 'separate' && result.bolt.momentary;
+    const commandBolt = result.bolt?.type === 'deconz' && result.bolt.relayMode === 'separate' && (result.bolt.momentary || result.bolt.hardwareMomentary);
     if (commandBolt ? result.feedback.bolt !== 'command' : result.feedback.bolt === 'command') fail('invalid_bolt_feedback');
     if (result.bolt?.relayMode === 'separate' && !commandBolt && result.feedback.bolt !== 'relay') fail('invalid_bolt_feedback');
     if (value.sensors !== undefined) result.sensors = sensors(value.sensors);

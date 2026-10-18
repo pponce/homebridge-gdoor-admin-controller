@@ -17,11 +17,14 @@ export class DeconzSeparateBolt {
     requireValue(!momentary || Number.isFinite(pulseSeconds) && pulseSeconds >= 0.1 && pulseSeconds <= 2, 'bolt_pulse_duration_invalid');
     const output = row => new DeconzBolt({ type, baseUrl, gatewayId, credentialRef, ...row, lockedValue: true }, key, { request, readOnly });
     this.lock = output(lockRelay); this.unlock = output(unlockRelay);
-    this.momentary = momentary; this.pulseMs = pulseSeconds * 1000;
+    this.momentary = momentary; this.hardwareMomentary = configuration.hardwareMomentary === true;
+    requireValue(!(momentary && this.hardwareMomentary), 'bolt_relay_mapping_invalid');
+    this.pulseMs = pulseSeconds * 1000;
     this.readOnly = readOnly; this.clock = clock; this.busy = false; this.stopped = false; this.lastCommand = null;
     this.activePulse = null;
     this.cancelled = new Promise(resolve => { this.cancel = resolve; });
-    this.capabilities = Object.freeze({ separateRelays: true, commandBased: momentary });
+    this.capabilities = Object.freeze({ separateRelays: true, commandBased: momentary || this.hardwareMomentary,
+      retainsCommand: momentary || this.hardwareMomentary });
   }
 
   stop() { this.stopped = true; this.invalidate(); this.cancel(); }
@@ -47,7 +50,14 @@ export class DeconzSeparateBolt {
           'bolt_relay_active_requires_review');
         return { locked: this.lastCommand, evidence: 'command' };
       }
-      return { locked: state.lock ? true : state.unlock ? false : null, evidence: 'relay' };
+      if (!this.hardwareMomentary) return { locked: state.lock ? true : state.unlock ? false : null, evidence: 'relay' };
+      if (state.lock || state.unlock) {
+        // Maintained outputs still supply their direction. Remember an observed
+        // direction too, in case hardware inching subsequently releases it.
+        if (!this.busy) this.lastCommand = state.lock;
+        return { locked: state.lock, evidence: 'command' };
+      }
+      return { locked: this.lastCommand, evidence: 'command' };
     } catch (error) { this.invalidate(); throw error; }
   }
 
@@ -80,7 +90,11 @@ export class DeconzSeparateBolt {
       this.lastCommand = null;
       // Break before make: release and verify the opposite direction first.
       if (locked ? initial.unlock : initial.lock) await this.release(opposite);
-      if (!this.momentary && (locked ? initial.lock : initial.unlock)) return;
+      if (!this.momentary && (locked ? initial.lock : initial.unlock)) {
+        this.lastCommand = locked;
+        if (this.hardwareMomentary) onAcknowledged?.();
+        return;
+      }
       try {
         this.activePulse = pulse;
         await selected.write(true, { beforeWrite: async () => {
@@ -105,11 +119,15 @@ export class DeconzSeparateBolt {
         if (this.momentary && attempted) await this.release(selected);
       }
       const final = await this.outputs();
-      requireValue(this.momentary ? !final.lock && !final.unlock : locked ? final.lock && !final.unlock : final.unlock && !final.lock,
+      // Hardware inching may already have released the selected output, even
+      // before the ON acknowledgement arrives. Only the opposite ON conflicts.
+      requireValue(this.momentary ? !final.lock && !final.unlock : this.hardwareMomentary ?
+        locked ? !final.unlock : !final.lock : locked ? final.lock && !final.unlock : final.unlock && !final.lock,
         'bolt_write_unconfirmed');
       this.checkRunning();
       requireValue(!pulse?.invalidated, 'bolt_write_unconfirmed');
       this.lastCommand = locked;
+      if (this.hardwareMomentary) onAcknowledged?.();
     } catch (error) { this.lastCommand = null; throw error; }
     finally { this.activePulse = null; this.busy = false; }
   }

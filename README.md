@@ -85,11 +85,13 @@ relays**. Single-relay setup uses the existing mapping. Separate-relay setup
 requires selecting both outputs and automatically enables one required HomeKit
 bolt Lock tile that controls them together.
 
-For separate outputs, **Momentary relay outputs** sends ON then OFF using a
-configurable pulse, default **0.2 seconds**. With it disabled, the selected
-output stays ON until the opposite command. Momentary bolt position is an
-estimate from the last acknowledged bolt command and is unknown after restart. Use the
-coordinated Lock tile; pulses from other apps can be missed. See
+For separate outputs, check **Relays are momentary** when the board has built-in
+inching. Otherwise set **Pulse duration · seconds**: **0** leaves the selected
+output ON until the opposite command; **0.1–2 seconds** makes the plugin generate
+a pulse (default **0.2 seconds** for new separate-relay setups). Hardware and
+software momentary modes retain estimated Locked/Unlocked after release and
+start Unknown after restart. Maintained mode uses relay direction; both OFF means
+Unknown. Use the coordinated Lock tile; external pulses can be missed. See
 [separate bolt relays](docs/separate-bolt-relays.md) for setup and feedback limits.
 
 ## Temporarily operate without the bolt

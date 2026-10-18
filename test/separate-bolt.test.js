@@ -14,8 +14,8 @@ import { hardwareFixture } from './support/hardware.mjs';
 import { selectConnection, updateConnection } from '../homebridge-ui/public/connections.js';
 
 const example = JSON.parse(await readFile(new URL('../examples/separate-bolt-config.json', import.meta.url)));
-function fixture({ momentary = true, readOnly = false } = {}) {
-  const config = structuredClone(example.controllers[0].bolt); config.momentary = momentary;
+function fixture({ momentary = true, hardwareMomentary = false, readOnly = false } = {}) {
+  const config = structuredClone(example.controllers[0].bolt); config.momentary = momentary; if (hardwareMomentary) config.hardwareMomentary = true;
   if (!momentary) delete config.pulseSeconds;
   const state = { now: 0, outputs: { '3': false, '4': false }, writes: [], requests: [], readError: false,
     door: 'closed', journal: { inProgress: false, fault: false } };
@@ -51,7 +51,7 @@ function engineFixture(options = {}) {
     } };
   const engine = new MovementEngine({ door, bolt, clock,
     journal: { read: async () => structuredClone(state.journal), write: async value => { state.journal = value; } },
-    feedback: { opening: 'timed', closing: 'sensor', bolt: bolt.momentary ? 'command' : 'relay', allowEstimatedBolting: false },
+    feedback: { opening: 'timed', closing: 'sensor', bolt: bolt.capabilities.commandBased ? 'command' : 'relay', allowEstimatedBolting: false },
     timing: { pollMs: 10, motionTimeoutMs: 1000, openingMs: 100, closedStableMs: 20,
       openRetractSettleMs: 20, closeRetractSettleMs: 0, boltSettleMs: 20 } });
   return { ...f, engine };
@@ -86,6 +86,24 @@ test('invalid pulse, feedback, mixed mappings and incomplete identities cannot b
   p.feedback.bolt = 'relay'; assert.equal(validateConfiguration(config).controllers[0].bolt.momentary, false);
 });
 
+test('hardware momentary mode is explicit and legacy software/maintained settings retain their meaning', () => {
+  const legacy = validateConfiguration(example);
+  assert.equal(legacy.controllers[0].bolt.momentary, true);
+  assert.equal(legacy.controllers[0].bolt.hardwareMomentary, undefined);
+  assert.deepEqual(validateConfiguration(legacy), legacy);
+  const config = structuredClone(example), p = config.controllers[0];
+  p.bolt.momentary = false; delete p.bolt.pulseSeconds; p.feedback.bolt = 'relay';
+  const maintained = validateConfiguration(config);
+  assert.equal(maintained.controllers[0].bolt.hardwareMomentary, undefined);
+  assert.deepEqual(validateConfiguration(maintained), maintained);
+  p.bolt.hardwareMomentary = true; p.feedback.bolt = 'command';
+  assert.equal(validateConfiguration(config).controllers[0].bolt.hardwareMomentary, true);
+  p.bolt.momentary = true;
+  assert.throws(() => validateConfiguration(config), /invalid_bolt_pulse_duration/);
+  p.bolt.momentary = false; p.bolt.hardwareMomentary = 'true';
+  assert.throws(() => validateConfiguration(config), /invalid_bolt_momentary/);
+});
+
 test('shared connection changes update the pair and selecting a different gateway clears both identities', () => {
   const config = validateConfiguration(example), b = config.controllers[0].bolt;
   const connection = config.connections.find(c => c.type === 'deconz');
@@ -118,7 +136,7 @@ test('pulses use the chosen output once and retain only a process-local command 
   assert.deepEqual(await f.driver().read(), { locked: null, evidence: 'command' });
 });
 
-test('maintained outputs break before make and both OFF remains unknown', async () => {
+test('maintained outputs break before make and both OFF starts unknown', async () => {
   const f = fixture({ momentary: false }); assert.equal((await f.bolt.read()).locked, null);
   f.state.outputs['3'] = true;
   await f.bolt.write(false, f.context); assert.deepEqual(await f.bolt.read(), { locked: false, evidence: 'relay' });
@@ -126,6 +144,59 @@ test('maintained outputs break before make and both OFF remains unknown', async 
   await f.bolt.write(true, f.context); assert.equal((await f.bolt.read()).locked, true);
   assert.deepEqual(f.state.writes.map(w => w.slice(0, 2)), [['3', false], ['4', true], ['4', false], ['3', true]]);
   assert.equal((await f.driver().read()).locked, true);
+  f.state.outputs['3'] = false;
+  assert.equal((await f.bolt.read()).locked, null, 'Maintained mode must not retain a released direction');
+});
+
+for (const releaseBeforeAck of [true, false]) test('hardware inching retains command after release, early release=' + releaseBeforeAck, async () => {
+  const f = fixture({ momentary: false, hardwareMomentary: true });
+  if (releaseBeforeAck) f.state.onWrite = async (id, on) => { if (on) f.state.outputs[id] = false; };
+  for (const locked of [true, false, false, true]) {
+    await f.bolt.write(locked, f.context);
+    f.state.outputs['3'] = f.state.outputs['4'] = false;
+    for (let poll = 0; poll < 3; poll++) {
+      assert.deepEqual(await f.bolt.read(), { locked, evidence: 'command' });
+    }
+  }
+  assert.deepEqual(f.state.writes.map(w => w.slice(0, 2)), [['3', true], ['4', true], ['4', true], ['3', true]]);
+  assert.equal((await f.driver().read()).locked, null, 'No estimate survives restart');
+  f.state.readError = true;
+  await assert.rejects(f.bolt.read());
+  f.state.readError = false;
+  assert.equal((await f.bolt.read()).locked, null, 'Disconnect invalidates estimate');
+});
+
+test('hardware inching unknown acknowledgements and conflicting outputs never retain a command', async () => {
+  for (const failure of ['ambiguousOn', 'badAck', 'conflict']) {
+    const f = fixture({ momentary: false, hardwareMomentary: true });
+    f.state.onWrite = async (id, on) => {
+      if (on) { f.state.outputs[id] = false; if (failure === 'conflict') f.state.outputs['4'] = true; }
+    };
+    f.state[failure] = true;
+    await assert.rejects(f.bolt.write(true, f.context));
+    f.state.outputs['3'] = f.state.outputs['4'] = false;
+    assert.equal((await f.bolt.read()).locked, null);
+    assert.equal(f.state.writes.length, 1, 'Never retry an uncertain ON');
+  }
+});
+
+test('hardware inching engine retains lock tile state through idle polls and door coordination', async () => {
+  const f = engineFixture({ momentary: false, hardwareMomentary: true });
+  f.state.onWrite = async (id, on) => { if (on) f.state.outputs[id] = false; };
+  await f.engine.initialize();
+  for (const [command, expected] of [['lock', 'locked'], ['unlock', 'unlocked'], ['open', 'unlocked'], ['close', 'locked']]) {
+    await f.engine.execute(command);
+    assert.equal(f.engine.state.fault, null);
+    for (let poll = 0; poll < 3; poll++) {
+      await f.engine.observe();
+      assert.equal(f.engine.state.bolt, expected);
+      assert.equal(f.engine.state.boltEstimated, true);
+    }
+  }
+  await f.engine.fail('bolt_write_ambiguous');
+  assert.equal(f.engine.state.bolt, 'unknown');
+  assert.equal(f.engine.state.boltEstimated, false);
+  assert.equal(f.bolt.lastCommand, null);
 });
 
 for (const failure of ['ambiguousOn', 'badAck', 'stuck']) test('failed pulse ' + failure + ' releases and never retries ON or claims a position', async () => {
