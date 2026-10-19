@@ -1,6 +1,6 @@
 # Homebridge Garage Door Admin Controller
 
-Coordinate a **garage door opener and a separate motorized bolt** from Apple Home, physical controls, and a keypad. The plugin manages the sequence: retract the bolt before opening, then wait for the configured closed-door checks before extending it. Each door and bolt share one controller so requests from different physical controls use the same movement and locking rules/logic.  I was inspired to install a bolt via this awesome guide. I used the [MHCOZY 2 Channel 5V 12V ZigBee Smart Relay Switch](MHCOZY 2 Channel 5V 12V ZigBee Smart Relay Switch)
+Coordinate a **garage door opener and a separate motorized bolt** from Apple Home, physical controls, and a keypad. The plugin manages the sequence: retract the bolt before opening, then wait for the configured closed-door checks before extending it. Each door and bolt share one controller so requests from different physical controls use the same movement and locking rules/logic.  I was inspired to install a bolt via this awesome guide. I used the [MHCOZY 2 Channel 5V 12V ZigBee Smart Relay Switch](https://www.amazon.com/gp/product/B08YY7XFS3/ref=ppx_yo_dt_b_search_asin_title?ie=UTF8&th=1)
 
 An optional **web administration interface** which can also be used standalone for deCONZ keypad/alarm user pin management and settings, brings deCONZ users, PINs, access schedules, keypad lockout protection, alarms, and activity history into one place. It runs inside the Homebridge plugin and can be accessed via a url for admin of your keypads..
 
