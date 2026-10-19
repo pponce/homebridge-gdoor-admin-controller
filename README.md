@@ -1,27 +1,27 @@
 # Homebridge Garage Door Admin Controller
 
-Coordinate a **garage door opener and a separate motorized bolt** from Apple Home, physical controls, and a keypad. The plugin manages the sequence: retract the bolt before opening, then wait for the configured closed-door checks before extending it. Each door and bolt share one controller so requests from different controls use the same movement and locking rules.
+Coordinate a **garage door opener and a separate motorized bolt** from Apple Home, physical controls, and a keypad. The plugin manages the sequence: retract the bolt before opening, then wait for the configured closed-door checks before extending it. Each door and bolt share one controller so requests from different physical controls use the same movement and locking rules/logic.  I was inspired to install a bolt via this awesome guide. I used the [MHCOZY 2 Channel 5V 12V ZigBee Smart Relay Switch](MHCOZY 2 Channel 5V 12V ZigBee Smart Relay Switch)
 
-An optional **web administration interface** brings deCONZ users, PINs, access schedules, keypad lockout protection, alarms, and activity history into one place. It runs inside the Homebridge plugin; there is no separate web service to install.
+An optional **web administration interface** which can also be used standalone for deCONZ keypad/alarm user pin management and settings, brings deCONZ users, PINs, access schedules, keypad lockout protection, alarms, and activity history into one place. It runs inside the Homebridge plugin and can be accessed via a url for admin of your keypads..
 
-Web admin can run without a garage configured. Its user, PIN and alarm pages remain available; the Controller page explains how to add a garage in Homebridge. Enable and configure web admin under **Settings → General → Web admin interface**. Its virtual keypad then works without adding a control under Garage doors. One garage is selected automatically; with multiple garages, choose the target on the web keypad. A valid Disarm PIN requests opening and a rejected PIN requests closing through the garage’s primary opener, subject to the existing control and bolt checks. Without a garage, the keypad operates the selected deCONZ alarm only.
+Web admin can run without a "garage door" configured to use with the controller logic. Its user, PIN and alarm pages remain available; the Controller page explains how to add a garage door in Homebridge if you want to use that feature. When a garage door is configured it allows you change settings via that page too. Enable and configure web admin under **Settings → General → Web admin interface**.  
 
-[**Try the interactive demo →**](https://pponce.github.io/homebridge-gdoor-admin-controller/)
+[**Try the interactive demo of the web interface→**](https://pponce.github.io/homebridge-gdoor-admin-controller/)
 
 > **Custom deCONZ is currently required for the keypad and user-management setup described here.** It needs the alarm-user features in [pponce's custom deCONZ REST plugin](https://github.com/pponce/deconz-rest-plugin/tree/alarm-users-v1). The upstream proposal, [deCONZ PR #8661](https://github.com/dresden-elektronik/deconz-rest-plugin/pull/8661), is still an open draft as of October 8, 2026. Acceptance is **TBD**. A standard deCONZ installation does not currently provide these features, and installing this Homebridge plugin does not install or upgrade deCONZ for you.
 
 ## What it does
 
-- **One coordinated garage door in Apple Home.** Publishes a Garage Door accessory, with an optional separate Lock accessory for the bolt. Configure additional controllers for additional door-and-bolt pairs.
-- **Shared control rules.** HomeKit, supported buttons and switches, physical keypads, and the web keypad send requests through the same coordinator. Supported relay setups can use configurable stop/reverse behavior.
+- **Allows setup of a coordinated garage door in Apple Home.** Publishes a Garage Door accessory, with an optional separate Lock accessory for the bolt. Configure additional controllers for additional door-and-bolt pairs.
+- **Shared physical control rules.** HomeKit, supported buttons and switches, physical keypads, and the web keypad send requests through the same coordinator. Supported relay setups can use configurable stop/reverse behavior.
 - **Timing for your hardware.** Set opening and closing times, bolt delays, settling time, relay pulses, and timing overrides for individual controls. Feedback can use supported sensors or explicitly configured estimates.
 - **Persistent setup.** The saved Enabled setting survives Homebridge and child-bridge restarts. Current faults and device availability are shown separately. Startup checks current device state without replaying movement commands.
-- **deCONZ access administration.** Manage named users and PINs, per-alarm permissions, allowed keypads, schedules, validity periods, and usage limits. Configure failed-PIN lockout protection and inspect access activity.
-- **Web accounts and controller settings.** Manage web logins and edit controller defaults or device timing overrides in a browser. Timing changes apply to the next operation without restarting the plugin.
+- **deCONZ access administration web management console.** Manage named users and PINs, per-alarm permissions, allowed keypads, schedules, validity periods, and usage limits. Configure failed-PIN lockout protection and inspect access activity.
+- **Web accounts and controller settings.** Manage web logins for the web management interface and edit controller defaults or device timing overrides in a browser. Timing changes apply to the next operation without restarting the plugin.
 
 ## Requirements
 
-The full garage, keypad, and web-administration setup uses:
+The full garage door, keypad, and web-administration setup uses:
 
 | Component | Requirement |
 | --- | --- |
@@ -32,11 +32,11 @@ The full garage, keypad, and web-administration setup uses:
 | Physical keypad | The tested model is the **Xfinity/Comcast URC4450BC0-X-R**, paired with deCONZ and assigned to the intended alarm. Other compatible IAS ACE keypads **may work, but have not been hardware-tested with this setup**. Do not assume other Xfinity models behave identically. |
 | Garage hardware | A supported garage opener **and a separate bolt/lock** for each controller, with suitable feedback or explicitly configured timing estimates. See Supported connections below. |
 
-**Both plugins require separate child bridges.** Do not run this plugin or `homebridge-deconz` on the main bridge, or put them together in one child bridge. This isolates their operation and keeps the controller and web interface available during deCONZ child-bridge maintenance.
+**Both plugins (homebridge-deCONZ and homebridge-gdoor-admin-controller) require being setup as child bridges.** Do not run this plugin or `homebridge-deconz` on the main homebridge bridge, or put them together in one child bridge. This isolates their operation and keeps the controller and web interface available during deCONZ child-bridge maintenance.
 
-The physical keypad is needed for physical PIN entry; it is not needed to operate a configured garage from Apple Home. A garage controller using other supported connections can run without the optional deCONZ administration features.
+The physical keypad is needed for physical PIN entry; it is not needed to operate a configured garage from Apple Home. A garage controller setup with this plugin using other supported connections and physical controls can run without the optional deCONZ web admin administration features.
 
-**Homebridge alarm-PIN synchronization** requires Linux, a local HTTP Homebridge UI and the installed homebridge-deconz UI command. It uses the official API without restarting Homebridge or editing accessory files. PINs may appear in Homebridge logs; the confirmation window offers optional log clearing after success. See [setup, persistence and recovery](docs/web-admin-alarm-pin.md).
+**Homebridge alarm-PIN synchronization** PINs may appear in Homebridge logs; the confirmation window offers optional log clearing after success via the web admin interface. See [setup, persistence and recovery](docs/web-admin-alarm-pin.md).
 
 ## Supported connections
 
@@ -68,7 +68,7 @@ On a host managed by `hb-service`, install the release from a terminal:
 (
   set -e
   sudo hb-service stop
-  sudo hb-service add homebridge-gdoor-admin-controller@0.4.49
+  sudo hb-service add homebridge-gdoor-admin-controller
   sudo hb-service start
 )
 ```
@@ -178,6 +178,6 @@ Developer setup, implementation notes, and development history are kept in [deve
 
 ## A friendly disclaimer
 
-I use this plugin on my own garage, but it's still software, and software can have bugs. Please test **all functions of your setup** before relying on it, and test again after updates or configuration changes. Check PIN access, opening, stopping or reversing where configured, closing, locking, and behavior after a restart. My garage gives it a regular workout, but yours may discover a new party trick.
+I use this plugin on my own garage, but it's still software, and software can have bugs. Please test **all functions of your setup** before relying on it, and test again after updates or configuration changes. Check PIN access, opening, stopping or reversing where configured, closing, locking, and behavior after a restart. My garage gives it a regular workout, but yours may discover a new party trick. I've only tested with my specific setup. This includes a tailwind garage door opener (allows control vi api), homebridge-Deconz with deconz using custom software (PR pending) and bolt setup to be controlled via zigbee + xfinity keypad.
 
 This plugin is provided **as is, without warranties**. You're responsible for making sure your setup works safely and as intended. I'm not responsible for bugs, failures, damage, or other issues resulting from its use.
