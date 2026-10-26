@@ -131,6 +131,60 @@ test('transport enforces Host, Origin, CSRF, secure cookies and explicit unavail
   assert.equal(logout.status, 200); assert.match(logout.headers.get('set-cookie'), /Max-Age=0/);
   assert.equal((await request('/api/session', { headers: { Cookie: cookie } })).status, 401);
 });
+test('top-level links from other origins can open only the public login page', async t => {
+  const request = await transport(t, {
+    session: async () => { throw Error('Public navigation must not read a session'); },
+  });
+  for (const site of ['same-site', 'cross-site']) {
+    const navigation = { 'Sec-Fetch-Site': site, 'Sec-Fetch-Mode': 'navigate', 'Sec-Fetch-Dest': 'document' };
+    const page = await request('/', { headers: navigation });
+    assert.equal(page.status, 200, site);
+    assert.match(page.text, /Synthetic login/);
+    assert.equal(page.headers.get('set-cookie'), null);
+    assert.equal(page.headers.get('x-frame-options'), 'DENY');
+    assert.match(page.headers.get('content-security-policy'), /frame-ancestors 'none'/);
+    const rejected = [
+      { 'Sec-Fetch-Site': site },
+      { ...navigation, 'Sec-Fetch-Mode': 'cors', 'Sec-Fetch-Dest': 'empty' },
+      { ...navigation, 'Sec-Fetch-Dest': 'iframe' },
+      { ...navigation, 'Sec-Fetch-Dest': 'frame' },
+      { ...navigation, 'Sec-Fetch-Site': 'unexpected' },
+      { ...navigation, 'Sec-Fetch-Site': [site, site] },
+      { ...navigation, Origin: 'https://other.example.test' },
+      { ...navigation, Origin: ['https://admin.example.test', 'https://admin.example.test'] },
+      { ...navigation, Host: 'other.example.test' },
+    ];
+    for (const headers of rejected) assert.equal((await request('/', { headers })).status, 400);
+    for (const path of ['/app.js', '/api/session', '/api/administration']) {
+      assert.equal((await request(path, { headers: navigation })).text, '{"error":"origin_rejected"}');
+    }
+    assert.equal((await request('/?unused=1', { headers: navigation })).text, '{"error":"query_not_allowed"}');
+  }
+  for (const site of ['none', 'same-origin']) {
+    assert.equal((await request('/', { headers: { 'Sec-Fetch-Site': site } })).status, 200);
+  }
+});
+test('navigation exception does not permit cross-origin login or authenticated API operations', async t => {
+  const f = await fixture(), calls = [];
+  const request = await transport(t, f.auth, { backend: { dispatch: async (...args) => { calls.push(args); return { ok: true }; } } });
+  const login = await request('/api/login', { method: 'POST', body: { username: 'Owner', password } });
+  assert.equal(login.status, 200);
+  const headers = { Cookie: login.headers.get('set-cookie').split(';')[0], 'X-CSRF-Token': JSON.parse(login.text).csrf };
+  for (const site of ['same-site', 'cross-site']) {
+    const navigation = { ...headers, 'Sec-Fetch-Site': site, 'Sec-Fetch-Mode': 'navigate', 'Sec-Fetch-Dest': 'document' };
+    for (const path of ['/', '/api/login', '/api/logout', '/api/accounts', '/api/keypad/send', '/api/controller/recover']) {
+      const reply = await request(path, { method: 'POST', body: { username: 'Owner', password }, headers: navigation });
+      assert.equal(reply.status, 400, path);
+      assert.equal(reply.text, '{"error":"origin_rejected"}');
+    }
+    assert.equal((await request('/api/administration', { headers: navigation })).text, '{"error":"origin_rejected"}');
+  }
+  assert.equal(calls.length, 0);
+  assert.equal((await request('/api/session', { headers })).status, 200);
+  assert.equal((await request('/api/logout', { method: 'POST', body: {}, headers: { Cookie: headers.Cookie } })).text, '{"error":"csrf_rejected"}');
+  assert.equal((await request('/api/logout', { method: 'POST', body: {}, headers })).status, 200);
+  assert.equal((await request('/api/session', { headers })).status, 401);
+});
 test('unexpected failures are sanitized and listeners require explicit TLS configuration', async t => {
   const request = await transport(t, { session: async () => { throw Error('private token/path'); } });
   const result = await request('/api/session'); assert.equal(result.status, 503); assert.equal(result.text.includes('private token'), false);

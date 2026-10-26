@@ -2,6 +2,12 @@
 
 User-facing changes for `homebridge-gdoor-admin-controller`. GitHub releases use matching `vVERSION` tags. Development history and validation receipts are in [developer documentation](docs/developer/README.md).
 
+## Unreleased
+
+- Allow links from another dashboard or website to open the web admin login page.
+  Keep origin checks on login submissions, administration APIs and garage controls,
+  and retain authentication, CSRF protection and frame restrictions.
+
 ## 0.4.54 — 2026-10-18
 
 - Add **Relays are momentary** for separate lock/unlock outputs. Checked uses built-in hardware inching and retains estimated Locked/Unlocked after release. Unchecked shows **Pulse duration · seconds**: 0 keeps the output maintained; 0.1–2 seconds generates and verifies a software pulse.

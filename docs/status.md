@@ -1,3 +1,19 @@
+## 2026-10-26 — Web admin link navigation review candidate
+
+Allow top-level GET navigation to the public HTML home page from same-site
+and cross-site links. Keep exact Host/Origin validation and restrict this
+exception to navigate/document requests for /. API reads, login submissions,
+control writes, embedded requests, CSRF checks and session handling retain
+their existing restrictions. No controller protocol or hardware behavior changed.
+
+The new regression failed on the unchanged transport with 400/origin_rejected.
+All 16 focused transport, asset and service integration tests pass with the fix;
+JavaScript syntax and whitespace checks pass. Source is based on canonical
+main 054f973de73b8f2d9220c158d38142a14931d5ed. CI, a versioned release, npm
+publication and live installation remain separate steps. Package version is
+unchanged and the changelog entry is Unreleased. The standalone application
+and host configuration have not been modified.
+
 ## 2026-10-18 — 0.4.54 explicit relay modes and owner updater
 
 Supersedes the automatic both-OFF fallback candidate below. The owner requested

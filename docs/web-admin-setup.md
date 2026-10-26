@@ -13,6 +13,12 @@ The optional server needs Node.js 22.13 or later in the 22 series, or Node.js 24
 
 ## HTTPS and nginx
 
+Links from dashboards or other websites can open the public web admin home page.
+This permits only a top-level browser navigation to `/`; signing in and using
+administration or garage controls still requires the normal authentication,
+origin and CSRF checks. Embedded pages and cross-origin API requests remain
+restricted. No special proxy rule is needed for links from another site.
+
 The browser web address and backend address may differ. For example, the browser could use https://garage.example.test while nginx forwards HTTPS to https://192.0.2.10:9443. In that arrangement, the backend address must match the Host and Origin headers nginx sends. The plugin accepts that exact backend origin rather than trusting arbitrary forwarded headers. The configured backend port must equal the listening port.
 
 The public certificate and its private key remain in nginx. The plugin generates and stores its own private self-signed backend certificate in Homebridge-owned storage. Configure the proxy's upstream certificate trust explicitly. Direct browser access to a self-signed listener needs a separately trusted certificate arrangement; it is not automatically trusted by browsers.

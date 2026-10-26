@@ -58,9 +58,14 @@ export function createWebAdminHandler({ origin, auth, assets = new Map(), backen
       requireValue(available(), 'web_admin_stopping');
       requireValue(headerCount(request, 'host') === 1 && request.headers.host === publicUrl.host, 'host_rejected');
       requireValue(!request.url.includes('?') && !request.url.includes('#'), 'query_not_allowed');
+      const site = request.headers['sec-fetch-site'] || 'same-origin';
+      // A link may open the public login document; API and embedded requests stay restricted.
+      const publicNavigation = request.method === 'GET' && request.url === '/' &&
+        assets.get('/')?.type === 'text/html' && request.headers['sec-fetch-mode'] === 'navigate' &&
+        request.headers['sec-fetch-dest'] === 'document' && ['same-site', 'cross-site'].includes(site);
       requireValue(headerCount(request, 'origin') <= 1 &&
         (!request.headers.origin || request.headers.origin === origin) &&
-        ['same-origin', 'none'].includes(request.headers['sec-fetch-site'] || 'same-origin'), 'origin_rejected');
+        (['same-origin', 'none'].includes(site) || publicNavigation), 'origin_rejected');
       requireValue(['GET', 'POST'].includes(request.method), 'method_not_allowed');
       let body = {};
       if (request.method === 'POST') {
