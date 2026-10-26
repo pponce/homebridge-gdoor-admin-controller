@@ -1,3 +1,27 @@
+## 2026-10-26 — 0.4.55 web admin navigation release preparation
+
+Prepare 0.4.55 from PR #15 on fix/web-admin-navigation-20261026. The original
+navigation commit 1451a37d46ce5374142a2ca5741af626472c52b8 passed all five
+Coordinator checks, including desktop/mobile browser coverage, in run
+40419515222. The release revision requires its own checks before promotion.
+
+Version the changelog entry, align the npm release instructions, and add the
+pinned 0.4.55 owner updater using the established publication and installation
+flow. Extend the owner-updater checks to include its six installation outcomes.
+The owner explicitly authorized GitHub release, npm publication and the local
+Git update. npm publication and Homebridge installation are owner-run through
+the supplied SSH block; neither has been executed in this workspace.
+
+The public login-page navigation change remains the only runtime change.
+No controller protocol, physical-device behavior or reverse-proxy settings change.
+See developer/NAVIGATION_FIX_HANDOFF.md for the release checkpoint.
+
+Local validation: all 576 tests pass, including the navigation regressions and
+66 owner-updater installation outcomes. Bash syntax, staged whitespace, release
+note generation, and all ten generated demo files pass. The npm package contains
+125 tracked, allowlisted files with matching archive integrity. CI and publication
+still require verification on the published release commit.
+
 ## 2026-10-26 — Web admin link navigation review candidate
 
 Allow top-level GET navigation to the public HTML home page from same-site

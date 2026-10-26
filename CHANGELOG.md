@@ -2,7 +2,7 @@
 
 User-facing changes for `homebridge-gdoor-admin-controller`. GitHub releases use matching `vVERSION` tags. Development history and validation receipts are in [developer documentation](docs/developer/README.md).
 
-## Unreleased
+## 0.4.55 — 2026-10-26
 
 - Allow links from another dashboard or website to open the web admin login page.
   Keep origin checks on login submissions, administration APIs and garage controls,
