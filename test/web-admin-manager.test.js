@@ -7,6 +7,7 @@ import path from 'node:path';
 import { WebAdminManager } from '../src/web-admin-manager.js';
 import { defaultWebSettings } from '../src/web-admin-settings.js';
 import { WebAdminApplication } from '../src/web-admin-application.js';
+import { WebAdminError } from '../src/web-admin-auth.js';
 
 async function fixture(t) {
   const storagePath = await mkdtemp(path.join(tmpdir(), 'web-lifecycle-'));
@@ -37,6 +38,35 @@ test('default OFF does not touch gateways, certificates, databases or a server',
   assert.equal(status.running, false); assert.equal(status.accountConfigured, false); assert.equal(status.error, null);
   assert.deepEqual(f.calls, []); assert.deepEqual(await readdir(path.join(f.storagePath, 'gdoorandbolt-coordinator')), []);
   assert.deepEqual(Object.keys(status.connections[0]).sort(), ['id', 'name']);
+  assert.equal(status.nodeSupported, null);
+});
+for (const version of ['26.13.0', '28.0.0']) {
+  test('configuration and saved startup do not reject runtime version label ' + version, async t => {
+    // The real runtime is exercised by CI. These labels catch future whitelists.
+    const original = Object.getOwnPropertyDescriptor(process.versions, 'node');
+    Object.defineProperty(process.versions, 'node', { ...original, value: version });
+    t.after(() => Object.defineProperty(process.versions, 'node', original));
+    const f = await fixture(t);
+    const saved = await f.manager.configure({ expectedRevision: 0, settings: f.settings, admin: f.admin });
+    assert.equal(saved.running, true); assert.equal(saved.error, null); assert.equal(saved.nodeSupported, true);
+    await f.manager.close();
+    const restarted = new WebAdminManager(f.manager); t.after(() => restarted.close());
+    await restarted.start(); const status = await restarted.status();
+    assert.equal(status.running, true); assert.equal(status.error, null);
+    assert.equal(status.accountConfigured, true); assert.equal(status.revision, saved.revision);
+    assert.deepEqual(status.settings, saved.settings);
+  });
+}
+test('a real dependency failure is reported without losing saved setup, and a later attempt can recover', async t => {
+  const f = await fixture(t), build = f.manager.build;
+  f.manager.build = async () => { throw new WebAdminError('web_admin_sqlite_unavailable'); };
+  const failed = await f.manager.configure({ expectedRevision: 0, settings: f.settings, admin: f.admin });
+  assert.equal(failed.running, false); assert.equal(failed.error, 'web_admin_sqlite_unavailable');
+  assert.equal(failed.nodeSupported, false); assert.equal(failed.accountConfigured, true);
+  assert.equal(failed.settings.enabled, true); assert.ok(!f.calls.includes('collect'));
+  f.manager.build = build; await f.manager.start(); const recovered = await f.manager.status();
+  assert.equal(recovered.running, true); assert.equal(recovered.error, null);
+  assert.equal(recovered.revision, failed.revision); assert.deepEqual(recovered.settings, failed.settings);
 });
 test('web administration starts with zero garages; disabling works offline and retains its account and gateway identity', async t => {
   const f = await fixture(t);

@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node: ['22', '24']
+        node: ['22', '24', '26.13.0']
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -44,12 +44,15 @@ jobs:
     timeout-minutes: 5
     strategy:
       matrix:
-        homebridge: ['2.0.0', '2.4.0']
+        include:
+          - {homebridge: '2.0.0', node: '24'}
+          - {homebridge: '2.4.0', node: '24'}
+          - {homebridge: '2.4.0', node: '26.13.0'}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: ${{ matrix.node }}
       - name: Install Homebridge for isolated smoke test
         run: npm install --prefix "$RUNNER_TEMP/coordinator-hb" --no-save --package-lock=false --ignore-scripts --no-audit --no-fund homebridge@${{ matrix.homebridge }}
       - name: Actual Homebridge child bridge with synthetic hardware
@@ -62,6 +65,9 @@ jobs:
         run: echo "Homebridge diagnostics are recorded in this step name."
 
   config-ui:
+    strategy:
+      matrix:
+        node: ['24', '26.13.0']
     runs-on: ubuntu-latest
     timeout-minutes: 10
     container:
@@ -71,7 +77,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: ${{ matrix.node }}
       - run: npm install --ignore-scripts --no-audit --no-fund
       - name: Actual custom UI server IPC and management integration
         run: node scripts/config-ui-server-smoke.mjs
@@ -117,5 +123,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: success()
         with:
-          name: configuration-ui-screenshots
+          name: configuration-ui-screenshots-node-${{ matrix.node }}
           path: ${{ runner.temp }}/coordinator-browser/screenshots

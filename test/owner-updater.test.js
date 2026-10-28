@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-for (const version of ['0.4.45', '0.4.46', '0.4.47', '0.4.48', '0.4.49', '0.4.50', '0.4.51', '0.4.52', '0.4.53', '0.4.54', '0.4.55']) {
+for (const version of ['0.4.45', '0.4.46', '0.4.47', '0.4.48', '0.4.49', '0.4.50', '0.4.51', '0.4.52', '0.4.53', '0.4.54', '0.4.55', '0.4.56']) {
 const script = await readFile(new URL('../scripts/update-owner-' + version + '.sh', import.meta.url), 'utf8');
 const installation = script.slice(script.lastIndexOf('\nsudo -v\n'));
 assert.ok(installation.startsWith('\nsudo -v\n'), 'Updater installation boundary changed');

@@ -2,6 +2,16 @@
 
 User-facing changes for `homebridge-gdoor-admin-controller`. GitHub releases use matching `vVERSION` tags. Development history and validation receipts are in [developer documentation](docs/developer/README.md).
 
+## 0.4.56 — 2026-10-28
+
+- Restore web administration after upgrading Homebridge to Node.js 26. Remove the
+  Node-major whitelist from startup, history access and npm publication so newer
+  runtimes can attempt to work instead of being rejected by their version number.
+- Report a specific setup error if Node's built-in SQLite support cannot load.
+  Support both SQLite constructor names while preserving existing accounts,
+  settings and history. Keep the web panel optional and controller startup separate.
+- Add Node 26.13.0 to the controller, Homebridge and desktop/mobile web-admin checks.
+
 ## 0.4.55 — 2026-10-26
 
 - Allow links from another dashboard or website to open the web admin login page.

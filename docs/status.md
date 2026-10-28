@@ -1,3 +1,31 @@
+## 2026-10-28 — 0.4.56 Node runtime compatibility
+
+The owner reported that upgrading Homebridge from Node 24 to Node 26 left the
+controller loaded but the optional web panel stopped. The panel's exact-major
+whitelist rejected the runtime before attempting startup. The owner requested
+attempting newer runtimes and reporting actual failures, and authorized a GitHub
+release followed by an owner-run Git update and npm publication.
+
+Remove the manager/history version gates and the publisher's exact-major check.
+Resolve the real built-in SQLite API when starting the enabled service, prefer
+Database with DatabaseSync fallback, and expose a specific sanitized capability
+error when loading fails. The disabled service remains lazy. Keep existing
+accounts, settings, history, commissioning and movement behavior unchanged.
+Allow newer Node versions in package metadata, update the setup message/docs,
+and prepare the pinned 0.4.56 owner updater with the established publication,
+registry-download verification and stop/add/verify/start installation sequence.
+
+Regression coverage includes current-runtime SQLite reads/writes, both constructor
+exports, missing/invalid dependencies, saved-start recovery, simulated future
+runtime labels, publication reconciliation and updater failure holds. CI covers
+Node 22/24/26.13.0, Homebridge 2.0/2.4 on Node 24 plus 2.4 on Node 26.13.0, and
+desktop/mobile flows on both Node 24 and 26.13.0. All 93 focused local checks pass
+on Node 24.22.1, including the publisher and all 72 owner-updater installation
+outcomes. Syntax, whitespace, demo freshness and release-note generation pass.
+Local dependency downloads are unavailable, so full runtime and browser validation
+will run in GitHub CI before promotion. Source, GitHub release, npm publication
+and physical installation remain distinct gates.
+
 ## 2026-10-26 — 0.4.55 web admin navigation release preparation
 
 Prepare 0.4.55 from PR #15 on fix/web-admin-navigation-20261026. The original

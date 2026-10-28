@@ -13,8 +13,12 @@ import { loadWebAdminAssets } from './web-admin-assets.js';
 import { WebHomebridgeMaintenance, WebHomebridgeMaintenanceStore } from './web-admin-homebridge-maintenance.js';
 import { WebHomebridgeApiHost as WebHomebridgeHost } from './web-admin-homebridge-api.js';
 import { WebAdminController } from './web-admin-controller.js';
+import { webAdminDatabase } from './web-admin-sqlite.js';
 
 export async function createWebAdminService({ storagePath, configPath, coordinatorBridge, runtime, row, registrations, accounts, tls, assertCurrent, homebridgeHost }) {
+  // Attempt the real dependency before starting collectors or accepting logins.
+  // A newer Node release is allowed; a missing API produces a specific setup error.
+  await webAdminDatabase();
   const application = new WebAdminApplication(storagePath); await application.load();
   const auth = new WebAdminAuth({ store: accounts }); await auth.refresh();
   const history = new WebAdminHistory(storagePath, new Map(registrations.map(value => [value.id, value])));

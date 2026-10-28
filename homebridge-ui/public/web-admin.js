@@ -12,7 +12,7 @@ const messages = {
   web_account_already_configured: 'A web account is already configured. Reload the web settings; existing accounts are kept.',
   username_invalid: 'Use a username starting with a letter or number, followed by letters, numbers, dots, underscores or hyphens.',
   password_length_invalid: 'Use a password with 8 to 256 characters.',
-  web_admin_node_update_required: 'The optional web admin needs Node.js 22.13 or later in the 22 series, or Node.js 24.',
+  web_admin_sqlite_unavailable: 'Node.js could not load its built-in SQLite support. Check that Homebridge uses a Node.js build with node:sqlite enabled.',
   web_certificate_generation_failed: 'The private backend certificate could not be created. Check that OpenSSL is available to Homebridge.',
   web_backend_port_mismatch: 'The backend HTTPS address must use the selected listening port.',
   web_origin_invalid: 'Use an HTTPS address with no path, trailing slash, username or password.',

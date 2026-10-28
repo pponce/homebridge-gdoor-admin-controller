@@ -6,6 +6,7 @@ import path from 'node:path';
 import { WebAdminError } from './web-admin-auth.js';
 import { WebAdminFiles, webPrivateFile } from './web-admin-files.js';
 import { requireWeb, exact, integer } from './web-admin-common.js';
+import { webAdminDatabase } from './web-admin-sqlite.js';
 
 const truncate = (value, limit) => [...value].slice(0, limit).join('');
 const historySchema = `
@@ -26,11 +27,9 @@ export class WebAdminHistory {
   scope(gateway, alarm) { requireWeb(typeof gateway === 'string' && this.registrations.has(gateway) && /^[a-z][a-z0-9-]{0,31}$/.test(gateway) && integer(alarm, 1, 255), 'invalid_history_scope'); }
   name(gateway, alarm) { this.scope(gateway, alarm); return 'web-activity-' + gateway + '-alarm-' + alarm + '.sqlite'; }
   async database(name, schema, action) {
-    const [major, minor] = process.versions.node.split('.').map(Number);
-    requireWeb(major === 22 && minor >= 13 || major >= 24, 'web_admin_node_update_required');
     let db, file, created = false;
     try {
-      const { DatabaseSync } = await import('node:sqlite');
+      const Database = await webAdminDatabase();
       const root = await this.files.directory(), filename = path.join(root, name);
       try { file = await open(filename, constants.O_CREAT | constants.O_EXCL | constants.O_RDWR | constants.O_NOFOLLOW, 0o600); created = true; }
       catch (error) { if (error.code !== 'EEXIST') throw error; file = await open(filename, constants.O_RDWR | constants.O_NOFOLLOW | constants.O_NONBLOCK); }
@@ -40,7 +39,7 @@ export class WebAdminHistory {
       for (const suffix of ['-journal', '-wal', '-shm']) {
         try { requireWeb(webPrivateFile(await lstat(filename + suffix), maxBytes), 'history_path_invalid'); } catch (error) { if (error.code !== 'ENOENT') throw error; }
       }
-      db = new DatabaseSync(filename);
+      db = new Database(filename);
       const current = await lstat(filename); requireWeb(current.dev === info.dev && current.ino === info.ino && webPrivateFile(current, maxBytes), 'history_path_invalid');
       db.exec('PRAGMA trusted_schema=OFF; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000; PRAGMA synchronous=FULL;');
       if (created) {

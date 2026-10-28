@@ -26,7 +26,7 @@ The full garage door, keypad, and web-administration setup uses:
 | Component | Requirement |
 | --- | --- |
 | Homebridge | **Homebridge 2.4 or later in the 2.x series** with the Homebridge UI for the tested deCONZ integration. Run this plugin in its **own child bridge**. |
-| Node.js | **22.13 or later in the 22.x series, or 24.x**, for the full setup including the web interface. OpenSSL is needed to create its local HTTPS certificate. |
+| Node.js | **22.13 or later with built-in SQLite enabled**, for the full setup including the web interface. Use a Homebridge-supported LTS release; CI covers Node 22, 24 and 26. Newer versions are allowed to attempt startup. OpenSSL is needed to create the local HTTPS certificate. |
 | deCONZ | A working Zigbee gateway and the **custom alarm-user build** linked above, with a deCONZ API key. This is a separate prerequisite, not an npm dependency installed by this plugin. |
 | homebridge-deconz | Install and configure [homebridge-deconz](https://github.com/ebaauw/homebridge-deconz) on the same Homebridge host, in a **different child bridge**. It provides the Homebridge side of the deCONZ alarm integration. |
 | Physical keypad | The tested model is the **Xfinity/Comcast URC4450BC0-X-R**, paired with deCONZ and assigned to the intended alarm. Other compatible IAS ACE keypads **may work, but have not been hardware-tested with this setup**. Do not assume other Xfinity models behave identically. |

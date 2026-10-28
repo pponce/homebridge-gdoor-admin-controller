@@ -10,9 +10,8 @@ import { webDigest } from './web-admin-files.js';
 import { requireWeb, exact, integer, object } from './web-admin-common.js';
 import { webAdminNetwork } from './web-admin-network.js';
 
-const nodeSupported = () => { const [major, minor] = process.versions.node.split('.').map(Number); return major === 22 && minor >= 13 || major === 24; };
 const safeErrors = new Set(['web_account_setup_required', 'web_connection_unavailable', 'web_connections_changed', 'web_gateway_unavailable',
-  'web_gateway_identity_changed', 'web_gateway_duplicate', 'web_admin_node_update_required', 'web_port_in_use', 'web_listener_failed',
+  'web_gateway_identity_changed', 'web_gateway_duplicate', 'web_admin_sqlite_unavailable', 'web_port_in_use', 'web_listener_failed',
   'web_certificate_generation_failed', 'web_private_storage_invalid', 'web_private_storage_write_failed']);
 export class WebAdminManager {
   constructor({ storagePath, configPath, coordinatorBridge, runtime, settings = new WebAdminSettings(storagePath), accounts = new WebAdminAccountStore(storagePath),
@@ -55,13 +54,14 @@ export class WebAdminManager {
     const row = await this.settings.read();
     let current = true; if (this.active) { try { await this.active.assertCurrent(); } catch { current = false; } }
     return { revision: row.revision, settings: row.settings, running: !!this.active, error: current ? this.error : 'web_connections_changed',
-      accountConfigured: await this.accounts.configured(), nodeSupported: nodeSupported(), network: webAdminNetwork(),
+      accountConfigured: await this.accounts.configured(),
+      // Retain the status field, but report observed startup rather than a version guess.
+      nodeSupported: this.active ? true : this.error === 'web_admin_sqlite_unavailable' ? false : null, network: webAdminNetwork(),
       connections: this.connections().map(({ id, name }) => ({ id, name })) };
   }
   async deactivate() { const active = this.active; this.active = null; if (active) await active.service.close(); }
   async activate(row, prepared) {
     if (!row.settings.enabled) return;
-    requireWeb(nodeSupported(), 'web_admin_node_update_required');
     requireWeb(await this.accounts.configured(), 'web_account_setup_required');
     const resolved = prepared ?? await this.resolve(row); await resolved.assertCurrent();
     const tls = await this.tls.load(row.settings);
@@ -94,7 +94,7 @@ export class WebAdminManager {
       requireWeb(copy.admin === null || !configured && exact(copy.admin, ['username', 'password']), 'web_account_already_configured');
       let prepared;
       if (copy.settings.enabled) {
-        requireWeb(nodeSupported(), 'web_admin_node_update_required'); requireWeb(configured || object(copy.admin), 'web_account_setup_required');
+        requireWeb(configured || object(copy.admin), 'web_account_setup_required');
         prepared = await this.resolve({ ...current, settings: copy.settings });
       }
       // A disabled server does not need gateway access and keeps its accounts,

@@ -51,6 +51,12 @@ process.exit(99);
     result = publish(); assert.equal(result.status, 0, result.stdout + result.stderr);
     assert.match(result.stdout, /already published/);
     assert.equal(await readFile(calls, 'utf8'), 'publish\n');
+    // A newer runtime label must not prevent publishing an otherwise tested artifact.
+    const future = 'data:text/javascript,' + encodeURIComponent('Object.defineProperty(process.versions,"node",{value:"28.0.0"})');
+    result = spawnSync('bash', ['scripts/publish-npm.sh', commit], { cwd: root,
+      env: { ...env, NODE_OPTIONS: [env.NODE_OPTIONS, '--import=' + future].filter(Boolean).join(' ') }, encoding: 'utf8', timeout: 30000 });
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    assert.match(result.stdout, /already published/); assert.equal(await readFile(calls, 'utf8'), 'publish\n');
     for (const value of ['different', 'offline']) {
       await writeFile(state, value); result = publish();
       assert.notEqual(result.status, 0); assert.equal(await readFile(calls, 'utf8'), 'publish\n');

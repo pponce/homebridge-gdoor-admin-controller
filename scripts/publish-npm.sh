@@ -8,7 +8,6 @@ release_expected_commit="${1:?Usage: bash scripts/publish-npm.sh EXPECTED_COMMIT
 release_commit="$(git rev-parse HEAD)"
 [[ "$release_commit" == "$release_expected_commit" ]] || { echo 'Checkout does not match the reviewed release revision.' >&2; exit 1; }
 [[ -z "$(git status --porcelain --untracked-files=all)" ]] || { echo 'Keep local changes intact: release requires a clean checkout.' >&2; exit 1; }
-node -e 'if (![22,24].includes(Number(process.versions.node.split(".")[0]))) throw Error("Use Node 22 or 24 for this release")'
 
 release_registry='https://registry.npmjs.org/'
 release_name="$(node -p 'JSON.parse(require("fs").readFileSync("package.json")).name')"
